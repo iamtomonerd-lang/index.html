@@ -101,6 +101,7 @@ body {
 .card.selected { box-shadow: 0 0 0 2px #ffff44, 0 0 14px #ffff44; }
 .card.tapped { transform: rotate(15deg); opacity: 0.85; margin-right: 10px; }
 .card.tapped:hover { transform: rotate(15deg) translateY(-6px) scale(1.06); }
+.card.tapped .card-pt { transform: rotate(-15deg); transform-origin: center bottom; }
 .card.face-down { background: linear-gradient(135deg, #1a1a3a 25%, #0d0d22 75%); }
 .card.face-down::after { content: '🎴'; font-size: 32px; position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); }
 .card.playable { box-shadow: 0 0 10px #44ff44; border-color: #44ff44; }
@@ -243,7 +244,7 @@ body {
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 6px;
-  overflow: hidden;
+  overflow: visible;
 }
 .board-row.ai-row { border-color: #3a2a2a; }
 .board-row.player-row { border-color: #2a3a2a; }
@@ -2504,7 +2505,6 @@ function renderHand(player) {
       el.title = card.text || card.name;
       el.dataset.cardId = card.id;
     }
-    el.style.animation = 'slideIn 0.2s ease';
     zone.appendChild(el);
   });
 }
