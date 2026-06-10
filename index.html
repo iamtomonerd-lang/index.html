@@ -2768,6 +2768,7 @@ function renderLands(player) {
     el.className = `land-card color-${card.color}`;
     if (land.tapped) el.classList.add('tapped');
     if (G.chargingMode === 'pick_land' && player === 0 && !land.chargeCard) el.classList.add('selected');
+    if (G.targetMode && G.targetMode.type === 'ownLand' && player === 0 && !land.tapped) el.classList.add('targetable');
     el.innerHTML = `${card.icon}<div class="land-name">${card.name}</div>`;
     if (land.chargeCard) {
       const pip = document.createElement('div');
@@ -2962,14 +2963,34 @@ function handleFieldClick(player, instId) {
     if (!inst) return;
     const card = CARD_DB[inst.cardId];
 
-    // アレスティア 還元: untap own creature
-    if (card.id === 'arestia' && !inst.tapped) {
-      G.targetMode = { type:'ownCreature', owner:0, callback:(tgt) => {
-        const tc = G.players[0].field.find(x=>x.instanceId===tgt.instId);
-        if (tc && tc.instanceId !== instId) { tc.tapped = false; log('アレスティア 還元: クリーチャーをアンタップ'); }
-        G.targetMode = null; render(); updateHints();
+    // アレスティア 還元: アンタップ土地1枚を土地デッキ底に置く → 味方クリーチャー1体をアンタップ
+    if (card.id === 'arestia') {
+      const p = G.players[0];
+      const untappedLands = p.lands.filter(l => !l.tapped);
+      if (untappedLands.length === 0) { log('アレスティア 還元: アンタップ状態の土地がありません'); return; }
+      const hasTapped = p.field.some(c => c.instanceId !== instId && c.tapped);
+      if (!hasTapped) { log('アレスティア 還元: アンタップできるクリーチャーがいません'); return; }
+      // Step1: 土地を選ぶ
+      G.targetMode = { type:'ownLand', owner:0, callback:(landInstId) => {
+        const lIdx = p.lands.findIndex(l => l.instanceId === landInstId);
+        if (lIdx === -1 || p.lands[lIdx].tapped) { log('アンタップ状態の土地を選んでください'); return; }
+        const returnedLand = p.lands.splice(lIdx, 1)[0];
+        p.landDeck.push(returnedLand.cardId);
+        log(`還元コスト: ${CARD_DB[returnedLand.cardId].name} を土地デッキ底へ`);
+        G.targetMode = null;
+        // Step2: アンタップするクリーチャーを選ぶ
+        G.targetMode = { type:'ownCreature', owner:0, callback:(tgt) => {
+          const tc = p.field.find(x => x.instanceId === tgt.instId);
+          if (tc && tc.instanceId !== instId) {
+            tc.tapped = false;
+            log('アレスティア 還元: クリーチャーをアンタップ');
+          }
+          G.targetMode = null; render(); updateHints();
+        }};
+        log('アレスティア 還元: アンタップするクリーチャーを選択');
+        render(); updateHints();
       }};
-      log('アレスティア 還元: アンタップするクリーチャーを選択');
+      log('アレスティア 還元: 土地デッキ底に置くアンタップ土地を選択');
       render(); updateHints();
       return;
     }
@@ -2985,6 +3006,11 @@ function handleFieldClick(player, instId) {
 function handleLandClick(player, instId) {
   if (G.chargingMode === 'pick_land' && player === 0) {
     chargeToLand(instId);
+    return;
+  }
+  if (G.targetMode && G.targetMode.type === 'ownLand' && player === 0) {
+    const land = G.players[0].lands.find(l=>l.instanceId===instId);
+    if (land && !land.tapped) { G.targetMode.callback(instId); }
     return;
   }
   if (G.targetMode) return;
@@ -3725,15 +3751,20 @@ class SimGame {
   }
 
   simUseActivations(ap) {
-    const s=this.state, p=s.players[ap], opp=s.players[1-ap];
-    // Arestia 還元: tap Arestia → untap own best tapped creature
-    const arestia=p.field.find(c=>CARD_DB[c.cardId].id==='arestia'&&!c.tapped&&!c.sick);
-    if (arestia) {
-      const tapped=p.field.filter(c=>c.tapped&&c!==arestia);
-      if (tapped.length) {
-        const best=tapped.reduce((a,b)=>(CARD_DB[b.cardId].power||0)>(CARD_DB[a.cardId].power||0)?b:a);
+    const s=this.state, p=s.players[ap];
+    // Arestia 還元: アンタップ土地1枚を土地デッキ底に置く → 味方タップクリーチャー1体をアンタップ
+    const hasArestia=p.field.some(c=>CARD_DB[c.cardId].id==='arestia'&&!c.sick);
+    if (hasArestia) {
+      const untappedLand=p.lands.find(l=>!l.tapped);
+      const tappedCreature=p.field.filter(c=>c.tapped&&CARD_DB[c.cardId].id!=='arestia');
+      if (untappedLand && tappedCreature.length) {
+        // 還元コスト: 最も価値の低いアンタップ土地を返す
+        const lIdx=p.lands.indexOf(untappedLand);
+        p.lands.splice(lIdx,1);
+        p.landDeck.push(untappedLand.cardId);
+        // 効果: 最も強いタップクリーチャーをアンタップ
+        const best=tappedCreature.reduce((a,b)=>(CARD_DB[b.cardId].power||0)>(CARD_DB[a.cardId].power||0)?b:a);
         best.tapped=false;
-        arestia.tapped=true;
       }
     }
   }
