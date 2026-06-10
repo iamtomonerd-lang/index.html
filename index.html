@@ -728,12 +728,78 @@ function initGame() {
   }
 
   G.phase = 'main';
-  // First turn special: place 1 land, no draw
-  placeLands(0, 1);
 
   log('ゲーム開始！', 'important');
+  render();
+  // ゲーム開始時マリガンを確認
+  showStartMulligan();
+}
+
+function showStartMulligan() {
+  const p = G.players[0];
+  let chosen = new Set();
+
+  const buildCards = () => {
+    const container = document.getElementById('mulligan-cards');
+    container.innerHTML = '';
+    p.hand.forEach((cid, i) => {
+      const card = CARD_DB[cid];
+      const el = document.createElement('div');
+      el.className = `card color-${card.color}`;
+      el.style.cursor = 'pointer';
+      el.innerHTML = buildCardHTML(card);
+      el.onclick = () => {
+        if (chosen.has(i)) { chosen.delete(i); el.style.opacity = '1'; }
+        else { chosen.add(i); el.style.opacity = '0.4'; }
+        document.getElementById('mulligan-count').textContent = chosen.size;
+      };
+      container.appendChild(el);
+    });
+  };
+
+  const html = `
+    <p style="margin-bottom:8px; font-size:12px;">戻したいカードを選択してクリック（グレーアウト）し、確認を押すと同枚数引き直します。</p>
+    <p style="margin-bottom:10px; font-size:11px; color:#aaa;">選択枚数: <span id="mulligan-count">0</span>枚</p>
+    <div style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px;" id="mulligan-cards"></div>
+    <div style="display:flex; gap:8px;">
+      <button onclick="confirmStartMulligan()" style="flex:1; padding:10px; background:#2a2a8a; border:1px solid #6060ff; color:#fff; border-radius:5px; font-size:13px; cursor:pointer;">確認</button>
+      <button onclick="skipStartMulligan()" style="flex:1; padding:10px; font-size:13px; cursor:pointer;">マリガンしない</button>
+    </div>
+  `;
+  showModal('マリガン（ゲーム開始時）', html);
+  buildCards();
+  window._startMulliganChosen = chosen;
+}
+
+function confirmStartMulligan() {
+  const p = G.players[0];
+  const chosen = window._startMulliganChosen || new Set();
+  if (chosen.size > 0) {
+    const newHand = [];
+    p.hand.forEach((cid, i) => {
+      if (chosen.has(i)) p.deck.push(cid);
+      else newHand.push(cid);
+    });
+    p.hand = newHand;
+    p.deck = shuffle(p.deck);
+    for (let i = 0; i < chosen.size; i++) drawCard(0);
+    p.mulliganUsed = true;
+    log(`マリガン: ${chosen.size}枚入れ替え`);
+  }
+  closeModal();
+  startFirstTurn();
+}
+
+function skipStartMulligan() {
+  closeModal();
+  startFirstTurn();
+}
+
+function startFirstTurn() {
+  // 先攻1ターン目: 土地1枚配置、ドローなし
+  placeLands(0, 1);
   log('ターン1: プレイヤーのメインフェイズ', 'important');
-  document.getElementById('btn-mulligan').disabled = false;
+  document.getElementById('btn-mulligan').disabled = true;
   render();
   updateHints();
 }
@@ -1392,7 +1458,13 @@ function doCharge(handIndex) {
 function chargeToLand(landInstId) {
   const p = G.players[0];
   const land = p.lands.find(l => l.instanceId === landInstId);
-  if (!land || land.chargeCard) { log('その土地にはチャージできません'); return; }
+  if (!land || land.chargeCard) {
+    log('その土地にはチャージできません');
+    G.chargingMode = false;
+    G.selectedCard = null;
+    render(); updateHints();
+    return;
+  }
   const hi = G.selectedCard.index;
   const cardId = p.hand[hi];
   p.hand.splice(hi, 1);
