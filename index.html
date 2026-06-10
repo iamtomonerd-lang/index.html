@@ -1512,13 +1512,14 @@ function bastianChooseETB(instanceId, hasCX6Override) {
   render(); updateHints();
 }
 
-function bastianChooseKakutou(instanceId) {
-  const inst = G.players[0].field.find(c => c.instanceId === instanceId);
+function startKakutou(player, instanceId) {
+  const inst = G.players[player].field.find(c => c.instanceId === instanceId);
   if (!inst) return;
-  const opp = 1;
-  const reachable = G.players[opp].field.filter(c => !CARD_DB[c.cardId].flying);
+  const card = CARD_DB[inst.cardId];
+  const opp = 1 - player;
+  const reachable = G.players[opp].field.filter(c => !CARD_DB[c.cardId].flying || card.flying);
   if (reachable.length === 0) {
-    log('バスティオン 格闘: 対象クリーチャーがいません');
+    log(`${card.name} 格闘: 対象クリーチャーがいません`);
     return;
   }
   inst.tapped = true;
@@ -1526,9 +1527,11 @@ function bastianChooseKakutou(instanceId) {
   G.kakutouTargetMode = true;
   G.pendingKakutouInstId = instanceId;
   G.kakutouTargets = {};
-  log('バスティオン 格闘: 攻撃するAIクリーチャーを選択してください');
+  log(`${card.name} 格闘: 対象のクリーチャーを選択してください`);
   render(); updateHints();
 }
+// 後方互換
+function bastianChooseKakutou(instanceId) { startKakutou(0, instanceId); }
 
 function doLook3Keep1White(player) {
   const p = G.players[player];
@@ -2849,8 +2852,8 @@ function renderField(player, zoneId) {
       // 攻撃可能ハイライト (メインフェイズ)
       if (player === 0 && G.activePlayer === 0 && G.phase === 'main' && !G.kakutouTargetMode && !G.targetMode) {
         if (canCreatureAttack(0, inst)) el.classList.add('attackable');
-        // 格闘ハイライト（バスティオン: 出たターンのみ、アンタップ）
-        if (card.id === 'bastian' && card.kakutou && inst.entryTurn === G.turn && !inst.tapped
+        // 格闘ハイライト（出たターンのみ、アンタップ、相手クリーチャーあり）
+        if (card.kakutou && inst.entryTurn === G.turn && !inst.tapped
             && G.players[1].field.some(c => !CARD_DB[c.cardId].flying || card.flying)) {
           el.classList.add('attackable');
         }
@@ -3159,12 +3162,12 @@ function handleFieldClick(player, instId) {
       return;
     }
 
-    // バスティオン 格闘: 出たターンのみ起動可（タップして相手クリーチャーと戦闘）
-    if (card.id === 'bastian' && card.kakutou && inst.entryTurn === G.turn && !inst.tapped) {
+    // 格闘キーワード: 出たターンのみ起動可（タップして相手クリーチャーと戦闘）
+    if (card.kakutou && inst.entryTurn === G.turn && !inst.tapped) {
       const opp = 1;
       const reachable = G.players[opp].field.filter(c => !CARD_DB[c.cardId].flying || card.flying);
-      if (reachable.length === 0) { log('バスティオン 格闘: 対象クリーチャーがいません'); return; }
-      bastianChooseKakutou(instId);
+      if (reachable.length === 0) { log(`${card.name} 格闘: 対象クリーチャーがいません`); return; }
+      startKakutou(0, instId);
       return;
     }
 
