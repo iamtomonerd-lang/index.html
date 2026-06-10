@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>DCG - デジタルカードゲーム</title>
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Noto+Sans+JP:wght@300;400;700&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
@@ -546,6 +547,106 @@ button.danger:hover { background: #6a2a2a; }
 }
 #phase-flash.active { opacity: 1; }
 @keyframes phaseFlashOut { 0%{opacity:1} 70%{opacity:1} 100%{opacity:0} }
+
+/* ── オンライン対戦UI ── */
+#net-lobby {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(5,5,15,0.97);
+  z-index: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+#net-lobby-box {
+  background: #12121e;
+  border: 2px solid var(--accent);
+  border-radius: 14px;
+  padding: 32px 40px;
+  width: 90%;
+  max-width: 420px;
+  text-align: center;
+  box-shadow: 0 0 60px rgba(96,96,255,0.25);
+}
+#net-lobby-box h2 { font-size: 22px; color: #aaaaff; margin-bottom: 6px; }
+#net-lobby-box .subtitle { font-size: 12px; color: #555; margin-bottom: 24px; }
+.net-input {
+  width: 100%; padding: 10px 14px;
+  background: #1a1a30; border: 1px solid #4444aa;
+  color: #ccccff; border-radius: 7px; font-size: 16px;
+  text-align: center; letter-spacing: 4px; font-family: monospace;
+  margin: 8px 0;
+}
+.net-input::placeholder { letter-spacing: 0; font-size: 12px; color: #444; }
+.net-divider { color: #333; margin: 20px 0; font-size: 11px; }
+.net-status {
+  font-size: 11px; color: #888; min-height: 18px; margin-top: 10px;
+}
+#net-timer-bar {
+  display: none;
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  height: 5px;
+  background: #1a1a3a;
+  z-index: 400;
+  overflow: hidden;
+}
+#net-timer-fill {
+  height: 100%;
+  transition: width 1s linear, background 0.3s;
+  background: #44ff88;
+}
+#net-timer-label {
+  position: fixed;
+  bottom: 7px; right: 8px;
+  font-size: 10px;
+  color: #888;
+  z-index: 401;
+  pointer-events: none;
+  background: rgba(0,0,0,0.6);
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+
+/* ── レスポンシブレイアウト ── */
+/* タブレット (601–1024px) */
+@media (max-width: 1024px) and (min-width: 601px) {
+  #game { grid-template-columns: 1fr 220px; gap: 4px; padding: 4px; }
+  .card { width: 58px; height: 84px; }
+  .field-slot { width: 58px; height: 84px; }
+  .land-card { width: 58px; height: 44px; }
+  .hand-zone { min-height: 96px; }
+  .field-zone { min-height: 96px; }
+  #card-detail-panel { max-height: 140px; }
+}
+/* モバイル (≤600px) */
+@media (max-width: 600px) {
+  html, body { overflow: auto; }
+  #game {
+    display: flex;
+    flex-direction: column;
+    height: auto;
+    min-height: 100vh;
+    gap: 3px;
+    padding: 3px;
+  }
+  #side-panel {
+    flex-direction: row;
+    flex-wrap: wrap;
+    order: -1;
+  }
+  .player-stat-card { flex: 1 1 calc(50% - 4px); min-width: 0; }
+  #card-detail-panel { display: none; }
+  #controls { flex: 1 1 100%; }
+  #log { flex: 1 1 100%; max-height: 120px; }
+  .card { width: 54px; height: 78px; font-size: 8px; }
+  .field-slot { width: 54px; height: 78px; }
+  .land-card { width: 52px; height: 40px; }
+  .hand-zone { min-height: 88px; }
+  .field-zone { min-height: 88px; }
+  .card-art { font-size: 18px; }
+  #net-lobby-box { padding: 20px 16px; }
+}
 </style>
 </head>
 <body>
@@ -666,6 +767,27 @@ button.danger:hover { background: #6a2a2a; }
     <div id="log"></div>
   </div>
 </div>
+
+<!-- Online Lobby -->
+<div id="net-lobby">
+  <div id="net-lobby-box">
+    <h2>⚔️ DCG オンライン対戦</h2>
+    <div class="subtitle">PeerJS WebRTC P2P</div>
+    <button onclick="netStartLocal()" style="width:100%;padding:12px;background:#1a2a1a;border:1px solid #447744;color:#88ff88;border-radius:8px;font-size:14px;margin-bottom:4px;">🖥️ ローカル対戦（AI vs プレイヤー）</button>
+    <div class="net-divider">─── または オンライン対戦 ───</div>
+    <button onclick="netHost()" style="width:100%;padding:12px;background:#1a1a3a;border:1px solid #4444aa;color:#aaaaff;border-radius:8px;font-size:14px;margin-bottom:12px;">🏠 ホストとして部屋を作る</button>
+    <div style="font-size:11px;color:#666;margin-bottom:8px;">または 部屋コードを入力して参加</div>
+    <input class="net-input" id="net-room-input" type="text" maxlength="6" placeholder="6桁の部屋コード" oninput="this.value=this.value.toUpperCase()">
+    <button onclick="netJoin()" style="width:100%;padding:10px;background:#2a1a2a;border:1px solid #774477;color:#ffaaff;border-radius:8px;font-size:13px;margin-top:6px;">🔗 参加する</button>
+    <div class="net-status" id="net-status-msg">接続待機中...</div>
+  </div>
+</div>
+
+<!-- Turn Timer Bar -->
+<div id="net-timer-bar">
+  <div id="net-timer-fill" style="width:100%;"></div>
+</div>
+<div id="net-timer-label"></div>
 
 <!-- Arrow Overlay -->
 <svg id="arrow-overlay"></svg>
@@ -917,13 +1039,17 @@ function showStartMulligan() {
 }
 
 function confirmStartMulligan() {
-  const p = G.players[0];
+  if (NET_MODE === 'guest') { netSendAction('mulliganConfirm', {selected: Array.from(G.mulliganSelected||[])}); return; }
+  _doConfirmStartMulligan();
+}
+function _doConfirmStartMulligan() {
+  const p = G.players[NET_MY_IDX];
   const chosen = G.mulliganSelected || new Set();
   if (chosen.size > 0) {
     const indicesToReturn = Array.from(chosen).sort((a, b) => b - a);
     indicesToReturn.forEach(i => p.deck.push(p.hand.splice(i, 1)[0]));
     p.deck = shuffle(p.deck);
-    for (let i = 0; i < chosen.size; i++) drawCard(0);
+    for (let i = 0; i < chosen.size; i++) drawCard(NET_MY_IDX);
     p.mulliganUsed = true;
     log(`マリガン: ${chosen.size}枚入れ替え`);
   }
@@ -935,6 +1061,10 @@ function confirmStartMulligan() {
 }
 
 function skipStartMulligan() {
+  if (NET_MODE === 'guest') { netSendAction('mulliganSkip', {}); return; }
+  _doSkipStartMulligan();
+}
+function _doSkipStartMulligan() {
   G.mulliganMode = false;
   G.mulliganSelected = new Set();
   const mc = document.getElementById('mulligan-controls');
@@ -1514,6 +1644,7 @@ function endGame(winner) {
 // PHASE MANAGEMENT
 // ============================================================
 function endPhase() {
+  if (NET_MODE === 'guest' && netCanAct()) { netSendAction('endPhase', {}); return; }
   if (G.phase === 'ended') return;
   // Open priority window for non-active player before ending phase
   if (!G.awaitingPriority && !G._skipPriorityWindow && !G.playerBlockMode) {
@@ -1813,19 +1944,26 @@ function endTurn() {
   const nonTurn = 1 - ap;
   openPriorityWindow(nonTurn, () => {
     if (ap === 1) {
-      setTimeout(aiTurn, 300);
+      if (NET_MODE !== 'local') {
+        log('相手のターンです（オンライン）');
+        netPostTurnEnd();
+      } else {
+        setTimeout(aiTurn, 300);
+      }
     } else {
       log('あなたのメインフェイズ');
       document.getElementById('btn-mulligan').disabled = true;
       updateHints();
     }
   });
+  netPostTurnEnd();
 }
 
 // ============================================================
 // CHARGE SYSTEM
 // ============================================================
 function startCharge() {
+  if (NET_MODE === 'guest') { netSendAction('charge', {}); return; }
   if (G.activePlayer !== 0) { log('あなたのターンではありません'); return; }
   if (G.phase !== 'main') { log('メインフェイズ中のみチャージできます'); return; }
   if (G.chargeUsedThisTurn) { log('チャージはターンに1回のみです'); return; }
@@ -2225,6 +2363,7 @@ function aiHandlePriority() {
 }
 
 function passPriority() {
+  if (NET_MODE === 'guest') { netSendAction('passPriority', {}); return; }
   if (G.awaitingPriority) {
     closePriorityAndResolve();
     return;
@@ -2584,12 +2723,14 @@ function render() {
   if (G.phase === 'ended' && !G._endedRendered) {
     G._endedRendered = true;
   }
-  safeCall(() => renderHand(0), 'renderHand(0)');
-  safeCall(() => renderHand(1), 'renderHand(1)');
-  safeCall(() => renderField(0), 'renderField(0)');
-  safeCall(() => renderField(1), 'renderField(1)');
-  safeCall(() => renderLands(0), 'renderLands(0)');
-  safeCall(() => renderLands(1), 'renderLands(1)');
+  // For guest: swap player indices so guest sees themselves on the bottom
+  const me = NET_MY_IDX, opp = 1 - NET_MY_IDX;
+  safeCall(() => renderHand(me, 'player-hand'), 'renderHand(me)');
+  safeCall(() => renderHand(opp, 'ai-hand'), 'renderHand(opp)');
+  safeCall(() => renderField(me, 'player-field'), 'renderField(me)');
+  safeCall(() => renderField(opp, 'ai-field'), 'renderField(opp)');
+  safeCall(() => renderLands(me, 'player-lands'), 'renderLands(me)');
+  safeCall(() => renderLands(opp, 'ai-lands'), 'renderLands(opp)');
   safeCall(() => renderInfoBar(), 'renderInfoBar');
   safeCall(() => renderStack(), 'renderStack');
   safeCall(() => updateCounts(), 'updateCounts');
@@ -2598,8 +2739,9 @@ function render() {
   safeCall(() => drawCombatArrows(), 'drawCombatArrows');
   const pgc = document.getElementById('player-grave-count');
   const agc = document.getElementById('ai-grave-count');
-  if (pgc) pgc.textContent = G.players[0].graveyard.length;
-  if (agc) agc.textContent = G.players[1].graveyard.length;
+  if (pgc) pgc.textContent = G.players[NET_MY_IDX].graveyard.length;
+  if (agc) agc.textContent = G.players[1-NET_MY_IDX].graveyard.length;
+  netPostAction();
 }
 
 function buildCardHTML(card, inst, playerOwner) {
@@ -2631,15 +2773,15 @@ function buildCardHTML(card, inst, playerOwner) {
   `;
 }
 
-function renderHand(player) {
-  const zone = document.getElementById(player === 0 ? 'player-hand' : 'ai-hand');
+function renderHand(player, zoneId) {
+  const zone = document.getElementById(zoneId || (player === 0 ? 'player-hand' : 'ai-hand'));
   zone.innerHTML = '';
   const p = G.players[player];
 
   p.hand.forEach((cardId, i) => {
     const card = CARD_DB[cardId];
     const el = document.createElement('div');
-    if (player === 1) {
+    if (player !== NET_MY_IDX) {
       el.className = 'card face-down';
     } else if (G.mulliganMode) {
       el.className = `card color-${card.color}`;
@@ -2662,15 +2804,14 @@ function renderHand(player) {
     } else {
       el.className = `card color-${card.color}`;
       // Determine if playable
-      const isMain = G.phase === 'main' && G.activePlayer === 0;
+      const isMain = G.phase === 'main' && G.activePlayer === player;
       const isQuick = card.keywords && card.keywords.includes('Quick');
-      const affordable = card.type !== 'land' && canAfford(0, card.cost);
+      const affordable = card.type !== 'land' && canAfford(player, card.cost);
       const inPriorityWindow = G.awaitingPriority;
-      // ターンプレイヤーは優先権ウィンドウ中も通常カード使用可; 非ターンはQuickのみ
       const canPlay = affordable && (
         isMain ||
         isQuick ||
-        (inPriorityWindow && G.activePlayer === 0) // player is turn player during priority window
+        (inPriorityWindow && G.activePlayer === player)
       );
       if (canPlay) el.classList.add('playable');
       el.innerHTML = buildCardHTML(card);
@@ -2682,8 +2823,8 @@ function renderHand(player) {
   });
 }
 
-function renderField(player) {
-  const zone = document.getElementById(player === 0 ? 'player-field' : 'ai-field');
+function renderField(player, zoneId) {
+  const zone = document.getElementById(zoneId || (player === 0 ? 'player-field' : 'ai-field'));
   zone.innerHTML = '';
   const p = G.players[player];
 
@@ -2747,8 +2888,8 @@ function renderField(player) {
   }
 }
 
-function renderLands(player) {
-  const zone = document.getElementById(player === 0 ? 'player-lands' : 'ai-lands');
+function renderLands(player, zoneId) {
+  const zone = document.getElementById(zoneId || (player === 0 ? 'player-lands' : 'ai-lands'));
   zone.innerHTML = '';
   const p = G.players[player];
 
@@ -2784,23 +2925,23 @@ function renderLands(player) {
 }
 
 function renderInfoBar() {
-  const p0 = G.players[0];
-  const p1 = G.players[1];
+  const me = NET_MY_IDX, opp = 1 - NET_MY_IDX;
+  const pMe = G.players[me];
+  const pOpp = G.players[opp];
 
   const lifeEl = document.getElementById('player-life');
-  lifeEl.textContent = `❤️ ${p0.life}`;
-  lifeEl.className = `life-display${p0.life <= 5 ? ' low' : ''}`;
+  lifeEl.textContent = `❤️ ${pMe.life}`;
+  lifeEl.className = `life-display${pMe.life <= 5 ? ' low' : ''}`;
 
   const aiLifeEl = document.getElementById('ai-life');
-  aiLifeEl.textContent = `❤️ ${p1.life}`;
-  aiLifeEl.className = `life-display${p1.life <= 5 ? ' low' : ''}`;
+  aiLifeEl.textContent = `❤️ ${pOpp.life}`;
+  aiLifeEl.className = `life-display${pOpp.life <= 5 ? ' low' : ''}`;
 
   const phases = { untap:'アンタップ', draw:'ドロー', main:'メイン', end:'エンド', ended:'終了' };
   document.getElementById('phase-name').textContent = phases[G.phase] || G.phase;
 
-  // CX/OC status is shown via threshold gauge (updateThresholdGauge)
-
-  document.getElementById('turn-indicator').textContent = `ターン ${G.turn} (${G.activePlayer===0?'自分':'AI'})`;
+  const turnName = G.activePlayer === me ? '自分' : (NET_MODE === 'local' ? 'AI' : '相手');
+  document.getElementById('turn-indicator').textContent = `ターン ${G.turn} (${turnName})`;
 
   // Mana display handled by updateManaDisplay() called from render()
 }
@@ -2826,16 +2967,18 @@ function renderStack() {
 }
 
 function updateCounts() {
-  document.getElementById('player-deck-count').textContent = G.players[0].deck.length;
-  document.getElementById('player-land-deck-count').textContent = G.players[0].landDeck.length;
-  document.getElementById('ai-deck-count').textContent = G.players[1].deck.length;
-  document.getElementById('ai-land-deck-count').textContent = G.players[1].landDeck.length;
+  const me = NET_MY_IDX, opp = 1 - NET_MY_IDX;
+  document.getElementById('player-deck-count').textContent = G.players[me].deck.length;
+  document.getElementById('player-land-deck-count').textContent = G.players[me].landDeck.length;
+  document.getElementById('ai-deck-count').textContent = G.players[opp].deck.length;
+  document.getElementById('ai-land-deck-count').textContent = G.players[opp].landDeck.length;
 }
 
 // ============================================================
 // CLICK HANDLERS
 // ============================================================
 function handleHandClick(player, index) {
+  if (NET_MODE === 'guest' && player === NET_MY_IDX) { netSendAction('playCard', {handIdx: index}); return; }
   if (player !== 0) return; // Can't click AI hand
   if (G.activePlayer !== 0 && G.phase !== 'ended') {
     // Allow quick spells
@@ -2856,6 +2999,13 @@ function handleHandClick(player, index) {
 }
 
 function handleFieldClick(player, instId) {
+  if (NET_MODE === 'guest') {
+    if (!netCanAct()) { log('相手のターンです'); return; }
+    const cardId = (G.players[player].field.find(c=>c.instanceId===instId)||{}).cardId;
+    if (G.targetMode) { netSendAction('targetSelect', {instId, cardId}); return; }
+    if (player === NET_MY_IDX || G.playerBlockMode) { netSendAction('activateCreature', {instId, cardId}); return; }
+    return;
+  }
   // 格闘ターゲット選択を最優先
   if (G.kakutouTargetMode && player === 1) {
     const atkInst = G.players[0].field.find(c=>c.instanceId===G.pendingKakutouInstId);
@@ -3004,6 +3154,12 @@ function handleFieldClick(player, instId) {
 }
 
 function handleLandClick(player, instId) {
+  if (NET_MODE === 'guest') {
+    if (!netCanAct()) { log('相手のターンです'); return; }
+    if (G.targetMode && G.targetMode.type === 'ownLand') { netSendAction('targetSelect', {instId}); return; }
+    if (player === NET_MY_IDX) { netSendAction('tapLand', {instId}); return; }
+    return;
+  }
   if (G.chargingMode === 'pick_land' && player === 0) {
     chargeToLand(instId);
     return;
@@ -3236,7 +3392,7 @@ function showGraveyard(player) {
 // 5. THRESHOLD GAUGE
 // ============================================================
 function updateThresholdGauge() {
-  const cx = getCXValue(0);
+  const cx = getCXValue(NET_MY_IDX);
   const labelEl = document.getElementById('threshold-label');
   const fillEl = document.getElementById('threshold-fill');
   const countEl = document.getElementById('threshold-count');
@@ -3317,7 +3473,7 @@ function drawCombatArrows() {
 // 8. MANA DISPLAY ENHANCED
 // ============================================================
 function updateManaDisplay() {
-  const p0 = G.players[0];
+  const p0 = G.players[NET_MY_IDX];
   // Current available mana
   const manaEl = document.getElementById('mana-display');
   manaEl.innerHTML = '';
@@ -4148,9 +4304,353 @@ function uiStopTraining() {
 }
 
 // ============================================================
+// ONLINE MULTIPLAYER (PeerJS)
+// ============================================================
+const NET_TURN_LIMIT = 60;     // active player seconds
+const NET_OPP_LIMIT  = 40;     // non-turn player seconds
+
+let NET_MODE    = 'local';     // 'local' | 'host' | 'guest'
+let NET_PEER    = null;        // PeerJS Peer instance
+let NET_CONN    = null;        // DataConnection
+let NET_MY_IDX  = 0;          // which G.players[] index is "me" (guest=1)
+let NET_ROOM_ID = null;        // 6-char room code (host's peer id)
+let _netTimerInterval = null;
+let _netTimerRemaining = 0;
+let _netTimerFor = -1;         // which player the current timer is for
+
+// ── ロビー表示／非表示 ──────────────────────────────────────
+function netShowLobby() {
+  const el = document.getElementById('net-lobby');
+  if (el) el.style.display = 'flex';
+}
+function netHideLobby() {
+  const el = document.getElementById('net-lobby');
+  if (el) el.style.display = 'none';
+}
+function netSetStatus(msg) {
+  const el = document.getElementById('net-status-msg');
+  if (el) el.textContent = msg;
+}
+
+// ── ローカル（AI対戦）────────────────────────────────────────
+function netStartLocal() {
+  NET_MODE = 'local';
+  NET_MY_IDX = 0;
+  netHideLobby();
+  initGame();
+}
+
+// ── ホスト ──────────────────────────────────────────────────
+function netHost() {
+  netSetStatus('PeerJS 接続中...');
+  const roomId = Array.from({length:6}, ()=>'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'[Math.floor(Math.random()*32)]).join('');
+  NET_ROOM_ID = roomId;
+  NET_PEER = new Peer(roomId, {debug: 1});
+  NET_PEER.on('open', id => {
+    netSetStatus(`部屋コード: ${id}  相手の接続を待っています...`);
+    document.getElementById('net-room-input').value = id;
+  });
+  NET_PEER.on('connection', conn => {
+    NET_CONN = conn;
+    NET_MODE = 'host';
+    NET_MY_IDX = 0;
+    netSetStatus('接続しました！ ゲームを開始します...');
+    conn.on('open', () => {
+      netHideLobby();
+      initGame();
+    });
+    conn.on('data', netOnHostReceive);
+    conn.on('close', netOnDisconnect);
+    conn.on('error', netOnDisconnect);
+  });
+  NET_PEER.on('error', e => netSetStatus(`エラー: ${e.type}`));
+}
+
+// ── ゲスト ──────────────────────────────────────────────────
+function netJoin() {
+  const code = (document.getElementById('net-room-input').value || '').trim().toUpperCase();
+  if (code.length < 4) { netSetStatus('部屋コードを入力してください'); return; }
+  netSetStatus('接続中...');
+  NET_PEER = new Peer(undefined, {debug: 1});
+  NET_PEER.on('open', () => {
+    const conn = NET_PEER.connect(code, {reliable: true});
+    NET_CONN = conn;
+    NET_ROOM_ID = code;
+    conn.on('open', () => {
+      NET_MODE = 'guest';
+      NET_MY_IDX = 1;
+      netSetStatus('接続しました！');
+      netHideLobby();
+    });
+    conn.on('data', netOnGuestReceive);
+    conn.on('close', netOnDisconnect);
+    conn.on('error', e => netSetStatus(`エラー: ${e.message || e}`));
+  });
+  NET_PEER.on('error', e => netSetStatus(`エラー: ${e.type}`));
+}
+
+// ── 切断 / 再接続 ────────────────────────────────────────────
+function netOnDisconnect() {
+  if (NET_MODE === 'local') return;
+  log('⚠️ 相手との接続が切れました。再接続を待っています...', 'important');
+  netStopTimer();
+  if (NET_MODE === 'host') {
+    // Reconnect: just wait for new connection on same peer
+    if (NET_PEER && !NET_PEER.destroyed) {
+      NET_PEER.on('connection', conn => {
+        NET_CONN = conn;
+        conn.on('open', () => {
+          log('✅ 再接続しました', 'important');
+          conn.on('data', netOnHostReceive);
+          conn.on('close', netOnDisconnect);
+          conn.on('error', netOnDisconnect);
+          netSyncToGuest(); // resend full state
+          netStartTimer();
+        });
+      });
+    }
+  } else {
+    // Guest: show reconnect button
+    const el = document.getElementById('net-lobby');
+    if (el) {
+      netSetStatus('切断されました。再接続するには同じコードで「参加する」を押してください');
+      el.style.display = 'flex';
+    }
+  }
+}
+
+// ── ホスト: ゲストからのメッセージ受信 ──────────────────────
+function netOnHostReceive(msg) {
+  if (!msg || !msg.type) return;
+  if (msg.type === 'action') {
+    netExecuteGuestAction(msg);
+  } else if (msg.type === 'ping') {
+    // nothing
+  }
+}
+
+// ── ゲスト: ホストからのメッセージ受信 ──────────────────────
+function netOnGuestReceive(msg) {
+  if (!msg || !msg.type) return;
+  if (msg.type === 'state') {
+    netApplyStateFromHost(msg.state);
+  } else if (msg.type === 'timer') {
+    netStartTimerClient(msg.forPlayer, msg.remaining);
+  } else if (msg.type === 'timerStop') {
+    netStopTimer();
+  }
+}
+
+// ── ホスト→ゲスト 状態同期 ──────────────────────────────────
+function netSyncToGuest() {
+  if (NET_MODE !== 'host' || !NET_CONN || !NET_CONN.open) return;
+  try {
+    const snapshot = JSON.stringify(G, (key, val) => {
+      if (val instanceof Set) return {__set: Array.from(val)};
+      return val;
+    });
+    NET_CONN.send({type:'state', state: snapshot});
+  } catch(e) { /* ignore */ }
+}
+
+// ── ゲスト: ホストの状態を適用 ───────────────────────────────
+function netApplyStateFromHost(snapshot) {
+  try {
+    G = JSON.parse(snapshot, (key, val) => {
+      if (val && val.__set) return new Set(val.__set);
+      return val;
+    });
+    render();
+    updateHints();
+  } catch(e) { /* ignore */ }
+}
+
+// ── ゲスト: アクションをホストへ送信 ────────────────────────
+function netSendAction(actionType, payload) {
+  if (NET_MODE !== 'guest' || !NET_CONN || !NET_CONN.open) return;
+  NET_CONN.send({type:'action', actionType, payload});
+}
+
+// ── ホスト: ゲストのアクションを実行 ────────────────────────
+function netExecuteGuestAction(msg) {
+  const {actionType, payload} = msg;
+  switch (actionType) {
+    case 'endPhase':    endPhase(); break;
+    case 'passPriority': passPriority(); break;
+    case 'charge':      startCharge(); break;
+    case 'playCard': {
+      const p = G.players[1];
+      const idx = payload.handIdx;
+      if (idx != null && p.hand[idx]) {
+        G.selectedCard = {owner: 1, zone: 'hand', index: idx};
+        playSelectedCard(1);
+      }
+      break;
+    }
+    case 'tapLand': {
+      tapLandForMana(1, payload.instId);
+      break;
+    }
+    case 'activateCreature': {
+      handleFieldClick(1, payload.instId);
+      break;
+    }
+    case 'confirmBlock': {
+      endPhase();
+      break;
+    }
+    case 'selectBlocker': {
+      netGuestSelectBlocker(payload.attackerInstId, payload.blockerInstId);
+      break;
+    }
+    case 'targetSelect': {
+      netGuestTargetSelect(payload);
+      break;
+    }
+    case 'mulliganConfirm': {
+      G.mulliganSelected = new Set(payload.selected);
+      _doConfirmStartMulligan();
+      break;
+    }
+    case 'mulliganSkip': {
+      _doSkipStartMulligan();
+      break;
+    }
+  }
+  netSyncToGuest();
+}
+
+function netGuestSelectBlocker(attackerInstId, blockerInstId) {
+  if (G.playerBlockMode) {
+    G.selectedBlockerToAssign = blockerInstId;
+    G.playerBlockAssignments[attackerInstId] = blockerInstId;
+    render(); updateHints();
+  }
+}
+
+function netGuestTargetSelect(payload) {
+  if (!G.targetMode) return;
+  const tm = G.targetMode;
+  if (tm.type === 'opponentCreature' && payload.instId) {
+    const tgt = G.players[0].field.find(c => c.instanceId === payload.instId);
+    if (tgt) tm.callback({instId: payload.instId, cardId: tgt.cardId});
+  } else if (tm.type === 'ownCreature' && payload.instId) {
+    const tgt = G.players[1].field.find(c => c.instanceId === payload.instId);
+    if (tgt) tm.callback({instId: payload.instId, cardId: tgt.cardId});
+  } else if (tm.type === 'ownLand' && payload.instId) {
+    tm.callback(payload.instId);
+  }
+}
+
+// ── ターンタイマー ────────────────────────────────────────────
+function netStartTimer() {
+  if (NET_MODE === 'local') return;
+  netStopTimer();
+  const isMyTurn = G.activePlayer === NET_MY_IDX;
+  const limit = isMyTurn ? NET_TURN_LIMIT : NET_OPP_LIMIT;
+  _netTimerFor = G.activePlayer;
+  _netTimerRemaining = limit;
+  _netShowTimer(limit, limit, _netTimerFor);
+
+  // Host tells guest about the timer
+  if (NET_MODE === 'host' && NET_CONN && NET_CONN.open) {
+    NET_CONN.send({type:'timer', forPlayer: _netTimerFor, remaining: limit});
+  }
+
+  _netTimerInterval = setInterval(() => {
+    _netTimerRemaining--;
+    _netShowTimer(_netTimerRemaining, limit, _netTimerFor);
+    if (_netTimerRemaining <= 0) {
+      netTimerExpired();
+    }
+  }, 1000);
+}
+
+function netStartTimerClient(forPlayer, remaining) {
+  netStopTimer();
+  const limit = forPlayer === NET_MY_IDX ? NET_TURN_LIMIT : NET_OPP_LIMIT;
+  _netTimerFor = forPlayer;
+  _netTimerRemaining = remaining;
+  _netShowTimer(remaining, limit, forPlayer);
+  _netTimerInterval = setInterval(() => {
+    _netTimerRemaining--;
+    _netShowTimer(_netTimerRemaining, limit, _netTimerFor);
+    if (_netTimerRemaining <= 0) {
+      clearInterval(_netTimerInterval);
+      // Guest just shows expired; host handles the actual auto-action
+    }
+  }, 1000);
+}
+
+function netStopTimer() {
+  if (_netTimerInterval) { clearInterval(_netTimerInterval); _netTimerInterval = null; }
+  document.getElementById('net-timer-bar').style.display = 'none';
+  document.getElementById('net-timer-label').textContent = '';
+}
+
+function _netShowTimer(remaining, total, forPlayer) {
+  const bar  = document.getElementById('net-timer-bar');
+  const fill = document.getElementById('net-timer-fill');
+  const lbl  = document.getElementById('net-timer-label');
+  bar.style.display = 'block';
+  const pct = Math.max(0, remaining / total * 100);
+  fill.style.width = pct + '%';
+  const isMe = forPlayer === NET_MY_IDX;
+  fill.style.background = remaining <= 10 ? '#ff4444' : remaining <= 20 ? '#ffaa00' : isMe ? '#44ff88' : '#4488ff';
+  lbl.textContent = isMe ? `あなたの残り ${remaining}秒` : `相手の残り ${remaining}秒`;
+}
+
+function netTimerExpired() {
+  netStopTimer();
+  if (NET_MODE !== 'host') return; // only host executes
+  if (G.activePlayer === 0) {
+    // Active player (player 0 = host's player) → auto end turn
+    log('⏰ 制限時間超過: 自動ターン終了', 'important');
+    endTurn();
+  } else {
+    // Non-turn player (player 1 = guest) timed out
+    if (G.awaitingPriority && G.priorityFor === 1) {
+      log('⏰ 相手の制限時間超過: 優先権パス', 'important');
+      closePriorityAndResolve();
+    } else if (G.playerBlockMode) {
+      log('⏰ 相手の制限時間超過: ブロックパス', 'important');
+      G.playerBlockMode = false;
+      G.selectedBlockerToAssign = null;
+      setTimeout(() => resolveAICombat(), 100);
+    }
+  }
+  netSyncToGuest();
+}
+
+// ── ゲスト: 操作権限チェック ──────────────────────────────────
+function netCanAct() {
+  if (NET_MODE !== 'guest') return true;
+  if (G.mulliganMode) return true;
+  if (G.awaitingPriority && G.priorityFor === NET_MY_IDX) return true;
+  if (G.playerBlockMode) return true;
+  return G.activePlayer === NET_MY_IDX;
+}
+
+// ── ホスト: アクション後に同期 ───────────────────────────────
+function netPostAction() {
+  if (NET_MODE === 'host') netSyncToGuest();
+}
+
+// ── ターン終了後: タイマーリセット＆同期 ─────────────────────
+function netPostTurnEnd() {
+  if (NET_MODE === 'local') return;
+  netStopTimer();
+  netSyncToGuest();
+  setTimeout(() => netStartTimer(), 300);
+}
+
+// ============================================================
 // INIT
 // ============================================================
-initGame();
+
+// Show lobby on page load instead of immediately initing the game
+netShowLobby();
+
 </script>
 </body>
 </html>
