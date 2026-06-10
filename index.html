@@ -671,6 +671,13 @@ button.danger:hover { background: #6a2a2a; }
 <!-- Phase Flash -->
 <div id="phase-flash"></div>
 
+<!-- Mulligan Banner -->
+<div id="mulligan-banner" style="display:none; position:fixed; bottom:0; left:0; right:0; background:#1a1a3a; border-top:2px solid #6060ff; padding:10px 16px; z-index:200; align-items:center; gap:12px;">
+  <span style="font-size:12px; color:#aaccff; flex:1;">🃏 マリガン: 戻したいカードをクリックして選択し「確認」で同枚数引き直します。選択中: <span id="mulligan-count">0</span>枚</span>
+  <button onclick="confirmStartMulligan()" style="padding:8px 18px; background:#2a2a8a; border:1px solid #6060ff; color:#fff; border-radius:5px; font-size:12px; cursor:pointer;">確認</button>
+  <button onclick="skipStartMulligan()" style="padding:8px 18px; background:#2a2a2a; border:1px solid #555; color:#ccc; border-radius:5px; font-size:12px; cursor:pointer;">マリガンしない</button>
+</div>
+
 <!-- Modal -->
 <div id="modal">
   <div id="modal-box">
@@ -880,6 +887,8 @@ function initGame() {
     kakutouTargetMode: false,    // waiting for player to select kakutou target
     pendingKakutouInstId: null,
     combatArrows: [],
+    mulliganMode: false,
+    mulliganSelected: new Set(),
   };
 
   // Draw initial hands
@@ -896,69 +905,36 @@ function initGame() {
 }
 
 function showStartMulligan() {
-  const p = G.players[0];
-  let chosen = new Set();
-
-  const buildCards = () => {
-    const container = document.getElementById('mulligan-cards');
-    container.innerHTML = '';
-    p.hand.forEach((cid, i) => {
-      const card = CARD_DB[cid];
-      const wrap = document.createElement('div');
-      wrap.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;';
-      const el = document.createElement('div');
-      el.className = `card color-${card.color}`;
-      el.style.cursor = 'pointer';
-      el.innerHTML = buildCardHTML(card);
-      const info = document.createElement('div');
-      info.style.cssText = 'width:84px;font-size:9px;color:#ccc;line-height:1.4;text-align:left;background:#1a1a2a;border:1px solid #333;border-radius:4px;padding:4px;white-space:pre-wrap;';
-      info.textContent = (card.text || '（テキストなし）');
-      wrap.appendChild(el);
-      wrap.appendChild(info);
-      wrap.onclick = () => {
-        if (chosen.has(i)) { chosen.delete(i); wrap.style.opacity = '1'; }
-        else { chosen.add(i); wrap.style.opacity = '0.4'; }
-        document.getElementById('mulligan-count').textContent = chosen.size;
-      };
-      container.appendChild(wrap);
-    });
-  };
-
-  const html = `
-    <p style="margin-bottom:8px; font-size:12px;">戻したいカードを選択してクリック（グレーアウト）し、確認を押すと同枚数引き直します。</p>
-    <p style="margin-bottom:10px; font-size:11px; color:#aaa;">選択枚数: <span id="mulligan-count">0</span>枚</p>
-    <div style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px;" id="mulligan-cards"></div>
-    <div style="display:flex; gap:8px;">
-      <button onclick="confirmStartMulligan()" style="flex:1; padding:10px; background:#2a2a8a; border:1px solid #6060ff; color:#fff; border-radius:5px; font-size:13px; cursor:pointer;">確認</button>
-      <button onclick="skipStartMulligan()" style="flex:1; padding:10px; font-size:13px; cursor:pointer;">マリガンしない</button>
-    </div>
-  `;
-  showModal('マリガン（ゲーム開始時）', html);
-  buildCards();
-  window._startMulliganChosen = chosen;
+  G.mulliganMode = true;
+  G.mulliganSelected = new Set();
+  render();
+  const banner = document.getElementById('mulligan-banner');
+  if (banner) banner.style.display = 'flex';
 }
 
 function confirmStartMulligan() {
   const p = G.players[0];
-  const chosen = window._startMulliganChosen || new Set();
+  const chosen = G.mulliganSelected || new Set();
   if (chosen.size > 0) {
-    const newHand = [];
-    p.hand.forEach((cid, i) => {
-      if (chosen.has(i)) p.deck.push(cid);
-      else newHand.push(cid);
-    });
-    p.hand = newHand;
+    const indicesToReturn = Array.from(chosen).sort((a, b) => b - a);
+    indicesToReturn.forEach(i => p.deck.push(p.hand.splice(i, 1)[0]));
     p.deck = shuffle(p.deck);
     for (let i = 0; i < chosen.size; i++) drawCard(0);
     p.mulliganUsed = true;
     log(`マリガン: ${chosen.size}枚入れ替え`);
   }
-  closeModal();
+  G.mulliganMode = false;
+  G.mulliganSelected = new Set();
+  const banner = document.getElementById('mulligan-banner');
+  if (banner) banner.style.display = 'none';
   startFirstTurn();
 }
 
 function skipStartMulligan() {
-  closeModal();
+  G.mulliganMode = false;
+  G.mulliganSelected = new Set();
+  const banner = document.getElementById('mulligan-banner');
+  if (banner) banner.style.display = 'none';
   startFirstTurn();
 }
 
@@ -2572,6 +2548,23 @@ function renderHand(player) {
     const el = document.createElement('div');
     if (player === 1) {
       el.className = 'card face-down';
+    } else if (G.mulliganMode) {
+      el.className = `card color-${card.color}`;
+      el.innerHTML = buildCardHTML(card);
+      el.style.cursor = 'pointer';
+      if (G.mulliganSelected.has(i)) {
+        el.style.opacity = '0.35';
+        el.style.outline = '2px solid #ff6666';
+      } else {
+        el.style.outline = '2px solid transparent';
+      }
+      el.onclick = () => {
+        if (G.mulliganSelected.has(i)) G.mulliganSelected.delete(i);
+        else G.mulliganSelected.add(i);
+        const countEl = document.getElementById('mulligan-count');
+        if (countEl) countEl.textContent = G.mulliganSelected.size;
+        renderHand(0);
+      };
     } else {
       el.className = `card color-${card.color}`;
       // Determine if playable
