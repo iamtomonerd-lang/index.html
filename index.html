@@ -1084,24 +1084,29 @@ function playCardFromHand(player, handIndex) {
   if (!isMyTurn && !isQuick) { log('あなたのターンではありません'); return; }
   if (!inMain && !isQuick) { log('メインフェイズ以外ではカードをプレイできません'); return; }
   if (G.combatStep && !isQuick) { log('戦闘フェイズ中はプレイできません'); return; }
+  // スタックにアイテムがある間は非Quickカードは唱えられない
+  if (G.stack.length > 0 && !isQuick) { log('スタック処理中は唱えられません（Quickのみ対応可）'); return; }
 
   if (!canAfford(player, card.cost)) { log('マナが足りません'); return; }
 
   if (card.type === 'spell') {
     if (card.effect === 'junigeki') {
-      // Quick: deal 2 dmg to opponent creature AND +0/+1 to own creature
-      G.targetMode = { type:'opponentCreature', callback: (tgt) => {
-        payMana(player, card.cost);
-        p.hand.splice(handIndex, 1);
-        applyDamageToCreature(1-player, tgt.instId, 2, player);
-        p.graveyard.push(cardId);
-        log(`${card.name}: 対戦相手クリーチャーに2ダメージ`, 'damage');
-        // Now pick own creature to buff
+      // 対象選択してからスタックへ
+      G.targetMode = { type:'opponentCreature', callback: (tgt1) => {
         G.targetMode = { type:'ownCreature', owner:player, callback: (tgt2) => {
-          const oc = G.players[player].field.find(x=>x.instanceId===tgt2.instId);
-          if (oc) { oc.tempToughness = (oc.tempToughness||0)+1; G.tempBuffs.push({instanceId:tgt2.instId,power:0,toughness:1}); }
-          log(`${card.name}: 自クリーチャーに+0/+1`);
-          G.targetMode = null; render(); updateHints();
+          G.targetMode = null;
+          payMana(player, card.cost);
+          p.hand.splice(handIndex, 1);
+          log(`${card.name} をスタックに積んだ`, 'important');
+          G.stack.push({ name: card.name, icon: card.icon||'🛡️', owner: player, resolve: () => {
+            applyDamageToCreature(1-player, tgt1.instId, 2, player);
+            const oc = G.players[player].field.find(x=>x.instanceId===tgt2.instId);
+            if (oc) { oc.tempToughness=(oc.tempToughness||0)+1; G.tempBuffs.push({instanceId:tgt2.instId,power:0,toughness:1}); }
+            p.graveyard.push(cardId);
+            log(`${card.name} 解決: 2ダメージ + +0/+1`, 'damage');
+            render();
+          }});
+          renderStack(); render(); updateHints();
           openPriorityWindow(1 - player, null);
         }};
         log('自クリーチャーを選択（+0/+1）');
@@ -1118,24 +1123,33 @@ function playCardFromHand(player, handIndex) {
     }
     payMana(player, card.cost);
     p.hand.splice(handIndex, 1);
-    p.graveyard.push(cardId);
-    log(`${card.name} を使用`);
-    render(); updateHints();
+    log(`${card.name} をスタックに積んだ`, 'important');
+    G.stack.push({ name: card.name, icon: card.icon||'✨', owner: player, resolve: () => {
+      p.graveyard.push(cardId);
+      log(`${card.name} 解決`);
+      render();
+    }});
+    renderStack(); render(); updateHints();
     openPriorityWindow(1 - player, null);
     return;
   }
 
-  // Creature
+  // Creature: スタックに積んで解決時に場に出る
   if (p.field.length >= 5) { log('フィールドがいっぱいです（最大5体）'); return; }
   payMana(player, card.cost);
   p.hand.splice(handIndex, 1);
   const inst = newInstance(cardId);
   inst.sick = true;
   inst.entryTurn = G.turn;
-  p.field.push(inst);
-  log(`${card.name} を召喚 (${costToString(card.cost)})`, 'important');
-  fireETB(player, inst.instanceId);
-  render(); updateHints();
+  log(`${card.name} をスタックに積んだ (${costToString(card.cost)})`, 'important');
+  G.stack.push({ name: card.name, icon: card.icon||'⚔️', owner: player, resolve: () => {
+    if (p.field.length >= 5) { p.graveyard.push(cardId); log(`${card.name}: フィールドが満杯`); return; }
+    p.field.push(inst);
+    log(`${card.name} が場に出た`, 'important');
+    fireETB(player, inst.instanceId);
+    render();
+  }});
+  renderStack(); render(); updateHints();
   openPriorityWindow(1 - player, null);
 }
 
@@ -1173,26 +1187,36 @@ function kaizenChoice(player, handIndex, choice) {
 
   if (choice === 'A') {
     G.targetMode = { type:'opponentCreature', callback:(tgt) => {
+      G.targetMode = null;
       payMana(player, card.cost);
       p.hand.splice(handIndex, 1);
-      applyDamageToCreature(1-player, tgt.instId, 2, player);
-      p.graveyard.push(cardId);
-      G.blockDrawTrigger = true;
-      log(`介善(A): 対戦相手クリーチャーに2ダメージ、このターンブロック時1ドロー`, 'damage');
-      G.targetMode = null; render(); updateHints();
+      log(`介善(A) をスタックに積んだ`, 'important');
+      G.stack.push({ name: card.name, icon: card.icon||'✨', owner: player, resolve: () => {
+        applyDamageToCreature(1-player, tgt.instId, 2, player);
+        p.graveyard.push(cardId);
+        G.blockDrawTrigger = true;
+        log(`介善(A) 解決: 2ダメージ、ブロック時1ドロー`, 'damage');
+        render();
+      }});
+      renderStack(); render(); updateHints();
       openPriorityWindow(1 - player, null);
     }};
     log('対象クリーチャーを選択（2ダメージ）');
   } else {
     G.targetMode = { type:'opponentCreature', callback:(tgt) => {
+      G.targetMode = null;
       payMana(player, card.cost);
       p.hand.splice(handIndex, 1);
-      const tc = G.players[1-player].field.find(x=>x.instanceId===tgt.instId);
-      if (tc) { tc.mustAttack = true; G.mustAttackCreatures.add(tgt.instId); }
-      p.graveyard.push(cardId);
-      G.blockDrawTrigger = true;
-      log(`介善(B): 対戦相手クリーチャーに攻撃強制、このターンブロック時1ドロー`, 'important');
-      G.targetMode = null; render(); updateHints();
+      log(`介善(B) をスタックに積んだ`, 'important');
+      G.stack.push({ name: card.name, icon: card.icon||'✨', owner: player, resolve: () => {
+        const tc = G.players[1-player].field.find(x=>x.instanceId===tgt.instId);
+        if (tc) { tc.mustAttack = true; G.mustAttackCreatures.add(tgt.instId); }
+        p.graveyard.push(cardId);
+        G.blockDrawTrigger = true;
+        log(`介善(B) 解決: 攻撃強制、ブロック時1ドロー`, 'important');
+        render();
+      }});
+      renderStack(); render(); updateHints();
       openPriorityWindow(1 - player, null);
     }};
     log('対象クリーチャーを選択（攻撃強制）');
@@ -1967,15 +1991,23 @@ function openPriorityWindow(forPlayer, continuation) {
 function closePriorityAndResolve() {
   G.awaitingPriority = false;
   G.priorityFor = null;
-  // Resolve all stack items (LIFO)
-  while (G.stack.length > 0) {
-    const item = G.stack.pop();
-    if (item.resolve) item.resolve();
-  }
-  renderStack();
   const cont = G.priorityContinuation;
   G.priorityContinuation = null;
-  render();
+
+  if (G.stack.length > 0) {
+    // LIFO: 最後に積んだものを解決
+    const item = G.stack.pop();
+    log(`スタック解決: ${item.icon||''} ${item.name}`, 'important');
+    if (item.resolve) item.resolve();
+    renderStack();
+    render();
+    // まだスタックが残っていれば再度優先権ウィンドウ
+    if (G.stack.length > 0) {
+      setTimeout(() => openPriorityWindow(1 - G.activePlayer, cont), 400);
+      return;
+    }
+  }
+  // スタック空 → continuation実行
   if (cont) setTimeout(cont, 50);
 }
 
@@ -2106,16 +2138,29 @@ function aiTurn() {
         const inst = newInstance(cid);
         inst.sick = true;
         inst.entryTurn = G.turn;
-        ai.field.push(inst);
-        log(`AI: ${card.name} を召喚`);
+        log(`AI: ${card.name} をスタックに積んだ`);
         showAIBalloon(`${card.icon} ${card.name} 召喚！`);
-        fireETB(1, inst.instanceId);
+        G.stack.push({ name: card.name, icon: card.icon||'⚔️', owner: 1, resolve: () => {
+          if (ai.field.length >= 5) { ai.graveyard.push(cid); return; }
+          ai.field.push(inst);
+          log(`AI: ${card.name} が場に出た`, 'important');
+          fireETB(1, inst.instanceId);
+          render();
+        }});
+        renderStack();
         played = true;
         aiPlayedCard = true;
         render();
       } else if (card.type === 'spell') {
+        payMana(1, card.cost);
+        ai.hand.splice(i, 1);
+        ai.graveyard.push(cid);
         showAIBalloon(`${card.icon} ${card.name} 使用！`);
-        aiPlaySpell(card, i);
+        log(`AI: ${card.name} をスタックに積んだ`);
+        G.stack.push({ name: card.name, icon: card.icon||'✨', owner: 1, resolve: () => {
+          aiPlaySpellEffect(card);
+        }});
+        renderStack();
         played = true;
         aiPlayedCard = true;
         render();
