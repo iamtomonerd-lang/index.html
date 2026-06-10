@@ -710,6 +710,16 @@ function initGame() {
     combatBlockersAlive: {},
     cantAttackPermanent: new Set(),
     kaizen_used_names: new Set(),
+    // AI attack / player block phase
+    playerBlockMode: false,
+    aiCurrentAttackers: [],      // [{instId, targetType:'player'|'creature', targetInstId}]
+    playerBlockAssignments: {},  // aiAtkInstId -> playerBlkInstId
+    selectedBlockerToAssign: null,
+    directlyAttackedCreatures: new Set(), // player creature instIds being directly targeted
+    // Kakutou target tracking
+    kakutouTargets: {},          // playerAtkInstId -> aiCreatureInstId
+    kakutouTargetMode: false,    // waiting for player to select kakutou target
+    pendingKakutouInstId: null,
   };
 
   // Draw initial hands
@@ -1217,7 +1227,21 @@ function endPhase() {
     return;
   }
 
+  // プレイヤーブロック確定
+  if (G.playerBlockMode) {
+    G.playerBlockMode = false;
+    G.selectedBlockerToAssign = null;
+    render();
+    setTimeout(() => resolveAICombat(), 300);
+    return;
+  }
+
   if (G.phase === 'combat') {
+    // 格闘ターゲット選択中なら確定待ち
+    if (G.kakutouTargetMode) {
+      log('格闘: 先に攻撃対象のクリーチャーを選んでください');
+      return;
+    }
     if (G.combatStep === 'declare_attackers') {
       if (G.players[0].attackers.length > 0) {
         G.combatStep = 'declare_blockers';
@@ -1241,9 +1265,9 @@ function canCreatureAttack(player, inst) {
   if (G.cantAttackPermanent.has(inst.instanceId)) return false;
   if (inst.tapped) return false;
   if (!inst.sick) return true;
-  // 格闘: can attack tapped opponents on entry turn
+  // 格闘: 出たターンは状態問わず相手クリーチャーにのみ攻撃できる
   if (card.kakutou && inst.entryTurn === G.turn) {
-    return G.players[1-player].field.some(c=>c.tapped);
+    return G.players[1-player].field.length > 0;
   }
   return false;
 }
@@ -1414,9 +1438,14 @@ function activateChargedLand(player, instId) {
     log(`${landCard.name} 還元: WW追加、土地デッキ底へ`, 'heal');
     render(); updateHints();
   } else if (landCard.chargedAbility === 'damage2opponent') {
-    // kemono_heichi: tap -> deal 2 dmg to opponent creature
-    if (land.tapped) { log('タップ済み'); return; }
-    land.tapped = true;
+    // kemono_heichi: 自身を土地デッキ底へ送り → 相手クリーチャーに2ダメージ
+    // 土地をフィールドから除去
+    const lIdx = p.lands.findIndex(l=>l.instanceId===instId);
+    if (lIdx === -1) return;
+    p.lands.splice(lIdx, 1);
+    p.landDeck.push(landCard.id);
+    if (land.chargeCard) p.exile.push(land.chargeCard);
+    log(`${landCard.name} 還元: 土地デッキ底へ`);
     if (player === 0) {
       G.targetMode = { type:'opponentCreature', callback:(tgt) => {
         applyDamageToCreature(opp, tgt.instId, 2, player);
@@ -1479,11 +1508,20 @@ function toggleAttacker(instId) {
     p.attackers.push(instId);
     if (!card.vigilance) creature.tapped = true;
     log(`攻撃宣言: ${card.name}`);
+    // 格闘: 出たターンはクリーチャーを対象に選ぶ
+    if (card.kakutou && creature.entryTurn === G.turn) {
+      G.kakutouTargetMode = true;
+      G.pendingKakutouInstId = instId;
+      log('格闘: 攻撃対象のクリーチャーを選択してください');
+    }
   } else {
     p.attackers.splice(idx, 1);
     if (!card.vigilance) creature.tapped = false;
+    delete G.kakutouTargets[instId];
+    G.kakutouTargetMode = false;
+    G.pendingKakutouInstId = null;
   }
-  render();
+  render(); updateHints();
 }
 
 function canFlyBlock(attackerInst, blockerInst) {
@@ -1537,9 +1575,19 @@ function resolveCombat() {
     const blockerIds = player.blockers[atkId] || [];
 
     if (blockerIds.length === 0) {
-      // Check kakutou entry turn: can only attack tapped
+      // 格闘: 出たターンはクリーチャーのみ攻撃、対象クリーチャーに直接ダメージ
       if (atkCard.kakutou && attacker.entryTurn === G.turn) {
-        // Verify target was tapped - since no blocker and going direct, skip (AI chose no block)
+        const tgtId = G.kakutouTargets[atkId];
+        const tgtInst = tgtId ? ai.field.find(c=>c.instanceId===tgtId) : null;
+        if (tgtInst) {
+          const tgtPow = getEffectivePower(1, tgtInst);
+          tgtInst.damage += atkPow;
+          attacker.damage += tgtPow;
+          log(`${atkCard.name} (格闘) が ${CARD_DB[tgtInst.cardId].name} に${atkPow}ダメージ`, 'damage');
+          checkCreatureDeath(1, tgtId, 0);
+          checkCreatureDeath(0, atkId, 1);
+        }
+        return;
       }
       ai.life -= atkPow;
       showFloatDamage(atkPow, 'ai');
@@ -1804,110 +1852,141 @@ function aiAttack() {
   const ai = G.players[1];
   const player = G.players[0];
 
-  // Determine attackers: must attack if mustAttack, also willing attackers
-  let attackers = [];
+  // 攻撃クリーチャー収集
+  let attackerInsts = [];
   ai.field.forEach(c => {
     const card = CARD_DB[c.cardId];
-    // Check if can attack
     if (G.cantAttackPermanent.has(c.instanceId)) return;
     if (c.tapped && !card.vigilance) return;
     if (c.sick) {
-      // kakutou can attack tapped player creatures on entry turn
-      if (card.kakutou && c.entryTurn === G.turn && player.field.some(pc=>pc.tapped)) {
-        attackers.push(c);
+      // 格闘: 出たターンは任意の相手クリーチャーに攻撃可
+      if (card.kakutou && c.entryTurn === G.turn && player.field.length > 0) {
+        attackerInsts.push(c);
       }
       return;
     }
-    // Check arestia passive: mustAttack
-    if (c.mustAttack) { attackers.push(c); return; }
-    attackers.push(c);
+    attackerInsts.push(c);
   });
 
-  if (attackers.length === 0) { setTimeout(() => endTurn(), 300); return; }
+  if (attackerInsts.length === 0) { setTimeout(() => endTurn(), 300); return; }
 
-  // アレスティア passive: if player has arestia, player creatures get +1/+1 temp on AI attack
+  // アレスティア passive
   const playerHasArestia = player.field.some(c=>CARD_DB[c.cardId].id==='arestia');
   if (playerHasArestia) {
     player.field.forEach(c=>{c.tempPower=(c.tempPower||0)+1;c.tempToughness=(c.tempToughness||0)+1;});
     log('アレスティア: プレイヤークリーチャー全体+1/+1（ターン終了時まで）','important');
   }
 
-  log('AI攻撃！');
-  const usedBlockers = new Set();
-  const aiAttackerIds = [];
-  const aiBlockerMap = {}; // atkId -> blkId
-
-  attackers.forEach(c => {
+  // 攻撃宣言 & ターゲット設定
+  G.aiCurrentAttackers = [];
+  G.directlyAttackedCreatures = new Set();
+  attackerInsts.forEach(c => {
     const card = CARD_DB[c.cardId];
     if (!card.vigilance) c.tapped = true;
-    aiAttackerIds.push(c.instanceId);
-
-    // kakutou on entry: can only attack tapped player creatures
-    let validTargets;
+    let targetType = 'player';
+    let targetInstId = null;
     if (card.kakutou && c.entryTurn === G.turn) {
-      validTargets = player.field.filter(pc=>pc.tapped);
+      // 格闘: 最も強い相手クリーチャーを対象
+      targetType = 'creature';
+      const strongest = player.field.reduce((a,b)=>getEffectivePower(0,b)>getEffectivePower(0,a)?b:a);
+      targetInstId = strongest.instanceId;
+      G.directlyAttackedCreatures.add(targetInstId);
+      log(`AI ${card.name} (格闘) → ${CARD_DB[strongest.cardId].name} を攻撃`);
     } else {
-      validTargets = null; // can attack player directly or be blocked
+      log(`AI ${card.name} が攻撃宣言`);
     }
+    G.aiCurrentAttackers.push({instId: c.instanceId, targetType, targetInstId});
+  });
 
-    const pow = getEffectivePower(1, c);
-    // Find a blocker
-    const availBlockers = player.field.filter(b=>!usedBlockers.has(b.instanceId) && !b.tapped && canFlyBlock(c, b));
-    const blocker = availBlockers.length > 0 ? availBlockers[0] : null;
+  // プレイヤーブロック宣言フェイズへ
+  G.playerBlockMode = true;
+  G.playerBlockAssignments = {};
+  G.selectedBlockerToAssign = null;
+  log('--- ブロッカーを宣言してください ---', 'important');
+  log('自分のクリーチャーをクリック → AIの攻撃クリーチャーをクリックでブロック割り当て');
+  log('「フェイズ終了」ボタンでブロック確定');
+  render(); updateHints();
+}
 
-    if (!blocker) {
-      // If kakutou on entry, can only attack tapped targets; if none unblocked, no damage
-      if (card.kakutou && c.entryTurn === G.turn && (validTargets && validTargets.length === 0)) {
-        log(`${card.name} (格闘): タップ中のクリーチャーなし、攻撃不可`);
-        return;
-      }
-      player.life -= pow;
-      showFloatDamage(pow, 'player');
-      log(`AI ${card.name} が${pow}ダメージ！`, 'damage');
-    } else {
-      usedBlockers.add(blocker.instanceId);
-      aiBlockerMap[c.instanceId] = blocker.instanceId;
+function resolveAICombat() {
+  if (G.phase === 'ended') return;
+  const ai = G.players[1];
+  const player = G.players[0];
+  const usedBlockers = new Set(Object.values(G.playerBlockAssignments));
+
+  G.aiCurrentAttackers.forEach(({instId: atkId, targetType, targetInstId}) => {
+    const attacker = ai.field.find(c=>c.instanceId===atkId);
+    if (!attacker) return;
+    const atkCard = CARD_DB[attacker.cardId];
+    const atkPow = getEffectivePower(1, attacker);
+
+    const blkId = G.playerBlockAssignments[atkId];
+    const blocker = blkId ? player.field.find(c=>c.instanceId===blkId) : null;
+
+    if (blocker) {
+      // ブロックあり
       const blkCard = CARD_DB[blocker.cardId];
       const blkPow = getEffectivePower(0, blocker);
-      log(`AI ${card.name} 攻撃 -> ${blkCard.name} ブロック`);
+      log(`${atkCard.name} vs ${blkCard.name} (ブロック)`);
+      blocker.damage += atkPow;
+      attacker.damage += blkPow;
 
-      blocker.damage += pow;
-      c.damage += blkPow;
-
-      // on-block triggers for blocker
-      if (blkCard.onBlock === 'draw1') { drawCard(0); log(`${blkCard.name} ブロック: 1ドロー`); }
-      if (blkCard.onBlock === 'gain3life') { player.life += 3; log(`${blkCard.name} ブロック: ライフ3回復`,'heal'); }
-      if (blkCard.onBlock === 'damage2attacker') { c.damage += 2; log(`${blkCard.name} ブロック: 攻撃クリーチャーに2ダメージ`,'damage'); }
+      // ブロック時トリガー
+      if (blkCard.onBlock === 'draw1') { drawCard(0); log(`${blkCard.name}: ブロック時1ドロー`); }
+      if (blkCard.onBlock === 'gain3life') { player.life += 3; log(`${blkCard.name}: ブロック時ライフ3回復`,'heal'); }
+      if (blkCard.onBlock === 'damage2attacker') { attacker.damage += 2; log(`${blkCard.name}: ブロック時2ダメージ`,'damage'); }
       if (blkCard.cx8Block === 'buff1ally' && getCXValue(0) >= 8) {
         const allies = player.field.filter(pc=>pc.instanceId!==blocker.instanceId);
-        if (allies.length>0){addPermanentBuff(0,allies[0].instanceId,1,1);log(`${blkCard.name} CX8: 味方+1/+1`);}
+        if (allies.length > 0) { addPermanentBuff(0, allies[0].instanceId, 1, 1); log(`${blkCard.name} CX8: 味方+1/+1`); }
       }
-      if (G.blockDrawTrigger) { drawCard(1); log('介善: ブロック時1ドロー'); }
+      if (G.blockDrawTrigger) { drawCard(0); log('介善: ブロック時1ドロー'); }
 
       checkCreatureDeath(0, blocker.instanceId, 1);
-      checkCreatureDeath(1, c.instanceId, 0);
+      checkCreatureDeath(1, atkId, 0);
+    } else {
+      // ブロックなし
+      if (targetType === 'creature' && targetInstId) {
+        // 格闘: 対象クリーチャーに直接ダメージ
+        const tgtInst = player.field.find(c=>c.instanceId===targetInstId);
+        if (tgtInst) {
+          const tgtPow = getEffectivePower(0, tgtInst);
+          tgtInst.damage += atkPow;
+          attacker.damage += tgtPow;
+          log(`AI ${atkCard.name} (格闘) が ${CARD_DB[tgtInst.cardId].name} に${atkPow}ダメージ`, 'damage');
+          checkCreatureDeath(0, targetInstId, 1);
+          checkCreatureDeath(1, atkId, 0);
+        }
+      } else {
+        player.life -= atkPow;
+        showFloatDamage(atkPow, 'player');
+        log(`AI ${atkCard.name} が${atkPow}ダメージ！`, 'damage');
+      }
     }
   });
 
-  // アレスティア AI turn block-completion: if player attacked (this is AI turn, so it's reverse)
-  // This fires when AI attacks and player's arestia condition: handled above differently
-  // Actually アレスティア block-completion: fires after player's OWN creatures block
-  // During AI attack, player's creatures are blockers -> check if none died -> deal 2 to AI
-  if (playerHasArestia) {
-    const anyBlockerDied = Array.from(usedBlockers).some(bid => {
-      return !player.field.some(c=>c.instanceId===bid);
-    });
-    if (usedBlockers.size > 0 && !anyBlockerDied) {
+  // アレスティア: ブロッカー全生存 → 2ダメージ
+  if (player.field.some(c=>CARD_DB[c.cardId].id==='arestia')) {
+    const hadBlockers = Object.keys(G.playerBlockAssignments).length > 0;
+    const anyBlockerDied = Object.values(G.playerBlockAssignments).some(bid=>!player.field.some(c=>c.instanceId===bid));
+    if (hadBlockers && !anyBlockerDied) {
       ai.life -= 2;
       showFloatDamage(2, 'ai');
       log('アレスティア: ブロッカー全生存 → 2ダメージ', 'damage');
     }
   }
 
-  // Vigilance: untap vigilant AI attackers
-  attackers.forEach(c => { if(CARD_DB[c.cardId].vigilance) c.tapped=false; });
+  // 警戒: AIアタッカーをアンタップ
+  G.aiCurrentAttackers.forEach(({instId}) => {
+    const atk = ai.field.find(c=>c.instanceId===instId);
+    if (atk && CARD_DB[atk.cardId].vigilance) atk.tapped = false;
+  });
 
   checkDeath();
+  G.playerBlockMode = false;
+  G.aiCurrentAttackers = [];
+  G.playerBlockAssignments = {};
+  G.selectedBlockerToAssign = null;
+  G.directlyAttackedCreatures = new Set();
   G.blockDrawTrigger = false;
   render();
   setTimeout(() => endTurn(), 600);
@@ -1999,10 +2078,33 @@ function renderField(player) {
       const el = document.createElement('div');
       el.className = `card color-${card.color}`;
       if (inst.tapped) el.classList.add('tapped');
-      // Attack mode highlights
+      // 攻撃宣言ハイライト
       if (player === 0 && G.attackMode && G.combatStep === 'declare_attackers') {
         if (canCreatureAttack(0, inst)) el.classList.add('attackable');
         if (G.players[0].attackers.includes(inst.instanceId)) el.classList.add('selected');
+      }
+      // 格闘ターゲット選択 (AI側クリーチャーをハイライト)
+      if (G.kakutouTargetMode && player === 1) el.classList.add('targetable');
+      // ブロック宣言ハイライト
+      if (G.playerBlockMode) {
+        if (player === 0) {
+          const card2 = CARD_DB[inst.cardId];
+          const canBlk = (!inst.tapped || (card2.ocBlockWhileTapped && isOCActive(0)))
+            && !inst.sick && !G.directlyAttackedCreatures.has(inst.instanceId);
+          if (canBlk) el.classList.add('blockable');
+          if (G.selectedBlockerToAssign === inst.instanceId) el.classList.add('selected');
+          const isAssigned = Object.values(G.playerBlockAssignments).includes(inst.instanceId);
+          if (isAssigned) el.classList.add('selected');
+        }
+        if (player === 1) {
+          const isAtkr = G.aiCurrentAttackers.some(a=>a.instId===inst.instanceId);
+          if (isAtkr) el.classList.add('attackable');
+          if (G.playerBlockAssignments[inst.instanceId]) {
+            const blkInst = G.players[0].field.find(c=>c.instanceId===G.playerBlockAssignments[inst.instanceId]);
+            if (blkInst) el.title = `ブロック: ${CARD_DB[blkInst.cardId].name}`;
+            el.classList.add('selected');
+          }
+        }
       }
       // Target mode
       if (G.targetMode) {
@@ -2146,7 +2248,70 @@ function handleFieldClick(player, instId) {
     }
   }
 
-  // Attack mode (player's creatures)
+  // 格闘ターゲット選択 (AIクリーチャーをクリック)
+  if (G.kakutouTargetMode && player === 1) {
+    G.kakutouTargets[G.pendingKakutouInstId] = instId;
+    const atkInst = G.players[0].field.find(c=>c.instanceId===G.pendingKakutouInstId);
+    const atkCard = atkInst ? CARD_DB[atkInst.cardId] : null;
+    const tgtInst = G.players[1].field.find(c=>c.instanceId===instId);
+    const tgtCard = tgtInst ? CARD_DB[tgtInst.cardId] : null;
+    log(`格闘対象: ${atkCard?.name} → ${tgtCard?.name}`);
+    G.kakutouTargetMode = false;
+    G.pendingKakutouInstId = null;
+    render(); updateHints();
+    return;
+  }
+
+  // ブロック宣言: 自分クリーチャー選択 or AI攻撃クリーチャー選択
+  if (G.playerBlockMode) {
+    if (player === 0) {
+      const inst2 = G.players[0].field.find(c=>c.instanceId===instId);
+      if (!inst2) return;
+      const card2 = CARD_DB[inst2.cardId];
+      const canBlk = (!inst2.tapped || (card2.ocBlockWhileTapped && isOCActive(0)))
+        && !inst2.sick && !G.directlyAttackedCreatures.has(instId);
+      if (!canBlk) { log(`${card2.name} はブロックできません`); return; }
+      // トグル選択
+      if (G.selectedBlockerToAssign === instId) {
+        G.selectedBlockerToAssign = null;
+      } else {
+        G.selectedBlockerToAssign = instId;
+        log(`${card2.name} をブロッカーに選択 → AIの攻撃クリーチャーをクリック`);
+      }
+      render(); updateHints();
+      return;
+    }
+    if (player === 1 && G.selectedBlockerToAssign) {
+      const isAtkr = G.aiCurrentAttackers.some(a=>a.instId===instId);
+      if (!isAtkr) return;
+      const atkrInst = G.players[1].field.find(c=>c.instanceId===instId);
+      const blkrInst = G.players[0].field.find(c=>c.instanceId===G.selectedBlockerToAssign);
+      if (!atkrInst || !blkrInst) return;
+      // 飛行チェック
+      if (!canFlyBlock(atkrInst, blkrInst)) {
+        log('飛行の制約でブロックできません'); return;
+      }
+      // 既に同じブロッカーが別の相手に割り当て済みなら解除
+      for (const [k,v] of Object.entries(G.playerBlockAssignments)) {
+        if (v === G.selectedBlockerToAssign) delete G.playerBlockAssignments[k];
+      }
+      G.playerBlockAssignments[instId] = G.selectedBlockerToAssign;
+      log(`${CARD_DB[blkrInst.cardId].name} が ${CARD_DB[atkrInst.cardId].name} をブロック`);
+      G.selectedBlockerToAssign = null;
+      render(); updateHints();
+      return;
+    }
+    // AI攻撃クリーチャーをクリックしてブロック割り当てを解除
+    if (player === 1 && G.playerBlockAssignments[instId]) {
+      delete G.playerBlockAssignments[instId];
+      log('ブロック割り当てを解除');
+      render(); updateHints();
+      return;
+    }
+    return;
+  }
+
+  // 攻撃宣言モード (player's creatures)
   if (player === 0 && G.attackMode && G.combatStep === 'declare_attackers') {
     toggleAttacker(instId);
     return;
@@ -2255,7 +2420,22 @@ function clearTargetMode() {
 
 function updateHints() {
   const hint = document.getElementById('action-hint');
-  if (G.targetMode) {
+  // ボタンテキスト切替
+  document.getElementById('btn-end-phase').textContent =
+    G.playerBlockMode ? 'ブロック確定' : 'フェイズ終了';
+
+  if (G.playerBlockMode) {
+    if (G.selectedBlockerToAssign) {
+      hint.textContent = 'AIの攻撃クリーチャーをクリックしてブロック割り当て';
+      hint.style.color = '#ff88aa';
+    } else {
+      hint.textContent = '自分クリーチャーを選択→AI攻撃クリーチャーを選択 | 「ブロック確定」でスキップ可';
+      hint.style.color = '#ff88aa';
+    }
+  } else if (G.kakutouTargetMode) {
+    hint.textContent = '格闘: 攻撃するAIクリーチャーを選択してください';
+    hint.style.color = '#ffaa00';
+  } else if (G.targetMode) {
     hint.textContent = '対象を選択中...（キャンセルはフェイズ終了ボタン）';
     hint.style.color = '#ffcc00';
   } else if (G.chargingMode === true) {
