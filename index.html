@@ -856,6 +856,7 @@ function initGame() {
     priorityFor: null,
     priorityContinuation: null,
     chargingMode: false,
+    chargeUsedThisTurn: false,
     targetMode: null, // {type, callback}
     attackMode: false,
     blockMode: false,
@@ -1564,6 +1565,7 @@ function endTurn() {
   G.attackMode = false;
   G.blockMode = false;
   G.chargingMode = false;
+  G.chargeUsedThisTurn = false;
 
   G.activePlayer = 1 - G.activePlayer;
   G.turn++;
@@ -1611,6 +1613,7 @@ function endTurn() {
 function startCharge() {
   if (G.activePlayer !== 0) { log('あなたのターンではありません'); return; }
   if (G.phase !== 'main') { log('メインフェイズ中のみチャージできます'); return; }
+  if (G.chargeUsedThisTurn) { log('チャージはターンに1回のみです'); return; }
   if (G.players[0].hand.length === 0) { log('手札がありません'); return; }
 
   // Check if any land can still be charged
@@ -1646,10 +1649,11 @@ function chargeToLand(landInstId) {
   const cardId = p.hand[hi];
   p.hand.splice(hi, 1);
   land.chargeCard = cardId;
-  land.tapped = false; // untap the land
+  land.tapped = true; // チャージした土地はそのターンタップ不可
   G.chargingMode = false;
   G.selectedCard = null;
-  log(`チャージ: ${CARD_DB[cardId].name} を土地に置き、土地をアンタップ`);
+  G.chargeUsedThisTurn = true;
+  log(`チャージ: ${CARD_DB[cardId].name} を土地に置いた（このターンはタップ不可）`);
   // wasure_heichi: draw 1 when charged
   const landCard = CARD_DB[land.cardId];
   if (landCard.chargeDrawTrigger) {
@@ -2850,7 +2854,7 @@ function updateHints() {
   }
 
   const btnCharge = document.getElementById('btn-charge');
-  btnCharge.disabled = G.activePlayer !== 0 || G.phase !== 'main';
+  btnCharge.disabled = G.activePlayer !== 0 || G.phase !== 'main' || G.chargeUsedThisTurn;
   const btnEnd = document.getElementById('btn-end-phase');
   btnEnd.disabled = (!G.playerBlockMode && G.activePlayer !== 0) || G.phase === 'ended';
 
