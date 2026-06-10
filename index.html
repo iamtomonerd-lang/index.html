@@ -877,6 +877,7 @@ function initGame() {
     kakutouTargets: {},          // playerAtkInstId -> aiCreatureInstId
     kakutouTargetMode: false,    // waiting for player to select kakutou target
     pendingKakutouInstId: null,
+    combatArrows: [],
   };
 
   // Draw initial hands
@@ -2022,10 +2023,12 @@ function aiTurn() {
         inst.entryTurn = G.turn;
         ai.field.push(inst);
         log(`AI: ${card.name} を召喚`);
+        showAIBalloon(`${card.icon} ${card.name} 召喚！`);
         fireETB(1, inst.instanceId);
         played = true;
         render();
       } else if (card.type === 'spell') {
+        showAIBalloon(`${card.icon} ${card.name} 使用！`);
         aiPlaySpell(card, i);
         played = true;
         render();
@@ -2106,7 +2109,9 @@ function aiAttack() {
 
   // 攻撃宣言 & ターゲット設定
   G.aiCurrentAttackers = [];
+  G.combatArrows = [];
   G.directlyAttackedCreatures = new Set();
+  if (attackerInsts.length > 0) showAIBalloon('⚔️ 攻撃宣言！');
   attackerInsts.forEach(c => {
     const card = CARD_DB[c.cardId];
     if (!card.vigilance) c.tapped = true;
@@ -2119,8 +2124,10 @@ function aiAttack() {
       targetInstId = strongest.instanceId;
       G.directlyAttackedCreatures.add(targetInstId);
       log(`AI ${card.name} (格闘) → ${CARD_DB[strongest.cardId].name} を攻撃`);
+      G.combatArrows.push({fromId: c.instanceId, toId: targetInstId, color: '#ff4444'});
     } else {
       log(`AI ${card.name} が攻撃宣言`);
+      G.combatArrows.push({fromId: c.instanceId, toId: null, color: '#ff8800'});
     }
     G.aiCurrentAttackers.push({instId: c.instanceId, targetType, targetInstId});
   });
@@ -2275,7 +2282,7 @@ function buildCardHTML(card, inst, playerOwner) {
     ptHtml = `<div class="card-pt">${card.power}/${card.toughness}</div>`;
   }
   const costStr = card.cost ? `<div class="card-cost">${costToString(card.cost)}</div>` : '';
-  const keywords = card.keywords && card.keywords.length ? `<div class="card-keywords">${card.keywords.join(', ')}</div>` : '';
+  const keywords = card.keywords && card.keywords.length ? `<div class="card-keywords">${card.keywords.map(k=>{ const def=KEYWORD_DEFS&&KEYWORD_DEFS[k]?KEYWORD_DEFS[k]:k; return `<span class="kw-tip" data-def="${def}">${k}</span>`; }).join(' ')}</div>` : '';
   const dmg = inst && inst.damage > 0 ? `<div class="damage-counter">${inst.damage}</div>` : '';
   const chg = inst && inst.chargeCard ? `<div class="charge-indicator">CG</div>` : '';
   return `
@@ -2310,6 +2317,7 @@ function renderHand(player) {
       el.innerHTML = buildCardHTML(card);
       el.onclick = () => handleHandClick(player, i);
       el.title = card.text || card.name;
+      el.dataset.cardId = card.id;
     }
     el.style.animation = 'slideIn 0.2s ease';
     zone.appendChild(el);
@@ -2366,6 +2374,8 @@ function renderField(player) {
         if (tm === 'ownCreature' && player === (G.targetMode.owner||0)) el.classList.add('targetable');
       }
       el.innerHTML = buildCardHTML(card, inst, player);
+      el.setAttribute('data-inst', inst.instanceId);
+      el.dataset.cardId = inst.cardId;
       el.onclick = () => handleFieldClick(player, inst.instanceId);
       slotEl.appendChild(el);
     } else {
@@ -2414,13 +2424,7 @@ function renderInfoBar() {
   const phases = { untap:'アンタップ', draw:'ドロー', main:'メイン', combat:'戦闘', end:'エンド', ended:'終了' };
   document.getElementById('phase-name').textContent = phases[G.phase] || G.phase;
 
-  const cx = getCXValue(0);
-  document.getElementById('cx-value').textContent = cx;
-  const oc = isOCActive(0);
-  const ocEl = document.getElementById('oc-status');
-  ocEl.textContent = `OC: ${oc ? '✓' : '✗'}`;
-  ocEl.style.background = oc ? '#2a4a2a' : '#4a1a2a';
-  ocEl.style.color = oc ? '#44ff88' : '#ff88aa';
+  // CX/OC status is shown via threshold gauge (updateThresholdGauge)
 
   document.getElementById('turn-indicator').textContent = `ターン ${G.turn} (${G.activePlayer===0?'自分':'AI'})`;
 
@@ -2430,10 +2434,16 @@ function renderInfoBar() {
 function renderStack() {
   const el = document.getElementById('stack-items');
   el.innerHTML = '';
+  if (G.stack.length === 0) {
+    el.innerHTML = '<span style="color:#444; font-size:10px;">スタックは空</span>';
+    return;
+  }
   G.stack.forEach(item => {
     const div = document.createElement('div');
     div.className = 'stack-item';
-    div.textContent = item.name;
+    const who = item.owner !== undefined ? (item.owner === 0 ? '自分' : 'AI') : '';
+    const icon = item.icon || '✨';
+    div.textContent = `${icon} ${who ? who + ': ' : ''}${item.name}`;
     el.appendChild(div);
   });
 }
@@ -2709,6 +2719,11 @@ function log(msg, type) {
   p.textContent = msg;
   el.appendChild(p);
   el.scrollTop = el.scrollHeight;
+  if (type === 'important' || type === 'damage') {
+    _recentImportantLogs.push({msg, type});
+    if (_recentImportantLogs.length > 3) _recentImportantLogs.shift();
+    updateRecentLog();
+  }
 }
 
 // ============================================================
@@ -2919,6 +2934,18 @@ function showPhaseFlash(phase) {
   if (_phaseFlashTimer) clearTimeout(_phaseFlashTimer);
   _phaseFlashTimer = setTimeout(() => { el.classList.remove('active'); }, 1500);
 }
+
+// ============================================================
+// GLOBAL RIGHT-CLICK HANDLER (card detail)
+// ============================================================
+document.addEventListener('contextmenu', function(e) {
+  const card = e.target.closest('[data-card-id]');
+  if (card) {
+    e.preventDefault();
+    e.stopPropagation();
+    showCardDetail(card.dataset.cardId);
+  }
+}, true);
 
 // ============================================================
 // INIT
