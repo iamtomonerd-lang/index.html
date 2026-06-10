@@ -653,6 +653,7 @@ button.danger:hover { background: #6a2a2a; }
         <button id="btn-pass" onclick="passPriority()">優先権パス</button>
         <button id="btn-mulligan" onclick="doMulligan()" disabled>マリガン</button>
         <button id="btn-charge" onclick="startCharge()">チャージ</button>
+        <button onclick="showTrainingPanel()" style="background:#1a2a1a;border-color:#446644;font-size:10px;">🧠 学習</button>
       </div>
       <div id="mulligan-controls" style="display:none; gap:6px; margin-top:4px;">
         <button onclick="confirmStartMulligan()" style="flex:1; padding:6px 10px; background:#2a2a8a; border:1px solid #6060ff; color:#fff; border-radius:5px; font-size:11px; cursor:pointer;">確認（<span id="mulligan-count">0</span>枚入替）</button>
@@ -1662,11 +1663,26 @@ function pickAIBlockerFor(atkPlayer, atkInstId) {
   const oppField = G.players[opp].field;
   const atkInst = G.players[atkPlayer].field.find(c => c.instanceId === atkInstId);
   if (!atkInst) return null;
-  return oppField.find(b => {
+  const eligible = oppField.filter(b => {
     const bc = CARD_DB[b.cardId];
-    const eligible = !b.tapped || (bc.ocBlockWhileTapped && isOCActive(opp));
-    return eligible && canFlyBlock(atkInst, b);
-  }) || null;
+    return (!b.tapped || (bc.ocBlockWhileTapped && isOCActive(opp))) && canFlyBlock(atkInst, b);
+  });
+  if (!eligible.length) return null;
+  // 評価スコアで最善ブロッカーを選択
+  let bestBlocker = null, bestVal = -Infinity;
+  for (const b of eligible) {
+    if (!aiShouldBlock(atkInst, b, atkPlayer)) continue;
+    const atkPow = getEffectivePower(atkPlayer, atkInst);
+    const blkPow = getEffectivePower(opp, b);
+    const blkTou = getEffectiveToughness(opp, b);
+    const atkTou = getEffectiveToughness(atkPlayer, atkInst);
+    const bSurvives = (blkTou - b.damage) > atkPow;
+    const aDies = (atkTou - atkInst.damage) <= blkPow;
+    const val = (aDies ? AI_WEIGHTS.fieldPower * atkPow + AI_WEIGHTS.fieldCount : 0)
+              - (bSurvives ? 0 : AI_WEIGHTS.fieldPower * blkPow + AI_WEIGHTS.fieldCount);
+    if (val > bestVal) { bestVal = val; bestBlocker = b; }
+  }
+  return bestBlocker;
 }
 
 function resolveSingleCombat(atkPlayer, atkInstId, kakutouTargetId, blockerInstId) {
@@ -2312,11 +2328,12 @@ function aiTurn() {
   while (played && attempts < 20) {
     played = false; attempts++;
     const playable = ai.hand.map((cid, i) => ({cid, i, card: CARD_DB[cid]}))
-      .filter(({card}) => card.type !== 'land' && canAfford(1, card.cost))
-      .sort((a,b) => totalCost(b.card.cost) - totalCost(a.card.cost));
+      .filter(({card}) => card.type !== 'land' && canAfford(1, card.cost));
 
+    // 評価スコアで最善カードを選択（学習済み重みを使用）
+    const best = playable.length > 0 ? aiPickBestCard(playable) : null;
     if (playable.length > 0) {
-      const {cid, i, card} = playable[0];
+      const {cid, i, card} = best;
       if (card.type === 'creature' && ai.field.length < 5) {
         payMana(1, card.cost);
         ai.hand.splice(i, 1);
@@ -3377,6 +3394,402 @@ document.addEventListener('contextmenu', function(e) {
   });
   document.addEventListener('scroll', () => { tip.style.display = 'none'; }, true);
 })();
+
+// ============================================================
+// AI WEIGHTS & EVALUATION SYSTEM
+// ============================================================
+
+const AI_WEIGHTS_VERSION = 2;
+const AI_WEIGHTS_DEFAULT = {
+  _version: AI_WEIGHTS_VERSION,
+  life: 2.0,          // 1ライフ差の価値
+  fieldPower: 0.8,    // フィールドパワー差の価値
+  fieldToughness: 0.3,// フィールドタフネス差の価値
+  fieldCount: 1.2,    // クリーチャー数差の価値
+  handAdv: 0.4,       // 手札差の価値
+  threshold: 0.12,    // CX値の価値
+  blockRisk: 0.6,     // ブロック時のリスク係数（高いほどブロックしやすい）
+};
+let AI_WEIGHTS = JSON.parse(JSON.stringify(AI_WEIGHTS_DEFAULT));
+let AI_TRAIN_STATS = { games: 0, wins: 0, epoch: 0 };
+
+function evalBoardScore(player) {
+  const me = G.players[player], opp = G.players[1-player];
+  if (me.life <= 0) return -99999;
+  if (opp.life <= 0) return 99999;
+  const w = AI_WEIGHTS;
+  const myPow  = me.field.reduce((s,c) => s + getEffectivePower(player,c), 0);
+  const oppPow = opp.field.reduce((s,c) => s + getEffectivePower(1-player,c), 0);
+  const myTou  = me.field.reduce((s,c) => s + getEffectiveToughness(player,c), 0);
+  const oppTou = opp.field.reduce((s,c) => s + getEffectiveToughness(1-player,c), 0);
+  return w.life * (me.life - opp.life)
+       + w.fieldPower * (myPow - oppPow)
+       + w.fieldToughness * (myTou - oppTou)
+       + w.fieldCount * (me.field.length - opp.field.length)
+       + w.handAdv * (me.hand.length - opp.hand.length)
+       + w.threshold * getCXValue(player);
+}
+
+// 評価スコアを使ってAIが最善のカードを選ぶ
+function aiPickBestCard(handItems) {
+  // 各カードプレイ後の評価スコアを比較して最善手を選ぶ
+  let best = null, bestScore = -Infinity;
+  for (const item of handItems) {
+    // シンプルな価値計算: フィールドへの貢献 + 手札コスト
+    const card = item.card;
+    const cost = totalCost(card.cost);
+    const value = card.type === 'creature'
+      ? evalBoardScore(1) + AI_WEIGHTS.fieldPower * card.power + AI_WEIGHTS.fieldToughness * card.toughness + AI_WEIGHTS.fieldCount
+      : evalBoardScore(1) + cost * 0.5;
+    if (value > bestScore) { bestScore = value; best = item; }
+  }
+  return best;
+}
+
+// ブロックすべきかどうか評価
+function aiShouldBlock(atkInst, blkInst, atkPlayer) {
+  const w = AI_WEIGHTS;
+  const defender = 1 - atkPlayer;
+  const atkPow = getEffectivePower(atkPlayer, atkInst);
+  const blkPow = getEffectivePower(defender, blkInst);
+  const blkTou = getEffectiveToughness(defender, blkInst);
+  const atkTou = getEffectiveToughness(atkPlayer, atkInst);
+  const blkSurvives = (blkTou - blkInst.damage) > atkPow;
+  const atkDies = (atkTou - atkInst.damage) <= blkPow;
+  // スコア: 攻撃側を倒せる、または自身が生き残る場合は積極的にブロック
+  let blockValue = 0;
+  if (atkDies) blockValue += AI_WEIGHTS.fieldPower * atkPow + AI_WEIGHTS.fieldCount;
+  if (!blkSurvives) blockValue -= AI_WEIGHTS.fieldPower * blkPow + AI_WEIGHTS.fieldCount;
+  const noBlockDamage = atkPow * AI_WEIGHTS.life;
+  return (blockValue + noBlockDamage * w.blockRisk) > 0;
+}
+
+// ============================================================
+// HEADLESS SIMULATION (学習用)
+// ============================================================
+
+class SimGame {
+  constructor(w0, w1) {
+    this.w = [w0, w1];
+    this.nid = 1;
+    this.turn = 0;
+    this.maxTurns = 40;
+    this.state = this.initState();
+  }
+
+  mkDeck() { return shuffle(['shinmai_heishi','ten_kara_shisha','eiyuu_kouho','serashia_heishi','serashia_junhei','serashia_souryo','bastian','arestia','junigeki','kaizen'].flatMap(c=>[c,c,c,c])); }
+  mkLandDeck() { return shuffle(['hito_heichi','wasure_heichi','shigen_heichi','kemono_heichi','serashia_miyako'].flatMap(l=>[l,l])); }
+
+  initState() {
+    const mk = (i) => {
+      const deck = this.mkDeck();
+      const hand = deck.splice(0,7);
+      return { life:20, deck, landDeck:this.mkLandDeck(), hand, field:[], lands:[], mana:{W:0,C:0}, graveyard:[], cx:0 };
+    };
+    return { players:[mk(0),mk(1)], turn:1, activePlayer:0 };
+  }
+
+  run() {
+    for (let t = 0; t < this.maxTurns * 2; t++) {
+      const ap = this.state.activePlayer;
+      if (this.simTurn(ap)) break;
+    }
+    const [p0,p1] = this.state.players;
+    if (p0.life <= 0 && p1.life > 0) return 1;
+    if (p1.life <= 0 && p0.life > 0) return 0;
+    return p0.life >= p1.life ? 0 : 1;
+  }
+
+  simTurn(ap) {
+    const s = this.state;
+    const p = s.players[ap], opp = s.players[1-ap];
+    s.turn++;
+    // Untap
+    p.field.forEach(c => { c.tapped = false; if(c.tempPower) c.tempPower=0; if(c.tempToughness) c.tempToughness=0; });
+    p.lands.forEach(l => l.tapped = false);
+    // Draw
+    if (s.turn > 2 && p.deck.length > 0) p.hand.push(p.deck.shift());
+    // Place land
+    if (p.landDeck.length > 0) p.lands.push({ id: this.nid++, cardId: p.landDeck.shift(), tapped:false, chargeCard:null });
+    // Tap all lands for mana
+    p.mana = {W:0,C:0};
+    p.lands.forEach(l => { const lc=CARD_DB[l.cardId]; p.mana[lc.produces]=(p.mana[lc.produces]||0)+1; l.tapped=true; });
+    // Play cards
+    this.simPlayCards(ap);
+    // Attack
+    this.simAttack(ap);
+    // End: cure sickness
+    p.field.forEach(c => { c.sick = false; });
+    s.activePlayer = 1-ap;
+    return p.life <= 0 || opp.life <= 0;
+  }
+
+  simPlayCards(ap) {
+    const s = this.state;
+    const p = s.players[ap];
+    let limit = 10;
+    while (limit-- > 0) {
+      const options = p.hand.map((cid,i) => ({cid,i,card:CARD_DB[cid]}))
+        .filter(({card}) => card.type==='creature' && p.field.length<5 && this.canAfford(p,card.cost));
+      if (!options.length) break;
+      // Pick by eval: power+toughness + cost as tiebreak
+      const best = options.reduce((a,b) => {
+        const va = b.card.power+b.card.toughness+totalCost(b.card.cost)*0.3;
+        const vb = a.card.power+a.card.toughness+totalCost(a.card.cost)*0.3;
+        return va > vb ? b : a;
+      });
+      const card = best.card;
+      this.payMana(p, card.cost);
+      p.hand.splice(best.i, 1);
+      const inst = { id: this.nid++, cardId: best.cid, tapped:false, damage:0, sick:true, tempPower:0, tempToughness:0, entryTurn:s.turn };
+      p.field.push(inst);
+      this.simETB(ap, inst);
+      this.simCheckDeath(0);
+      this.simCheckDeath(1);
+    }
+  }
+
+  simETB(ap, inst) {
+    const s = this.state;
+    const card = CARD_DB[inst.cardId];
+    const opp = s.players[1-ap];
+    const me = s.players[ap];
+    if (!card.etb) return;
+    if (card.etb === 'damage1opponent' || card.etb === 'damage2opponent_always_cx6damage3' || card.etb === 'damage3opponent') {
+      const dmg = card.etb==='damage1opponent' ? 1 : card.etb==='damage3opponent' ? 3 : 2;
+      if (opp.field.length) {
+        const tgt = opp.field.reduce((a,b) => (CARD_DB[a.cardId].toughness-a.damage) < (CARD_DB[b.cardId].toughness-b.damage) ? a : b);
+        tgt.damage += dmg;
+      } else { opp.life -= dmg; }
+    }
+    if (card.etb === 'look3keep1white' && me.deck.length > 0) me.hand.push(me.deck.shift());
+    if (card.etb === 'mustAttackTarget' && opp.field.length > 0) { /* simplified: no-op */ }
+  }
+
+  simCheckDeath(p) {
+    const pl = this.state.players[p];
+    pl.field = pl.field.filter(c => {
+      const card = CARD_DB[c.cardId];
+      return c.damage < card.toughness + (c.tempToughness||0);
+    });
+  }
+
+  simAttack(ap) {
+    const s = this.state;
+    const p = s.players[ap], opp = s.players[1-ap];
+    const attackers = p.field.filter(c => {
+      const card = CARD_DB[c.cardId];
+      if (c.tapped && !card.vigilance) return false;
+      if (c.sick && !(card.kakutou && c.entryTurn===s.turn)) return false;
+      return true;
+    });
+    for (const atk of attackers) {
+      const atkCard = CARD_DB[atk.cardId];
+      const atkPow = atkCard.power + (atk.tempPower||0);
+      const atkTou = atkCard.toughness + (atk.tempToughness||0);
+      if (!atkCard.vigilance) atk.tapped = true;
+      // Find blocker
+      const eligibleBlockers = opp.field.filter(b => !b.tapped && (atkCard.flying ? CARD_DB[b.cardId].flying : true));
+      const blocker = this.simPickBlocker(1-ap, atk, eligibleBlockers, atkPow);
+      if (blocker) {
+        const blkCard = CARD_DB[blocker.cardId];
+        const blkPow = blkCard.power + (blocker.tempPower||0);
+        blocker.damage += atkPow;
+        atk.damage += blkPow;
+        blocker.tapped = true;
+        // onBlock effects (simplified)
+        if (blkCard.onBlock === 'draw1' && opp.deck.length) opp.hand.push(opp.deck.shift());
+        if (blkCard.onBlock === 'gain3life') opp.life += 3;
+        if (blkCard.onBlock === 'damage2attacker') atk.damage += 2;
+        this.simCheckDeath(ap);
+        this.simCheckDeath(1-ap);
+      } else {
+        // kakutou: target creature
+        if (atkCard.kakutou && atk.entryTurn === s.turn) {
+          if (opp.field.length) {
+            const tgt = opp.field.reduce((a,b) => getEffectivePowerSim(b) > getEffectivePowerSim(a) ? b : a);
+            tgt.damage += atkPow;
+            atk.damage += CARD_DB[tgt.cardId].power;
+            this.simCheckDeath(ap);
+            this.simCheckDeath(1-ap);
+          }
+        } else {
+          opp.life -= atkPow;
+        }
+      }
+    }
+  }
+
+  simPickBlocker(defender, atk, candidates, atkPow) {
+    if (!candidates.length) return null;
+    const w = this.w[defender];
+    const defLife = this.state.players[defender].life;
+    let best = null, bestVal = -Infinity;
+    for (const b of candidates) {
+      const bc = CARD_DB[b.cardId];
+      const blkPow = bc.power + (b.tempPower||0);
+      const blkTou = bc.toughness + (b.tempToughness||0);
+      const bSurvives = (blkTou - b.damage) > atkPow;
+      const aDies = (CARD_DB[atk.cardId].toughness - atk.damage) <= blkPow;
+      let val = 0;
+      if (aDies) val += w.fieldPower * atkPow + w.fieldCount;
+      if (!bSurvives) val -= w.fieldPower * blkPow + w.fieldCount;
+      val += w.life * atkPow * w.blockRisk;
+      if (val > bestVal) { bestVal = val; best = b; }
+    }
+    return bestVal > 0 ? best : null;
+  }
+
+  canAfford(p, cost) {
+    if (!cost) return false;
+    const m = {...p.mana};
+    for (const [k,v] of Object.entries(cost)) {
+      if ((m[k]||0) < v) return false;
+      m[k] -= v;
+    }
+    return true;
+  }
+  payMana(p, cost) {
+    for (const [k,v] of Object.entries(cost)) p.mana[k] = (p.mana[k]||0) - v;
+  }
+}
+
+function getEffectivePowerSim(inst) {
+  const card = CARD_DB[inst.cardId];
+  return card.power + (inst.tempPower||0);
+}
+
+// ============================================================
+// TRAINING SYSTEM
+// ============================================================
+
+let _trainStop = false;
+
+function mutateWeights(w) {
+  const keys = ['life','fieldPower','fieldToughness','fieldCount','handAdv','threshold','blockRisk'];
+  const m = JSON.parse(JSON.stringify(w));
+  const k = keys[Math.floor(Math.random()*keys.length)];
+  m[k] = Math.max(0.01, m[k] + (Math.random()-0.5)*0.4);
+  return m;
+}
+
+function runTrainingBatch(w0, w1, n) {
+  let wins0 = 0;
+  for (let i = 0; i < n; i++) {
+    const g = new SimGame(w0, w1);
+    if (g.run() === 0) wins0++;
+  }
+  return wins0 / n;
+}
+
+async function startTraining(totalGames, gamesPerBatch, onProgress) {
+  _trainStop = false;
+  let currentWeights = JSON.parse(JSON.stringify(AI_WEIGHTS));
+  let totalPlayed = 0;
+  let totalWins = 0;
+  const BATCH = gamesPerBatch;
+
+  while (totalPlayed < totalGames && !_trainStop) {
+    const candidate = mutateWeights(currentWeights);
+    // candidate (player0) vs current (player1)
+    const wr = await new Promise(resolve => {
+      setTimeout(() => resolve(runTrainingBatch(candidate, currentWeights, BATCH)), 0);
+    });
+    totalPlayed += BATCH;
+    if (wr > 0.52) {
+      currentWeights = candidate;
+      totalWins += Math.round(wr * BATCH);
+    } else {
+      totalWins += Math.round((1-wr) * BATCH);
+    }
+    AI_WEIGHTS = JSON.parse(JSON.stringify(currentWeights));
+    AI_WEIGHTS._version = AI_WEIGHTS_VERSION;
+    AI_TRAIN_STATS.games += BATCH;
+    if (onProgress) onProgress(totalPlayed, totalGames, (totalWins/totalPlayed*100).toFixed(1));
+  }
+  AI_TRAIN_STATS.epoch++;
+  return currentWeights;
+}
+
+function saveWeightsToFile() {
+  const data = { _version: AI_WEIGHTS_VERSION, weights: AI_WEIGHTS, stats: AI_TRAIN_STATS };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type:'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `ai_weights_v${AI_WEIGHTS_VERSION}.json`;
+  a.click();
+}
+
+function loadWeightsFromFile(file) {
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const data = JSON.parse(e.target.result);
+      if (!data._version) throw new Error('バージョン情報なし');
+      const w = data.weights || data;
+      const keys = Object.keys(AI_WEIGHTS_DEFAULT).filter(k => k !== '_version');
+      const valid = keys.every(k => typeof w[k] === 'number');
+      if (!valid) throw new Error('互換性なし');
+      AI_WEIGHTS = {...AI_WEIGHTS_DEFAULT, ...w, _version: AI_WEIGHTS_VERSION};
+      if (data.stats) AI_TRAIN_STATS = {...AI_TRAIN_STATS, ...data.stats};
+      document.getElementById('train-status').textContent = `✅ 読込完了 (${AI_TRAIN_STATS.games}戦)`;
+    } catch(err) {
+      document.getElementById('train-status').textContent = `❌ 読込失敗: ${err.message}`;
+    }
+  };
+  reader.readAsText(file);
+}
+
+function showTrainingPanel() {
+  const gamesOptions = [100,500,1000,3000,5000].map(n=>`<option value="${n}">${n}戦</option>`).join('');
+  const html = `
+    <div style="display:flex;flex-direction:column;gap:10px;font-size:12px;">
+      <div style="color:#aaa;">現在の学習データ: ${AI_TRAIN_STATS.games}戦 / エポック${AI_TRAIN_STATS.epoch}</div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <label>対戦数:</label>
+        <select id="train-games" style="background:#1a1a2a;color:#ccc;border:1px solid #444;padding:4px;">
+          ${gamesOptions}
+        </select>
+        <button id="btn-train-start" onclick="uiStartTraining()" style="padding:6px 14px;background:#1a3a1a;border:1px solid #44aa44;color:#aaffaa;border-radius:4px;cursor:pointer;">▶ 開始</button>
+        <button onclick="uiStopTraining()" style="padding:6px 10px;background:#3a1a1a;border:1px solid #aa4444;color:#ffaaaa;border-radius:4px;cursor:pointer;">■ 停止</button>
+      </div>
+      <div style="background:#0a0a1a;border:1px solid #333;border-radius:4px;height:14px;overflow:hidden;">
+        <div id="train-bar" style="height:100%;width:0%;background:#336633;transition:width 0.3s;"></div>
+      </div>
+      <div id="train-status" style="color:#88cc88;min-height:18px;">待機中</div>
+      <hr style="border-color:#333;margin:4px 0;">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button onclick="saveWeightsToFile()" style="padding:6px 12px;background:#1a1a3a;border:1px solid #4444aa;color:#aaaaff;border-radius:4px;cursor:pointer;">💾 保存</button>
+        <label style="padding:6px 12px;background:#2a1a1a;border:1px solid #774444;color:#ffaaaa;border-radius:4px;cursor:pointer;">
+          📂 読込<input type="file" accept=".json" style="display:none;" onchange="loadWeightsFromFile(this.files[0])">
+        </label>
+        <button onclick="AI_WEIGHTS={...AI_WEIGHTS_DEFAULT};AI_TRAIN_STATS={games:0,wins:0,epoch:0};document.getElementById('train-status').textContent='リセット済';" style="padding:6px 10px;background:#1a1a1a;border:1px solid #555;color:#888;border-radius:4px;cursor:pointer;">↺ リセット</button>
+      </div>
+      <div style="color:#666;font-size:10px;">ファイルはv${AI_WEIGHTS_VERSION}以降と互換。保存したデータは他バージョンに読み込み可能。</div>
+    </div>
+  `;
+  showModal('🧠 AI学習モード', html);
+}
+
+async function uiStartTraining() {
+  const n = parseInt(document.getElementById('train-games').value) || 100;
+  document.getElementById('btn-train-start').disabled = true;
+  document.getElementById('train-status').textContent = '学習中...';
+  await startTraining(n, 20, (done, total, wr) => {
+    const pct = (done/total*100).toFixed(0);
+    document.getElementById('train-bar').style.width = pct + '%';
+    document.getElementById('train-status').textContent = `${done}/${total}戦 完了 (直近勝率 ${wr}%)`;
+  });
+  document.getElementById('train-bar').style.width = '100%';
+  document.getElementById('train-status').textContent = `✅ 完了 (累計${AI_TRAIN_STATS.games}戦 / エポック${AI_TRAIN_STATS.epoch})`;
+  document.getElementById('btn-train-start').disabled = false;
+}
+
+function uiStopTraining() {
+  _trainStop = true;
+  const el = document.getElementById('train-status');
+  if (el) el.textContent = '⏹ 停止しました';
+}
 
 // ============================================================
 // INIT
