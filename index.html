@@ -586,7 +586,7 @@ button.danger:hover { background: #6a2a2a; }
       <div class="phase-display" id="phase-name">アンタップ</div>
       <div class="sep"></div>
       <div class="threshold-gauge-wrap" id="threshold-gauge-wrap">
-        <div class="threshold-gauge-label" id="threshold-label">墓地 0 / CX:6 / OC:12</div>
+        <div class="threshold-gauge-label" id="threshold-label">CX値: 0  CX6✗ CX8✗ OC✗</div>
         <div class="threshold-gauge"><div class="threshold-gauge-fill" id="threshold-fill" style="width:0%;background:#555;"></div></div>
       </div>
       <div class="sep"></div>
@@ -3010,12 +3010,16 @@ function updateThresholdGauge() {
   const labelEl = document.getElementById('threshold-label');
   const fillEl = document.getElementById('threshold-fill');
   if (!labelEl || !fillEl) return;
-  const status = cx >= 12 ? '🔴 OC発動中' : cx >= 6 ? '🟡 CX発動中' : '⚪ 通常';
-  labelEl.textContent = `土地+チャージ: ${cx} / 6でCX / 12でOC  ${status}`;
-  const pct = Math.min(cx / 12 * 100, 100);
+  const cx6 = cx >= 6 ? '🟡CX6✓' : 'CX6✗';
+  const cx8 = cx >= 8 ? '🟠CX8✓' : 'CX8✗';
+  const oc  = cx >= 10 ? '🔴OC✓'  : 'OC✗';
+  labelEl.textContent = `CX値: ${cx}  ${cx6} ${cx8} ${oc}`;
+  const pct = Math.min(cx / 10 * 100, 100);
   fillEl.style.width = pct + '%';
-  if (cx >= 12) {
+  if (cx >= 10) {
     fillEl.style.background = '#cc3333';
+  } else if (cx >= 8) {
+    fillEl.style.background = '#cc7722';
   } else if (cx >= 6) {
     fillEl.style.background = '#ccaa33';
   } else {
