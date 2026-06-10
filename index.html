@@ -654,6 +654,10 @@ button.danger:hover { background: #6a2a2a; }
         <button id="btn-mulligan" onclick="doMulligan()" disabled>マリガン</button>
         <button id="btn-charge" onclick="startCharge()">チャージ</button>
       </div>
+      <div id="mulligan-controls" style="display:none; gap:6px; margin-top:4px;">
+        <button onclick="confirmStartMulligan()" style="flex:1; padding:6px 10px; background:#2a2a8a; border:1px solid #6060ff; color:#fff; border-radius:5px; font-size:11px; cursor:pointer;">確認（<span id="mulligan-count">0</span>枚入替）</button>
+        <button onclick="skipStartMulligan()" style="flex:1; padding:6px 10px; background:#2a2a2a; border:1px solid #555; color:#ccc; border-radius:5px; font-size:11px; cursor:pointer;">しない</button>
+      </div>
       <div id="action-hint"></div>
     </div>
 
@@ -671,12 +675,6 @@ button.danger:hover { background: #6a2a2a; }
 <!-- Phase Flash -->
 <div id="phase-flash"></div>
 
-<!-- Mulligan Banner -->
-<div id="mulligan-banner" style="display:none; position:fixed; bottom:0; left:0; right:0; background:#1a1a3a; border-top:2px solid #6060ff; padding:10px 16px; z-index:200; align-items:center; gap:12px;">
-  <span style="font-size:12px; color:#aaccff; flex:1;">マリガン中 — 選択: <span id="mulligan-count">0</span>枚</span>
-  <button onclick="confirmStartMulligan()" style="padding:8px 18px; background:#2a2a8a; border:1px solid #6060ff; color:#fff; border-radius:5px; font-size:12px; cursor:pointer;">確認</button>
-  <button onclick="skipStartMulligan()" style="padding:8px 18px; background:#2a2a2a; border:1px solid #555; color:#ccc; border-radius:5px; font-size:12px; cursor:pointer;">マリガンしない</button>
-</div>
 
 <!-- Modal -->
 <div id="modal">
@@ -911,8 +909,8 @@ function showStartMulligan() {
   log('--- マリガン ---', 'important');
   log('戻したいカードをクリックして選択（赤枠・半透明）し「確認」を押すと同枚数引き直します。');
   log('右クリックでカード詳細を確認できます。問題なければ「マリガンしない」を押してください。');
-  const banner = document.getElementById('mulligan-banner');
-  if (banner) banner.style.display = 'flex';
+  const mc = document.getElementById('mulligan-controls');
+  if (mc) mc.style.display = 'flex';
 }
 
 function confirmStartMulligan() {
@@ -928,16 +926,16 @@ function confirmStartMulligan() {
   }
   G.mulliganMode = false;
   G.mulliganSelected = new Set();
-  const banner = document.getElementById('mulligan-banner');
-  if (banner) banner.style.display = 'none';
+  const mc = document.getElementById('mulligan-controls');
+  if (mc) mc.style.display = 'none';
   startFirstTurn();
 }
 
 function skipStartMulligan() {
   G.mulliganMode = false;
   G.mulliganSelected = new Set();
-  const banner = document.getElementById('mulligan-banner');
-  if (banner) banner.style.display = 'none';
+  const mc = document.getElementById('mulligan-controls');
+  if (mc) mc.style.display = 'none';
   startFirstTurn();
 }
 
