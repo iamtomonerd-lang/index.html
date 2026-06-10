@@ -22,35 +22,70 @@
   --danger: #ff4444;
   --heal: #44ff88;
 }
+html, body {
+  height: 100%;
+  overflow: hidden;
+}
 body {
   background: var(--bg);
   color: var(--text);
   font-family: 'Noto Sans JP', sans-serif;
-  min-height: 100vh;
-  overflow-x: hidden;
-  font-size: 12px;
+  font-size: 13px;
 }
+
+/* ── 全体レイアウト ── */
 #game {
+  display: grid;
+  grid-template-columns: 1fr 260px;
+  grid-template-rows: 1fr;
+  height: 100vh;
+  gap: 6px;
+  padding: 6px;
+}
+
+/* 左側：ボード */
+#board {
   display: flex;
   flex-direction: column;
-  height: 100vh;
-  max-width: 1400px;
-  margin: 0 auto;
-  padding: 4px;
-  gap: 3px;
+  gap: 4px;
+  overflow: hidden;
+  min-width: 0;
 }
+
+/* 右側：サイドパネル */
+#side-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  overflow: hidden;
+}
+
+/* プレイヤー情報ヘッダー */
+.player-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+
 .zone-label {
   font-size: 9px;
-  color: #666;
+  color: #555;
   text-transform: uppercase;
   letter-spacing: 1px;
-  padding: 0 4px;
+  padding: 0 2px;
+  white-space: nowrap;
 }
-/* Card styles */
+
+/* ── カード ── */
 .card {
-  width: 68px;
-  height: 96px;
-  border-radius: 6px;
+  width: 84px;
+  height: 118px;
+  border-radius: 7px;
   border: 1.5px solid var(--border);
   cursor: pointer;
   position: relative;
@@ -60,50 +95,51 @@ body {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  font-size: 9px;
+  font-size: 10px;
 }
-.card:hover { transform: translateY(-4px) scale(1.05); z-index: 10; }
-.card.selected { box-shadow: 0 0 0 2px #ffff44, 0 0 12px #ffff44; }
-.card.tapped { transform: rotate(15deg); opacity: 0.85; }
-.card.tapped:hover { transform: rotate(15deg) translateY(-4px) scale(1.05); }
+.card:hover { transform: translateY(-6px) scale(1.06); z-index: 20; }
+.card.selected { box-shadow: 0 0 0 2px #ffff44, 0 0 14px #ffff44; }
+.card.tapped { transform: rotate(15deg); opacity: 0.85; margin-right: 10px; }
+.card.tapped:hover { transform: rotate(15deg) translateY(-6px) scale(1.06); }
 .card.face-down { background: linear-gradient(135deg, #1a1a3a 25%, #0d0d22 75%); }
-.card.face-down::after { content: '🎴'; font-size: 28px; position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); }
-.card.playable { box-shadow: 0 0 8px #44ff44; border-color: #44ff44; }
-.card.attackable { box-shadow: 0 0 8px #ff8800; border-color: #ff8800; cursor: crosshair; }
-.card.blockable { box-shadow: 0 0 8px #ff4488; border-color: #ff4488; cursor: crosshair; }
-.card.targetable { box-shadow: 0 0 8px #ff44ff; border-color: #ff44ff; cursor: crosshair; }
+.card.face-down::after { content: '🎴'; font-size: 32px; position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); }
+.card.playable { box-shadow: 0 0 10px #44ff44; border-color: #44ff44; }
+.card.attackable { box-shadow: 0 0 10px #ff8800; border-color: #ff8800; cursor: crosshair; }
+.card.blockable { box-shadow: 0 0 10px #ff4488; border-color: #ff4488; cursor: crosshair; }
+.card.targetable { box-shadow: 0 0 10px #ff44ff; border-color: #ff44ff; cursor: crosshair; }
 .card.damaged { animation: shake 0.3s; }
 .card.dying { animation: die 0.5s forwards; }
-@keyframes shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-4px)} 75%{transform:translateX(4px)} }
+@keyframes shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-5px)} 75%{transform:translateX(5px)} }
 @keyframes die { to { transform: scale(0) rotate(180deg); opacity: 0; } }
-@keyframes slideIn { from { transform: translateY(40px); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes slideIn { from { transform: translateY(30px); opacity: 0; } to { transform: none; opacity: 1; } }
+
 .card-art {
   flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 20px;
+  font-size: 26px;
   border-bottom: 1px solid rgba(255,255,255,0.1);
 }
 .card-bottom {
-  padding: 2px 3px;
-  background: rgba(0,0,0,0.6);
+  padding: 3px 4px;
+  background: rgba(0,0,0,0.65);
 }
-.card-name { font-size: 7px; font-weight: 700; line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.card-type-line { font-size: 6px; color: #aaa; }
-.card-pt { font-size: 8px; font-weight: 700; text-align: right; }
-.card-cost { position: absolute; top: 2px; right: 2px; font-size: 7px; background: rgba(0,0,0,0.8); border-radius: 3px; padding: 0 2px; }
-.card-keywords { font-size: 5px; color: #ffcc44; }
+.card-name { font-size: 8px; font-weight: 700; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.card-type-line { font-size: 7px; color: #999; }
+.card-pt { font-size: 10px; font-weight: 700; text-align: right; margin-top: 1px; }
+.card-cost { position: absolute; top: 3px; right: 3px; font-size: 8px; background: rgba(0,0,0,0.85); border-radius: 3px; padding: 1px 3px; }
+.card-keywords { font-size: 6px; color: #ffcc44; }
 .damage-counter {
   position: absolute;
-  top: 2px;
-  left: 2px;
+  top: 3px;
+  left: 3px;
   background: #cc0000;
   color: white;
   border-radius: 50%;
-  width: 14px;
-  height: 14px;
-  font-size: 8px;
+  width: 16px;
+  height: 16px;
+  font-size: 9px;
   font-weight: bold;
   display: flex;
   align-items: center;
@@ -111,15 +147,17 @@ body {
 }
 .charge-indicator {
   position: absolute;
-  bottom: 24px;
-  right: 2px;
+  bottom: 28px;
+  right: 3px;
   background: #ffaa00;
   color: #000;
   border-radius: 2px;
-  font-size: 6px;
+  font-size: 7px;
   padding: 0 2px;
+  font-weight: bold;
 }
-/* COLOR themes for cards */
+
+/* ── カード色テーマ ── */
 .color-R { background: linear-gradient(160deg, #2a0a0a, #1a0505); border-color: #883333; }
 .color-R .card-art { color: #ff6633; }
 .color-U { background: linear-gradient(160deg, #0a0a2a, #05051a); border-color: #333388; }
@@ -132,68 +170,124 @@ body {
 .color-B .card-art { color: #aa66cc; }
 .color-C { background: linear-gradient(160deg, #1a1a1a, #0d0d0d); border-color: #555555; }
 .color-C .card-art { color: #aaaaaa; }
-/* Land cards */
-.land-card { width: 60px; height: 42px; border-radius: 4px; border: 1.5px solid var(--border); cursor: pointer; position: relative; transition: transform 0.15s, box-shadow 0.15s; user-select: none; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 16px; overflow: hidden; }
-.land-card:hover { transform: scale(1.08); z-index: 5; }
-.land-card.tapped { transform: rotate(15deg); }
-.land-card.tapped:hover { transform: rotate(15deg) scale(1.08); }
+
+/* ── 土地カード ── */
+.land-card {
+  width: 68px; height: 50px;
+  border-radius: 5px;
+  border: 1.5px solid var(--border);
+  cursor: pointer;
+  position: relative;
+  transition: transform 0.15s, box-shadow 0.15s;
+  user-select: none;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  overflow: hidden;
+}
+.land-card:hover { transform: scale(1.1); z-index: 5; }
+.land-card.tapped { transform: rotate(15deg); margin-right: 8px; }
+.land-card.tapped:hover { transform: rotate(15deg) scale(1.1); }
 .land-card.selected { box-shadow: 0 0 0 2px #ffff44; }
-.land-card .land-name { position: absolute; bottom: 1px; left: 0; right: 0; text-align: center; font-size: 6px; color: rgba(255,255,255,0.7); }
-.land-card .charge-pip { position: absolute; top: 1px; right: 1px; background: #ffaa00; border-radius: 50%; width: 8px; height: 8px; font-size: 5px; display: flex; align-items: center; justify-content: center; color: #000; }
-/* Zones */
-.hand-zone { display: flex; gap: 4px; padding: 4px; min-height: 108px; align-items: center; flex-wrap: nowrap; overflow-x: auto; }
-.field-zone { display: flex; gap: 6px; padding: 4px; min-height: 112px; align-items: center; }
-.land-zone { display: flex; gap: 4px; padding: 4px; min-height: 52px; align-items: center; flex-wrap: wrap; }
+.land-card .land-name { position: absolute; bottom: 2px; left: 0; right: 0; text-align: center; font-size: 7px; color: rgba(255,255,255,0.75); }
+.land-card .charge-pip { position: absolute; top: 2px; right: 2px; background: #ffaa00; border-radius: 50%; width: 10px; height: 10px; font-size: 7px; display: flex; align-items: center; justify-content: center; color: #000; font-weight: bold; }
+
+/* ── ゾーン ── */
+.hand-zone {
+  display: flex;
+  gap: 5px;
+  padding: 5px 6px;
+  min-height: 132px;
+  align-items: center;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #2a2a4a transparent;
+}
+.field-zone {
+  display: flex;
+  gap: 8px;
+  padding: 5px 6px;
+  min-height: 132px;
+  align-items: center;
+  flex: 1;
+}
+.land-zone {
+  display: flex;
+  gap: 6px;
+  padding: 4px 6px;
+  min-height: 62px;
+  align-items: center;
+  flex-wrap: wrap;
+}
 .field-slot {
-  width: 68px; height: 100px;
-  border: 1px dashed #2a2a4a;
-  border-radius: 6px;
+  width: 84px; height: 120px;
+  border: 1px dashed #252540;
+  border-radius: 7px;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  color: #333;
-  font-size: 10px;
+  color: #2a2a4a;
+  font-size: 11px;
   position: relative;
 }
-/* Info bar */
+
+/* ── ゾーン行 ── */
+.board-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.board-row.ai-row { border-color: #3a2a2a; }
+.board-row.player-row { border-color: #2a3a2a; }
+
+/* ── 情報バー ── */
 #info-bar {
   display: flex;
-  gap: 8px;
-  padding: 4px 8px;
+  gap: 6px;
+  padding: 5px 8px;
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 6px;
   align-items: center;
+  flex-shrink: 0;
   flex-wrap: wrap;
 }
 .life-display {
   display: flex;
   align-items: center;
   gap: 4px;
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 700;
 }
 .life-display.low { color: var(--danger); animation: pulse 1s infinite; }
 @keyframes pulse { 50% { opacity: 0.5; } }
 .phase-display {
   background: var(--accent);
-  padding: 2px 8px;
+  padding: 3px 10px;
   border-radius: 4px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
 }
-.cx-display { background: #2a1a4a; padding: 2px 6px; border-radius: 4px; font-size: 11px; }
-.oc-display { background: #4a1a2a; padding: 2px 6px; border-radius: 4px; font-size: 11px; color: #ff88aa; }
-.mana-display { display: flex; gap: 3px; align-items: center; }
-.mana-pip { width: 14px; height: 14px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 7px; font-weight: bold; }
+.cx-display { background: #2a1a4a; padding: 3px 7px; border-radius: 4px; font-size: 12px; }
+.oc-display { background: #4a1a2a; padding: 3px 7px; border-radius: 4px; font-size: 12px; color: #ff88aa; }
+.mana-display { display: flex; gap: 3px; align-items: center; flex-wrap: wrap; max-width: 120px; }
+.mana-pip { width: 16px; height: 16px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 8px; font-weight: bold; }
 .mana-R { background: #cc3333; color: white; }
 .mana-U { background: #3366cc; color: white; }
 .mana-G { background: #336633; color: white; }
 .mana-W { background: #cccc88; color: #333; }
 .mana-B { background: #553355; color: white; }
 .mana-C { background: #555; color: white; }
-/* Stack */
+
+/* ── スタック ── */
 #stack-area {
   display: flex;
   gap: 6px;
@@ -201,59 +295,87 @@ body {
   background: #0d0d1a;
   border: 1px solid #2a2a5a;
   border-radius: 6px;
-  min-height: 30px;
+  min-height: 32px;
   align-items: center;
+  flex-shrink: 0;
 }
 .stack-item {
   background: #1a1a3a;
   border: 1px solid #4444aa;
   border-radius: 4px;
-  padding: 3px 6px;
-  font-size: 10px;
+  padding: 3px 7px;
+  font-size: 11px;
   color: #aaaaff;
 }
-/* Controls */
+
+/* ── サイドパネル ── */
+#side-panel-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* プレイヤー情報カード */
+.player-stat-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  flex-shrink: 0;
+}
+.player-stat-card h3 { font-size: 11px; color: #666; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 1px; }
+
+/* コントロール */
 #controls {
   display: flex;
-  gap: 6px;
-  padding: 4px;
-  flex-wrap: wrap;
-  align-items: center;
+  flex-direction: column;
+  gap: 5px;
+  padding: 8px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  flex-shrink: 0;
 }
+#controls-btns { display: flex; flex-wrap: wrap; gap: 5px; }
 button {
   background: var(--panel);
   border: 1px solid var(--border);
   color: var(--text);
-  padding: 5px 12px;
-  border-radius: 4px;
+  padding: 6px 12px;
+  border-radius: 5px;
   cursor: pointer;
   font-family: inherit;
-  font-size: 11px;
+  font-size: 12px;
   transition: background 0.1s;
 }
 button:hover { background: #2a2a4a; }
-button:disabled { opacity: 0.4; cursor: default; }
+button:disabled { opacity: 0.35; cursor: default; }
 button.primary { background: #2a2a8a; border-color: var(--accent); }
 button.primary:hover { background: #3a3aaa; }
 button.danger { background: #4a1a1a; border-color: #cc3333; }
 button.danger:hover { background: #6a2a2a; }
-/* Message log */
+
+/* ログ */
 #log {
   flex: 1;
   overflow-y: auto;
-  padding: 4px 8px;
-  font-size: 10px;
-  max-height: 80px;
+  padding: 6px 8px;
+  font-size: 11px;
   background: var(--panel);
   border: 1px solid var(--border);
-  border-radius: 4px;
-  color: #8888aa;
+  border-radius: 8px;
+  color: #7788aa;
+  scrollbar-width: thin;
+  scrollbar-color: #2a2a4a transparent;
 }
-#log p { margin: 1px 0; }
+#log p { margin: 2px 0; line-height: 1.4; }
 #log p.important { color: #ffcc44; }
 #log p.damage { color: #ff6644; }
 #log p.heal { color: #44ff88; }
-/* Modal overlay */
+
+/* ── モーダル ── */
 #modal {
   display: none;
   position: fixed;
@@ -268,108 +390,129 @@ button.danger:hover { background: #6a2a2a; }
   background: #12121e;
   border: 2px solid var(--accent);
   border-radius: 10px;
-  padding: 20px;
-  max-width: 600px;
+  padding: 24px;
+  max-width: 640px;
   width: 95%;
   max-height: 80vh;
   overflow-y: auto;
 }
-#modal-title { font-size: 18px; font-weight: 700; margin-bottom: 10px; color: #aaaaff; }
-#modal-cards { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
-#modal-btn { margin-top: 10px; }
-/* Floating damage */
+#modal-title { font-size: 20px; font-weight: 700; margin-bottom: 12px; color: #aaaaff; }
+#modal-cards { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+#modal-btn { margin-top: 12px; }
+
+/* ── フローティングダメージ ── */
 .float-damage {
   position: fixed;
-  font-size: 22px;
+  font-size: 26px;
   font-weight: 900;
   pointer-events: none;
   z-index: 200;
   animation: floatUp 1.2s forwards;
-  text-shadow: 0 0 8px currentColor;
+  text-shadow: 0 0 10px currentColor;
 }
-@keyframes floatUp { 0%{opacity:1;transform:translateY(0)} 100%{opacity:0;transform:translateY(-60px)} }
-/* Turn indicator */
-#turn-indicator {
-  font-size: 10px;
-  color: #666;
-}
+@keyframes floatUp { 0%{opacity:1;transform:translateY(0)} 100%{opacity:0;transform:translateY(-70px)} }
+
+#turn-indicator { font-size: 11px; color: #666; }
 .highlight { background: rgba(255,255,100,0.05); border-radius: 4px; }
-/* separator */
-.sep { width: 1px; background: var(--border); align-self: stretch; margin: 0 4px; }
+.sep { width: 1px; background: var(--border); align-self: stretch; margin: 0 2px; }
+#action-hint { font-size: 11px; color: #aaaaff; }
 </style>
 </head>
 <body>
 <div id="game">
-  <!-- Opponent area -->
-  <div style="display:flex; gap:4px; align-items:center;">
-    <div class="zone-label">対戦相手の手札</div>
-    <div id="ai-hand" class="hand-zone"></div>
-    <div style="margin-left:auto; display:flex; gap:6px; align-items:center;">
-      <div class="life-display" id="ai-life">❤️ 20</div>
-      <div style="font-size:9px; color:#666;">山札: <span id="ai-deck-count">40</span> / 土地: <span id="ai-land-deck-count">10</span></div>
+  <!-- 左：ボードエリア -->
+  <div id="board">
+    <!-- AI 手札 -->
+    <div class="board-row ai-row">
+      <div class="zone-label" style="writing-mode:initial; min-width:52px;">相手の手札</div>
+      <div id="ai-hand" class="hand-zone" style="flex:1;"></div>
     </div>
-  </div>
-  <div style="display:flex; gap:4px; align-items:center;">
-    <div class="zone-label">敵フィールド</div>
-    <div id="ai-field" class="field-zone"></div>
-  </div>
-  <div style="display:flex; gap:4px; align-items:center;">
-    <div class="zone-label">敵土地</div>
-    <div id="ai-lands" class="land-zone"></div>
-  </div>
 
-  <!-- Info bar -->
-  <div id="info-bar">
-    <div id="turn-indicator">ターン 1</div>
-    <div class="sep"></div>
-    <div class="phase-display" id="phase-name">アンタップ</div>
-    <div class="sep"></div>
-    <div class="cx-display">CX: <span id="cx-value">0</span></div>
-    <div class="oc-display" id="oc-status">OC: ✗</div>
-    <div class="sep"></div>
-    <div style="font-size:10px;">マナ:</div>
-    <div class="mana-display" id="mana-display"></div>
-    <div class="sep"></div>
-    <div style="font-size:10px;">山札: <span id="player-deck-count">40</span> / 土地: <span id="player-land-deck-count">10</span></div>
-  </div>
+    <!-- AI フィールド -->
+    <div class="board-row ai-row" style="flex:1;">
+      <div class="zone-label" style="min-width:52px;">相手フィールド</div>
+      <div id="ai-field" class="field-zone" style="flex:1;"></div>
+    </div>
 
-  <!-- Stack -->
-  <div id="stack-area">
-    <span style="font-size:9px; color:#555; margin-right:4px;">スタック:</span>
-    <div id="stack-items" style="display:flex; gap:6px; flex-wrap:wrap;"></div>
-  </div>
+    <!-- AI 土地 -->
+    <div class="board-row ai-row">
+      <div class="zone-label" style="min-width:52px;">相手の土地</div>
+      <div id="ai-lands" class="land-zone" style="flex:1;"></div>
+    </div>
 
-  <!-- Player lands -->
-  <div style="display:flex; gap:4px; align-items:center;">
-    <div class="zone-label">自分の土地</div>
-    <div id="player-lands" class="land-zone"></div>
-  </div>
+    <!-- 中央情報バー -->
+    <div id="info-bar">
+      <div id="turn-indicator">ターン 1</div>
+      <div class="sep"></div>
+      <div class="phase-display" id="phase-name">アンタップ</div>
+      <div class="sep"></div>
+      <div class="cx-display">CX: <span id="cx-value">0</span></div>
+      <div class="oc-display" id="oc-status">OC: ✗</div>
+      <div class="sep"></div>
+      <span style="font-size:11px;">マナ:</span>
+      <div class="mana-display" id="mana-display"></div>
+      <div id="stack-area" style="flex:1; border:none; background:transparent; padding:0; margin-left:4px; min-height:auto;">
+        <span style="font-size:9px; color:#444;">スタック:</span>
+        <div id="stack-items" style="display:flex; gap:5px; flex-wrap:wrap;"></div>
+      </div>
+    </div>
 
-  <!-- Player field -->
-  <div style="display:flex; gap:4px; align-items:center;">
-    <div class="zone-label">自分フィールド</div>
-    <div id="player-field" class="field-zone"></div>
-  </div>
+    <!-- 自分 土地 -->
+    <div class="board-row player-row">
+      <div class="zone-label" style="min-width:52px;">自分の土地</div>
+      <div id="player-lands" class="land-zone" style="flex:1;"></div>
+    </div>
 
-  <!-- Player hand -->
-  <div style="display:flex; gap:4px; align-items:center;">
-    <div class="zone-label">手札</div>
-    <div id="player-hand" class="hand-zone"></div>
-    <div style="margin-left:auto; display:flex; gap:6px; align-items:center;">
-      <div class="life-display" id="player-life">❤️ 20</div>
+    <!-- 自分 フィールド -->
+    <div class="board-row player-row" style="flex:1;">
+      <div class="zone-label" style="min-width:52px;">自分フィールド</div>
+      <div id="player-field" class="field-zone" style="flex:1;"></div>
+    </div>
+
+    <!-- 自分 手札 -->
+    <div class="board-row player-row">
+      <div class="zone-label" style="min-width:52px;">手札</div>
+      <div id="player-hand" class="hand-zone" style="flex:1;"></div>
     </div>
   </div>
 
-  <!-- Controls + Log -->
-  <div style="display:flex; gap:4px;">
+  <!-- 右：サイドパネル -->
+  <div id="side-panel">
+    <!-- AI 情報 -->
+    <div class="player-stat-card" style="border-color:#3a2a2a;">
+      <h3>対戦相手</h3>
+      <div style="display:flex; align-items:center; gap:8px;">
+        <div class="life-display" id="ai-life">❤️ 20</div>
+        <div style="font-size:10px; color:#666; margin-left:auto;">
+          山札 <span id="ai-deck-count">40</span> / 土地 <span id="ai-land-deck-count">10</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 自分 情報 -->
+    <div class="player-stat-card" style="border-color:#2a3a2a;">
+      <h3>自分</h3>
+      <div style="display:flex; align-items:center; gap:8px;">
+        <div class="life-display" id="player-life">❤️ 20</div>
+        <div style="font-size:10px; color:#666; margin-left:auto;">
+          山札 <span id="player-deck-count">40</span> / 土地 <span id="player-land-deck-count">10</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- コントロール -->
     <div id="controls">
-      <button id="btn-end-phase" class="primary" onclick="endPhase()">フェイズ終了</button>
-      <button id="btn-pass" onclick="passPriority()">優先権パス</button>
-      <button id="btn-mulligan" onclick="doMulligan()" disabled>マリガン</button>
-      <button id="btn-charge" onclick="startCharge()">チャージ</button>
-      <span id="action-hint" style="font-size:10px; color:#aaaaff;"></span>
+      <div id="controls-btns">
+        <button id="btn-end-phase" class="primary" onclick="endPhase()">フェイズ終了</button>
+        <button id="btn-pass" onclick="passPriority()">優先権パス</button>
+        <button id="btn-mulligan" onclick="doMulligan()" disabled>マリガン</button>
+        <button id="btn-charge" onclick="startCharge()">チャージ</button>
+      </div>
+      <div id="action-hint"></div>
     </div>
-    <div id="log" style="flex:1;"></div>
+
+    <!-- ログ -->
+    <div id="log"></div>
   </div>
 </div>
 
