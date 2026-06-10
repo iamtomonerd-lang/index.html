@@ -1080,7 +1080,6 @@ function playCardFromHand(player, handIndex) {
   if (!isMyTurn && !isQuick) { log('あなたのターンではありません'); return; }
   if (!inMain && !isQuick) { log('メインフェイズ以外ではカードをプレイできません'); return; }
   if (G.combatStep && !isQuick) { log('戦闘フェイズ中はプレイできません'); return; }
-  if (G.stack.length > 0) { log('スタック処理中は使用できません（優先権パスで解決してください）'); return; }
 
   if (!canAfford(player, card.cost)) { log('マナが足りません'); return; }
 
@@ -2120,9 +2119,20 @@ function aiAttack() {
     let targetType = 'player';
     let targetInstId = null;
     if (card.kakutou && c.entryTurn === G.turn) {
-      // 格闘: 最も強い相手クリーチャーを対象
+      // 格闘: 飛行を持たない場合は非飛行クリーチャーのみ対象
+      const reachable = player.field.filter(pc => {
+        const pc_card = CARD_DB[pc.cardId];
+        return card.flying || !pc_card.flying;
+      });
+      if (reachable.length === 0) {
+        // 対象なし: 通常攻撃に切り替え
+        log(`AI ${card.name} (格闘): 対象なし、通常攻撃`);
+        G.combatArrows.push({fromId: c.instanceId, toId: null, color: '#ff8800'});
+        G.aiCurrentAttackers.push({instId: c.instanceId, targetType: 'player', targetInstId: null});
+        return;
+      }
       targetType = 'creature';
-      const strongest = player.field.reduce((a,b)=>getEffectivePower(0,b)>getEffectivePower(0,a)?b:a);
+      const strongest = reachable.reduce((a,b)=>getEffectivePower(0,b)>getEffectivePower(0,a)?b:a);
       targetInstId = strongest.instanceId;
       G.directlyAttackedCreatures.add(targetInstId);
       log(`AI ${card.name} (格闘) → ${CARD_DB[strongest.cardId].name} を攻撃`);
@@ -2348,8 +2358,13 @@ function renderField(player) {
         if (canCreatureAttack(0, inst)) el.classList.add('attackable');
         if (G.players[0].attackers.includes(inst.instanceId)) el.classList.add('selected');
       }
-      // 格闘ターゲット選択 (AI側クリーチャーをハイライト)
-      if (G.kakutouTargetMode && player === 1) el.classList.add('targetable');
+      // 格闘ターゲット選択 (AI側クリーチャーをハイライト、飛行制限あり)
+      if (G.kakutouTargetMode && player === 1) {
+        const atkInst = G.players[0].field.find(c=>c.instanceId===G.pendingKakutouInstId);
+        const atkCard = atkInst ? CARD_DB[atkInst.cardId] : null;
+        const canTarget = atkCard && (atkCard.flying || !CARD_DB[inst.cardId].flying);
+        if (canTarget) el.classList.add('targetable');
+      }
       // ブロック宣言ハイライト
       if (G.playerBlockMode) {
         if (player === 0) {
@@ -2484,13 +2499,18 @@ function handleHandClick(player, index) {
 }
 
 function handleFieldClick(player, instId) {
-  // 格闘ターゲット選択を最優先 (飛行含む全クリーチャーが対象)
+  // 格闘ターゲット選択を最優先
   if (G.kakutouTargetMode && player === 1) {
-    G.kakutouTargets[G.pendingKakutouInstId] = instId;
     const atkInst = G.players[0].field.find(c=>c.instanceId===G.pendingKakutouInstId);
     const atkCard = atkInst ? CARD_DB[atkInst.cardId] : null;
     const tgtInst = G.players[1].field.find(c=>c.instanceId===instId);
     const tgtCard = tgtInst ? CARD_DB[tgtInst.cardId] : null;
+    // 飛行チェック: 非飛行は飛行クリーチャーを格闘対象にできない
+    if (tgtCard && tgtCard.flying && !(atkCard && atkCard.flying)) {
+      log('飛行クリーチャーは飛行を持たないクリーチャーに攻撃されません');
+      return;
+    }
+    G.kakutouTargets[G.pendingKakutouInstId] = instId;
     log(`格闘対象: ${atkCard?.name} → ${tgtCard?.name}`);
     G.kakutouTargetMode = false;
     G.pendingKakutouInstId = null;
