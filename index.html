@@ -1084,8 +1084,8 @@ function playCardFromHand(player, handIndex) {
   if (!isMyTurn && !isQuick) { log('あなたのターンではありません'); return; }
   if (!inMain && !isQuick) { log('メインフェイズ以外ではカードをプレイできません'); return; }
   if (G.combatStep && !isQuick) { log('戦闘フェイズ中はプレイできません'); return; }
-  // スタックにアイテムがある間は非Quickカードは唱えられない
-  if (G.stack.length > 0 && !isQuick) { log('スタック処理中は唱えられません（Quickのみ対応可）'); return; }
+  // 非ターンプレイヤーはQuickのみスタックに積める
+  if (G.stack.length > 0 && !isMyTurn && !isQuick) { log('スタック処理中は唱えられません（非ターンプレイヤーはQuickのみ対応可）'); return; }
 
   if (!canAfford(player, card.cost)) { log('マナが足りません'); return; }
 
