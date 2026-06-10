@@ -1310,22 +1310,23 @@ function fireETB(player, instanceId) {
       }
     }
   } else if (card.etb === 'damage2opponent_always_cx6damage3') {
-    // Bastian ETB: always 2 damage to one opponent creature; CX6 adds 3 more
     const hasCX6 = getCXValue(player) >= 6;
+    const oppField = G.players[opp].field;
     if (player === 0) {
-      const oppField = G.players[opp].field;
       if (oppField.length > 0) {
-        G.targetMode = { type:'opponentCreature', callback:(tgt) => {
-          applyDamageToCreature(opp, tgt.instId, 2, player);
-          log(`${card.name} ETB: 2ダメージ`, 'damage');
-          if (hasCX6) {
-            applyDamageToCreature(opp, tgt.instId, 3, player);
-            log(`${card.name} CX6 ETB追加: さらに3ダメージ`, 'damage');
-          }
-          G.targetMode = null; render(); updateHints();
-        }};
-        log(`${card.name} ETB: 対象を選択（2ダメージ${hasCX6 ? ' +CX6: 3ダメージ' : ''}）`);
-        render(); updateHints();
+        // Choose: ETB damage OR kakutou attack
+        const html = `
+          <p style="margin-bottom:10px; font-size:12px;">バスティオンの能力を選んでください：</p>
+          <div style="display:flex; flex-direction:column; gap:8px;">
+            <button onclick="bastianChooseETB()" style="padding:10px; background:#2a2a8a; border:1px solid #6060ff; color:#fff; border-radius:5px; font-size:12px; cursor:pointer;">
+              ETBダメージ（2ダメージ${hasCX6 ? ' + CX6: 3ダメージ' : ''}）
+            </button>
+            <button onclick="bastianChooseKakutou(${inst.instanceId})" style="padding:10px; background:#4a1a1a; border:1px solid #cc4444; color:#fff; border-radius:5px; font-size:12px; cursor:pointer;">
+              格闘攻撃（対戦相手クリーチャーと戦闘）
+            </button>
+          </div>
+        `;
+        showModal('バスティオン ETB', html);
       }
     } else {
       const targets = G.players[opp].field;
@@ -1339,8 +1340,56 @@ function fireETB(player, instanceId) {
         }
       }
     }
-    // Bastian CX8 buff is handled dynamically via getCXBonus (no ETB permanent buff needed)
   }
+}
+
+function bastianChooseETB() {
+  closeModal();
+  const hasCX6 = getCXValue(0) >= 6;
+  const opp = 1;
+  // Step 1: pick target for 2 damage
+  G.targetMode = { type:'opponentCreature', callback:(tgt) => {
+    applyDamageToCreature(opp, tgt.instId, 2, 0);
+    log('バスティオン ETB: 2ダメージ', 'damage');
+    G.targetMode = null;
+    checkDeath();
+    render(); updateHints();
+    if (hasCX6) {
+      // Step 2: pick target for CX6 3 damage (separate)
+      if (G.players[opp].field.length > 0) {
+        G.targetMode = { type:'opponentCreature', callback:(tgt2) => {
+          applyDamageToCreature(opp, tgt2.instId, 3, 0);
+          log('バスティオン CX6 ETB: 3ダメージ', 'damage');
+          G.targetMode = null;
+          checkDeath();
+          render(); updateHints();
+        }};
+        log('バスティオン CX6 ETB: 追加3ダメージの対象を選択');
+        render(); updateHints();
+      }
+    }
+  }};
+  log('バスティオン ETB: 2ダメージの対象を選択');
+  render(); updateHints();
+}
+
+function bastianChooseKakutou(instanceId) {
+  closeModal();
+  const inst = G.players[0].field.find(c => c.instanceId === instanceId);
+  if (!inst) return;
+  const opp = 1;
+  const reachable = G.players[opp].field.filter(c => !CARD_DB[c.cardId].flying);
+  if (reachable.length === 0) {
+    log('バスティオン 格闘: 対象クリーチャーがいません');
+    return;
+  }
+  inst.tapped = true;
+  G.combatArrows = [{fromId: instanceId, toId: null, color: '#ff8800'}];
+  G.kakutouTargetMode = true;
+  G.pendingKakutouInstId = instanceId;
+  G.kakutouTargets = {};
+  log('バスティオン 格闘: 攻撃するAIクリーチャーを選択してください');
+  render(); updateHints();
 }
 
 function doLook3Keep1White(player) {
