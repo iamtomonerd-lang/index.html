@@ -485,7 +485,7 @@ button.danger:hover { background: #6a2a2a; }
 }
 .threshold-gauge-label { font-size: 9px; color: #888; }
 .threshold-gauge {
-  height: 8px;
+  height: 14px;
   background: #1a1a2a;
   border-radius: 4px;
   overflow: hidden;
@@ -587,7 +587,10 @@ button.danger:hover { background: #6a2a2a; }
       <div class="sep"></div>
       <div class="threshold-gauge-wrap" id="threshold-gauge-wrap">
         <div class="threshold-gauge-label" id="threshold-label">CX値: 0  CX6✗ CX8✗ OC✗</div>
-        <div class="threshold-gauge"><div class="threshold-gauge-fill" id="threshold-fill" style="width:0%;background:#555;"></div></div>
+        <div class="threshold-gauge" style="position:relative;">
+          <div class="threshold-gauge-fill" id="threshold-fill" style="width:0%;background:#555;"></div>
+          <div id="threshold-count" style="position:absolute;top:0;left:0;width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:8px;color:#fff;font-weight:bold;pointer-events:none;">0/10</div>
+        </div>
       </div>
       <div class="sep"></div>
       <span style="font-size:11px;">マナ:</span>
@@ -1343,11 +1346,7 @@ function fireETB(player, instanceId) {
         }
       }
     }
-    // Bastian CX8 buff
-    if (card.cx8Buff && getCXValue(player) >= 8) {
-      addPermanentBuff(player, instanceId, 3, 3);
-      log(`${card.name} CX8: +3/+3`, 'important');
-    }
+    // Bastian CX8 buff is handled dynamically via getCXBonus (no ETB permanent buff needed)
   }
 }
 
@@ -1442,7 +1441,7 @@ function checkCreatureDeath(player, instId, sourcePlayer) {
   const c = p.field[idx];
   const card = CARD_DB[c.cardId];
   const permBuff = getPermanentBuff(c.instanceId);
-  const toughness = card.toughness + (c.tempToughness||0) + permBuff.toughness;
+  const toughness = card.toughness + (c.tempToughness||0) + permBuff.toughness + getCXBonus(player, c).toughness;
   const dead = c.damage >= toughness;
   if (dead) {
     p.field.splice(idx, 1);
@@ -1766,12 +1765,12 @@ function activateChargedLand(player, instId) {
 function getEffectivePower(player, inst) {
   const card = CARD_DB[inst.cardId];
   const pb = getPermanentBuff(inst.instanceId);
-  return card.power + (inst.tempPower||0) + pb.power + getCXBonus(player, inst);
+  return card.power + (inst.tempPower||0) + pb.power + getCXBonus(player, inst).power;
 }
 function getEffectiveToughness(player, inst) {
   const card = CARD_DB[inst.cardId];
   const pb = getPermanentBuff(inst.instanceId);
-  return card.toughness + (inst.tempToughness||0) + pb.toughness;
+  return card.toughness + (inst.tempToughness||0) + pb.toughness + getCXBonus(player, inst).toughness;
 }
 
 function toggleAttacker(instId) {
@@ -1957,10 +1956,10 @@ function resolveCombat() {
 
 function getCXBonus(player, creature) {
   const card = CARD_DB[creature.cardId];
-  if (!card.keywords) return 0;
+  if (!card.keywords) return {power:0, toughness:0};
   const cx = getCXValue(player);
-  if (card.id === 'bastian' && card.cx8Buff && cx >= 8) return 3;
-  return 0;
+  if (card.id === 'bastian' && card.cx8Buff && cx >= 8) return {power:3, toughness:3};
+  return {power:0, toughness:0};
 }
 
 function getCXValue(player) {
@@ -2458,8 +2457,9 @@ function buildCardHTML(card, inst, playerOwner) {
   if (card.type === 'creature' && inst) {
     const pb = getPermanentBuff(inst.instanceId);
     const p2 = playerOwner !== undefined ? playerOwner : 0;
-    const pw = card.power + (inst.tempPower||0) + pb.power + getCXBonus(p2, inst);
-    const th = card.toughness + (inst.tempToughness||0) + pb.toughness;
+    const cxb = getCXBonus(p2, inst);
+    const pw = card.power + (inst.tempPower||0) + pb.power + cxb.power;
+    const th = card.toughness + (inst.tempToughness||0) + pb.toughness + cxb.toughness;
     const dmgStr = inst.damage > 0 ? `-${inst.damage}` : '';
     ptHtml = `<div class="card-pt">${pw}/${th}${dmgStr}</div>`;
   } else if (card.type === 'creature') {
@@ -3009,11 +3009,13 @@ function updateThresholdGauge() {
   const cx = getCXValue(0);
   const labelEl = document.getElementById('threshold-label');
   const fillEl = document.getElementById('threshold-fill');
+  const countEl = document.getElementById('threshold-count');
   if (!labelEl || !fillEl) return;
   const cx6 = cx >= 6 ? '🟡CX6✓' : 'CX6✗';
   const cx8 = cx >= 8 ? '🟠CX8✓' : 'CX8✗';
   const oc  = cx >= 10 ? '🔴OC✓'  : 'OC✗';
-  labelEl.textContent = `CX値: ${cx}  ${cx6} ${cx8} ${oc}`;
+  labelEl.textContent = `${cx6} ${cx8} ${oc}`;
+  if (countEl) countEl.textContent = `${cx}/10`;
   const pct = Math.min(cx / 10 * 100, 100);
   fillEl.style.width = pct + '%';
   if (cx >= 10) {
