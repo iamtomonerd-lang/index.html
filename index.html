@@ -852,6 +852,9 @@ function initGame() {
     ],
     nextInstanceId: 1,
     firstTurn: true,
+    awaitingPriority: false,
+    priorityFor: null,
+    priorityContinuation: null,
     chargingMode: false,
     targetMode: null, // {type, callback}
     attackMode: false,
@@ -1098,6 +1101,7 @@ function playCardFromHand(player, handIndex) {
           if (oc) { oc.tempToughness = (oc.tempToughness||0)+1; G.tempBuffs.push({instanceId:tgt2.instId,power:0,toughness:1}); }
           log(`${card.name}: 自クリーチャーに+0/+1`);
           G.targetMode = null; render(); updateHints();
+          openPriorityWindow(1 - player, null);
         }};
         log('自クリーチャーを選択（+0/+1）');
         render(); updateHints();
@@ -1116,6 +1120,7 @@ function playCardFromHand(player, handIndex) {
     p.graveyard.push(cardId);
     log(`${card.name} を使用`);
     render(); updateHints();
+    openPriorityWindow(1 - player, null);
     return;
   }
 
@@ -1130,6 +1135,7 @@ function playCardFromHand(player, handIndex) {
   log(`${card.name} を召喚 (${costToString(card.cost)})`, 'important');
   fireETB(player, inst.instanceId);
   render(); updateHints();
+  openPriorityWindow(1 - player, null);
 }
 
 // ============================================================
@@ -1173,6 +1179,7 @@ function kaizenChoice(player, handIndex, choice) {
       G.blockDrawTrigger = true;
       log(`介善(A): 対戦相手クリーチャーに2ダメージ、このターンブロック時1ドロー`, 'damage');
       G.targetMode = null; render(); updateHints();
+      openPriorityWindow(1 - player, null);
     }};
     log('対象クリーチャーを選択（2ダメージ）');
   } else {
@@ -1185,6 +1192,7 @@ function kaizenChoice(player, handIndex, choice) {
       G.blockDrawTrigger = true;
       log(`介善(B): 対戦相手クリーチャーに攻撃強制、このターンブロック時1ドロー`, 'important');
       G.targetMode = null; render(); updateHints();
+      openPriorityWindow(1 - player, null);
     }};
     log('対象クリーチャーを選択（攻撃強制）');
   }
@@ -1438,6 +1446,17 @@ function endGame(winner) {
 // ============================================================
 function endPhase() {
   if (G.phase === 'ended') return;
+  // Open priority window for non-active player before ending phase
+  if (!G.awaitingPriority && !G._skipPriorityWindow && !G.playerBlockMode) {
+    const opponent = 1 - G.activePlayer;
+    G._skipPriorityWindow = true;
+    openPriorityWindow(opponent, () => {
+      G._skipPriorityWindow = false;
+      endPhase();
+    });
+    return;
+  }
+  G._skipPriorityWindow = false;
   clearTargetMode();
 
   if (G.phase === 'main' && G.activePlayer === 0) {
@@ -1917,11 +1936,61 @@ function isOCActive(player) {
   return getCXValue(player) >= 10;
 }
 
+// ============================================================
+// PRIORITY WINDOW SYSTEM
+// ============================================================
+function openPriorityWindow(forPlayer, continuation) {
+  G.awaitingPriority = true;
+  G.priorityFor = forPlayer;
+  G.priorityContinuation = continuation;
+  render();
+  updateHints();
+  if (forPlayer === 1) {
+    setTimeout(() => aiHandlePriority(), 700);
+  }
+}
+
+function closePriorityAndResolve() {
+  G.awaitingPriority = false;
+  G.priorityFor = null;
+  // Resolve all stack items (LIFO)
+  while (G.stack.length > 0) {
+    const item = G.stack.pop();
+    if (item.resolve) item.resolve();
+  }
+  renderStack();
+  const cont = G.priorityContinuation;
+  G.priorityContinuation = null;
+  render();
+  if (cont) setTimeout(cont, 50);
+}
+
+function aiHandlePriority() {
+  if (!G.awaitingPriority || G.priorityFor !== 1) return;
+  const ai = G.players[1];
+  // Find a Quick spell AI can play
+  const response = ai.hand.map((cid, i) => ({ cid, i, card: CARD_DB[cid] }))
+    .find(({ card }) => card.keywords && card.keywords.includes('Quick') && canAfford(1, card.cost));
+  if (response) {
+    const { cid, i, card } = response;
+    log(`AI: ${card.name} を対応で使用 (Quick)`, 'important');
+    showAIBalloon(`⚡ ${card.icon} ${card.name} 対応！`);
+    payMana(1, card.cost);
+    ai.hand.splice(i, 1);
+    ai.graveyard.push(cid);
+    G.stack.push({ name: card.name, icon: card.icon || '✨', owner: 1, resolve: () => aiPlaySpell(card, -1) });
+    renderStack();
+  }
+  closePriorityAndResolve();
+}
+
 function passPriority() {
+  if (G.awaitingPriority) {
+    closePriorityAndResolve();
+    return;
+  }
   if (G.stack.length > 0) {
     resolveStack();
-  } else {
-    log('スタックは空です');
   }
 }
 
@@ -2008,6 +2077,7 @@ function aiTurn() {
   // Play creatures/spells
   let played = true;
   let attempts = 0;
+  let aiPlayedCard = false;
   while (played && attempts < 20) {
     played = false; attempts++;
     const playable = ai.hand.map((cid, i) => ({cid, i, card: CARD_DB[cid]}))
@@ -2027,17 +2097,23 @@ function aiTurn() {
         showAIBalloon(`${card.icon} ${card.name} 召喚！`);
         fireETB(1, inst.instanceId);
         played = true;
+        aiPlayedCard = true;
         render();
       } else if (card.type === 'spell') {
         showAIBalloon(`${card.icon} ${card.name} 使用！`);
         aiPlaySpell(card, i);
         played = true;
+        aiPlayedCard = true;
         render();
       }
     }
   }
 
-  setTimeout(() => { aiAttack(); }, 600);
+  if (aiPlayedCard) {
+    openPriorityWindow(0, () => setTimeout(() => aiAttack(), 300));
+  } else {
+    setTimeout(() => { aiAttack(); }, 600);
+  }
 }
 
 function totalCost(cost) {
