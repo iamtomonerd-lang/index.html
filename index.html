@@ -1668,6 +1668,15 @@ function endPhase() {
   clearTargetMode();
 
   if (G.phase === 'main' && G.activePlayer === 0) {
+    // mustAttackクリーチャーが残っていれば強制攻撃
+    const mustAtkers = G.players[0].field.filter(c =>
+      c.mustAttack && canCreatureAttack(0, c)
+    );
+    if (mustAtkers.length > 0) {
+      log(`⚠️ ${CARD_DB[mustAtkers[0].cardId].name} は攻撃しなければなりません（アレスティア効果）`, 'important');
+      startSingleAttack(0, mustAtkers[0].instanceId);
+      return;
+    }
     endTurn();
     return;
   }
@@ -1856,7 +1865,20 @@ function resolveSingleCombat(atkPlayer, atkInstId, kakutouTargetId, blockerInstI
       atkInst.damage += blkPow;
       log(`${atkCard.name} vs ${blkCard.name}: ${atkPow}/${blkPow}ダメージ交換`, 'damage');
       // onBlock triggers
-      if (blkCard.onBlock === 'damage2attacker') { atkInst.damage += 2; log(`${blkCard.name}: 攻撃クリーチャーに+2ダメージ`, 'damage'); }
+      if (blkCard.onBlock === 'damage2attacker') {
+        if (opp === 0) {
+          // プレイヤーのブロッカー: 対象を選んで2ダメージ
+          G.targetMode = { type:'opponentCreature', callback:(tgt) => {
+            applyDamageToCreature(atkPlayer, tgt.instId, 2, opp);
+            log(`${blkCard.name}: 相手クリーチャーに2ダメージ`, 'damage');
+            G.targetMode = null; checkDeath(); render(); updateHints();
+          }};
+          log(`${blkCard.name}: 2ダメージの対象を選択（紫枠のクリーチャー）`);
+        } else {
+          atkInst.damage += 2;
+          log(`${blkCard.name}: 攻撃クリーチャーに2ダメージ`, 'damage');
+        }
+      }
       if (blkCard.onBlock === 'draw1') { drawCard(opp); log(`${blkCard.name}: 1ドロー`); }
       if (blkCard.onBlock === 'gain3life') { G.players[opp].life += 3; log(`${blkCard.name}: ライフ+3`); }
       if (blkCard.cx8Block === 'buff1ally' && getCXValue(opp) >= 8) {
@@ -1930,16 +1952,18 @@ function endTurn() {
   // Untap
   untapAll(ap);
 
-  // Clear mustAttack on active player's creatures (it was set for their turn)
-  G.players[ap].field.forEach(c => {
-    if (c.mustAttack) { c.mustAttack = false; G.mustAttackCreatures.delete(c.instanceId); }
-  });
+  // Clear mustAttack on ALL creatures (fresh each turn)
+  G.players[0].field.forEach(c => { c.mustAttack = false; G.mustAttackCreatures.delete(c.instanceId); });
+  G.players[1].field.forEach(c => { c.mustAttack = false; G.mustAttackCreatures.delete(c.instanceId); });
 
-  // アレスティア passive: if opponent has arestia, set all opponent creatures mustAttack
+  // アレスティア passive: 相手がアレスティアを持つ → アクティブプレイヤーのクリーチャーはmustAttack
+  // 両者アレスティアの場合も一方向のみ（アクティブ側に適用）
   const opp = 1 - ap;
   const oppHasArestia = G.players[opp].field.some(c=>CARD_DB[c.cardId].id==='arestia');
   if (oppHasArestia) {
-    G.players[ap].field.forEach(c => { c.mustAttack = true; G.mustAttackCreatures.add(c.instanceId); });
+    G.players[ap].field.forEach(c => {
+      if (!c.tapped && !c.sick) { c.mustAttack = true; G.mustAttackCreatures.add(c.instanceId); }
+    });
   }
 
   G.phase = 'draw';
