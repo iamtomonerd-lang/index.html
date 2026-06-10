@@ -1580,7 +1580,7 @@ function startSingleAttack(player, atkInstId) {
 
   G.combatArrows = [{fromId: atkInstId, toId: null, color: '#ff8800'}];
 
-  // 格闘: need to select a target creature first
+  // 格闘: select target creature first, then priority window after target chosen
   if (card.kakutou && inst.entryTurn === G.turn) {
     const reachable = G.players[opp].field.filter(c => card.flying || !CARD_DB[c.cardId].flying);
     if (reachable.length === 0) {
@@ -1597,19 +1597,28 @@ function startSingleAttack(player, atkInstId) {
     return;
   }
 
-  // Normal attack: AI picks blocker
+  // Normal attack: open priority window for non-turn player before combat resolves
   log(`${card.name} が攻撃宣言`);
   render();
-  setTimeout(() => {
+  openPriorityWindow(opp, () => {
+    // After priority window: check attacker still alive
+    const stillAlive = G.players[player].field.find(c => c.instanceId === atkInstId);
+    if (!stillAlive) {
+      log('攻撃クリーチャーが破壊されたため攻撃中止');
+      G.combatArrows = [];
+      render(); updateHints();
+      if (player === 1) setTimeout(() => continueAIAttack(), 300);
+      return;
+    }
     const aiBlocker = pickAIBlockerFor(player, atkInstId);
     if (aiBlocker) {
       G.combatArrows = [{fromId: atkInstId, toId: aiBlocker.instanceId, color: '#ff4444'}];
       render();
-      setTimeout(() => resolveSingleCombat(player, atkInstId, null, aiBlocker.instanceId), 500);
+      setTimeout(() => resolveSingleCombat(player, atkInstId, null, aiBlocker.instanceId), 400);
     } else {
       resolveSingleCombat(player, atkInstId, null, null);
     }
-  }, 300);
+  });
 }
 
 function pickAIBlockerFor(atkPlayer, atkInstId) {
@@ -1627,7 +1636,11 @@ function pickAIBlockerFor(atkPlayer, atkInstId) {
 function resolveSingleCombat(atkPlayer, atkInstId, kakutouTargetId, blockerInstId) {
   const opp = 1 - atkPlayer;
   const atkInst = G.players[atkPlayer].field.find(c => c.instanceId === atkInstId);
-  if (!atkInst) { G.combatArrows = []; render(); return; }
+  if (!atkInst) {
+    G.combatArrows = []; render();
+    if (atkPlayer === 1) setTimeout(() => continueAIAttack(), 300);
+    return;
+  }
   const atkCard = CARD_DB[atkInst.cardId];
   const atkPow = getEffectivePower(atkPlayer, atkInst);
 
@@ -2429,32 +2442,52 @@ function continueAIAttack() {
       return;
     }
     const tgt = reachable.reduce((a,b)=>getEffectivePower(0,b)>getEffectivePower(0,a)?b:a);
+    const tgtId = tgt.instanceId;
     log(`AI ${card.name} 格闘 → ${CARD_DB[tgt.cardId].name}`);
-    G.combatArrows = [{fromId: atkInstId, toId: tgt.instanceId, color: '#ff4444'}];
+    G.combatArrows = [{fromId: atkInstId, toId: tgtId, color: '#ff4444'}];
     render();
-    setTimeout(() => resolveSingleCombat(1, atkInstId, tgt.instanceId, null), 600);
+    openPriorityWindow(0, () => {
+      const aAlive = G.players[1].field.find(c => c.instanceId === atkInstId);
+      const tAlive = G.players[0].field.find(c => c.instanceId === tgtId);
+      if (!aAlive || !tAlive) {
+        log('格闘: クリーチャーが破壊されたため攻撃中止');
+        G.combatArrows = []; render();
+        setTimeout(() => continueAIAttack(), 300);
+        return;
+      }
+      resolveSingleCombat(1, atkInstId, tgtId, null);
+    });
     return;
   }
 
-  // Normal: player may block
+  // Normal: open priority window for player before blocker phase
   log(`AI ${card.name} が攻撃宣言`);
   G.combatArrows = [{fromId: atkInstId, toId: null, color: '#ff8800'}];
-  const eligibleBlockers = player.field.filter(c => {
-    const bc = CARD_DB[c.cardId];
-    return (!c.tapped || (bc.ocBlockWhileTapped && isOCActive(0))) && canFlyBlock(atkInst, c);
+  render();
+  openPriorityWindow(0, () => {
+    const stillAlive = G.players[1].field.find(c => c.instanceId === atkInstId);
+    if (!stillAlive) {
+      log('攻撃クリーチャーが破壊されたため攻撃中止');
+      G.combatArrows = []; render();
+      setTimeout(() => continueAIAttack(), 300);
+      return;
+    }
+    const eligibleBlockers = player.field.filter(c => {
+      const bc = CARD_DB[c.cardId];
+      return (!c.tapped || (bc.ocBlockWhileTapped && isOCActive(0))) && canFlyBlock(atkInst, c);
+    });
+    if (eligibleBlockers.length === 0) {
+      resolveSingleCombat(1, atkInstId, null, null);
+      return;
+    }
+    // Player block phase for this single attacker
+    G.aiCurrentAttackers = [{instId: atkInstId, targetType:'player', targetInstId:null}];
+    G.playerBlockMode = true;
+    G.playerBlockAssignments = {};
+    G.selectedBlockerToAssign = null;
+    log(`--- ${card.name} に対してブロッカーを宣言（任意）→「ブロック確定」 ---`, 'important');
+    render(); updateHints();
   });
-  if (eligibleBlockers.length === 0) {
-    render();
-    setTimeout(() => resolveSingleCombat(1, atkInstId, null, null), 500);
-    return;
-  }
-  // Player block phase for this single attacker
-  G.aiCurrentAttackers = [{instId: atkInstId, targetType:'player', targetInstId:null}];
-  G.playerBlockMode = true;
-  G.playerBlockAssignments = {};
-  G.selectedBlockerToAssign = null;
-  log(`--- ${card.name} に対してブロッカーを宣言（任意）→「ブロック確定」 ---`, 'important');
-  render(); updateHints();
 }
 
 function resolveAICombat() {
@@ -2737,13 +2770,25 @@ function handleFieldClick(player, instId) {
       return;
     }
     const atkInstId = G.pendingKakutouInstId;
-    G.kakutouTargets[atkInstId] = instId;
-    G.combatArrows = [{fromId: atkInstId, toId: instId, color: '#ff4444'}];
+    const kakutouTgtId = instId;
+    G.kakutouTargets[atkInstId] = kakutouTgtId;
+    G.combatArrows = [{fromId: atkInstId, toId: kakutouTgtId, color: '#ff4444'}];
     log(`格闘: ${atkCard?.name} → ${tgtCard?.name}`);
     G.kakutouTargetMode = false;
     G.pendingKakutouInstId = null;
     render();
-    setTimeout(() => resolveSingleCombat(0, atkInstId, instId, null), 500);
+    // Priority window after 格闘 target declared
+    openPriorityWindow(1, () => {
+      const atkStillAlive = G.players[0].field.find(c => c.instanceId === atkInstId);
+      const tgtStillAlive = G.players[1].field.find(c => c.instanceId === kakutouTgtId);
+      if (!atkStillAlive || !tgtStillAlive) {
+        log('格闘: クリーチャーが破壊されたため攻撃中止');
+        G.combatArrows = [];
+        render(); updateHints();
+        return;
+      }
+      setTimeout(() => resolveSingleCombat(0, atkInstId, kakutouTgtId, null), 300);
+    });
     return;
   }
 
