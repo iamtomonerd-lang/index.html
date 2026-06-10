@@ -956,6 +956,7 @@ function skipStartMulligan() {
 function startFirstTurn() {
   // 先攻1ターン目: 土地1枚配置、ドローなし
   placeLands(0, 1);
+  log(`--- ターン${G.turn} プレイヤーのターン ---`, 'important');
   log('ターン1: プレイヤーのメインフェイズ', 'important');
   document.getElementById('btn-mulligan').disabled = true;
   render();
@@ -2246,23 +2247,25 @@ function resolveAICombat() {
 // ============================================================
 // RENDERING
 // ============================================================
+function safeCall(fn, label) {
+  try { fn(); } catch(e) { console.error('[render] ' + label + ':', e); }
+}
 function render() {
   if (G.phase === 'ended' && !G._endedRendered) {
     G._endedRendered = true;
   }
-  renderHand(0);
-  renderHand(1);
-  renderField(0);
-  renderField(1);
-  renderLands(0);
-  renderLands(1);
-  renderInfoBar();
-  renderStack();
-  updateCounts();
-  updateThresholdGauge();
-  updateManaDisplay();
-  drawCombatArrows();
-  // update graveyard counts
+  safeCall(() => renderHand(0), 'renderHand(0)');
+  safeCall(() => renderHand(1), 'renderHand(1)');
+  safeCall(() => renderField(0), 'renderField(0)');
+  safeCall(() => renderField(1), 'renderField(1)');
+  safeCall(() => renderLands(0), 'renderLands(0)');
+  safeCall(() => renderLands(1), 'renderLands(1)');
+  safeCall(() => renderInfoBar(), 'renderInfoBar');
+  safeCall(() => renderStack(), 'renderStack');
+  safeCall(() => updateCounts(), 'updateCounts');
+  safeCall(() => updateThresholdGauge(), 'updateThresholdGauge');
+  safeCall(() => updateManaDisplay(), 'updateManaDisplay');
+  safeCall(() => drawCombatArrows(), 'drawCombatArrows');
   const pgc = document.getElementById('player-grave-count');
   const agc = document.getElementById('ai-grave-count');
   if (pgc) pgc.textContent = G.players[0].graveyard.length;
