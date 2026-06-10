@@ -3682,16 +3682,21 @@ function runTrainingBatch(w0, w1, n) {
   return wins0 / n;
 }
 
-async function startTraining(totalGames, gamesPerBatch, onProgress) {
+async function startTraining(limitMode, limitValue, gamesPerBatch, onProgress) {
+  // limitMode: 'games' | 'time'
+  // limitValue: number of games OR seconds
   _trainStop = false;
   let currentWeights = JSON.parse(JSON.stringify(AI_WEIGHTS));
   let totalPlayed = 0;
   let totalWins = 0;
   const BATCH = gamesPerBatch;
+  const deadline = limitMode === 'time' ? Date.now() + limitValue * 1000 : null;
+  const totalGames = limitMode === 'games' ? limitValue : Infinity;
 
-  while (totalPlayed < totalGames && !_trainStop) {
+  while (!_trainStop) {
+    if (limitMode === 'games' && totalPlayed >= totalGames) break;
+    if (limitMode === 'time' && Date.now() >= deadline) break;
     const candidate = mutateWeights(currentWeights);
-    // candidate (player0) vs current (player1)
     const wr = await new Promise(resolve => {
       setTimeout(() => resolve(runTrainingBatch(candidate, currentWeights, BATCH)), 0);
     });
@@ -3705,7 +3710,8 @@ async function startTraining(totalGames, gamesPerBatch, onProgress) {
     AI_WEIGHTS = JSON.parse(JSON.stringify(currentWeights));
     AI_WEIGHTS._version = AI_WEIGHTS_VERSION;
     AI_TRAIN_STATS.games += BATCH;
-    if (onProgress) onProgress(totalPlayed, totalGames, (totalWins/totalPlayed*100).toFixed(1));
+    const elapsed = limitMode === 'time' ? Math.min(Date.now() - (deadline - limitValue*1000), limitValue*1000) : null;
+    if (onProgress) onProgress(totalPlayed, limitMode === 'games' ? totalGames : null, (totalWins/totalPlayed*100).toFixed(1), elapsed, limitMode === 'time' ? limitValue*1000 : null);
   }
   AI_TRAIN_STATS.epoch++;
   return currentWeights;
@@ -3741,17 +3747,38 @@ function loadWeightsFromFile(file) {
 }
 
 function showTrainingPanel() {
-  const gamesOptions = [100,500,1000,3000,5000].map(n=>`<option value="${n}">${n}戦</option>`).join('');
   const html = `
     <div style="display:flex;flex-direction:column;gap:10px;font-size:12px;">
       <div style="color:#aaa;">現在の学習データ: ${AI_TRAIN_STATS.games}戦 / エポック${AI_TRAIN_STATS.epoch}</div>
-      <div style="display:flex;gap:8px;align-items:center;">
-        <label>対戦数:</label>
-        <select id="train-games" style="background:#1a1a2a;color:#ccc;border:1px solid #444;padding:4px;">
-          ${gamesOptions}
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+        <label>指定方法:</label>
+        <label style="display:flex;align-items:center;gap:3px;cursor:pointer;">
+          <input type="radio" name="train-mode" value="time" checked onchange="uiTrainModeChange()"> 時間
+        </label>
+        <label style="display:flex;align-items:center;gap:3px;cursor:pointer;">
+          <input type="radio" name="train-mode" value="games" onchange="uiTrainModeChange()"> 対戦数
+        </label>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;" id="train-time-row">
+        <select id="train-time" style="background:#1a1a2a;color:#ccc;border:1px solid #444;padding:4px;">
+          <option value="30">30秒</option>
+          <option value="60" selected>1分</option>
+          <option value="180">3分</option>
+          <option value="300">5分</option>
+          <option value="600">10分</option>
+          <option value="1800">30分</option>
         </select>
         <button id="btn-train-start" onclick="uiStartTraining()" style="padding:6px 14px;background:#1a3a1a;border:1px solid #44aa44;color:#aaffaa;border-radius:4px;cursor:pointer;">▶ 開始</button>
         <button onclick="uiStopTraining()" style="padding:6px 10px;background:#3a1a1a;border:1px solid #aa4444;color:#ffaaaa;border-radius:4px;cursor:pointer;">■ 停止</button>
+      </div>
+      <div style="display:none;gap:8px;align-items:center;" id="train-games-row">
+        <select id="train-games" style="background:#1a1a2a;color:#ccc;border:1px solid #444;padding:4px;">
+          <option value="100">100戦</option>
+          <option value="500">500戦</option>
+          <option value="1000">1000戦</option>
+          <option value="3000">3000戦</option>
+          <option value="5000">5000戦</option>
+        </select>
       </div>
       <div style="background:#0a0a1a;border:1px solid #333;border-radius:4px;height:14px;overflow:hidden;">
         <div id="train-bar" style="height:100%;width:0%;background:#336633;transition:width 0.3s;"></div>
@@ -3771,14 +3798,35 @@ function showTrainingPanel() {
   showModal('🧠 AI学習モード', html);
 }
 
+function uiTrainModeChange() {
+  const mode = document.querySelector('input[name="train-mode"]:checked').value;
+  document.getElementById('train-time-row').style.display = mode === 'time' ? 'flex' : 'none';
+  document.getElementById('train-games-row').style.display = mode === 'games' ? 'flex' : 'none';
+  // ボタンを時間行に移す
+  if (mode === 'games') {
+    document.getElementById('train-games-row').appendChild(document.getElementById('btn-train-start').parentNode ? document.getElementById('btn-train-start').cloneNode(true) : document.getElementById('btn-train-start'));
+  }
+}
+
 async function uiStartTraining() {
-  const n = parseInt(document.getElementById('train-games').value) || 100;
+  const mode = document.querySelector('input[name="train-mode"]:checked')?.value || 'time';
+  const limit = mode === 'time'
+    ? parseInt(document.getElementById('train-time').value) || 60
+    : parseInt(document.getElementById('train-games').value) || 100;
   document.getElementById('btn-train-start').disabled = true;
   document.getElementById('train-status').textContent = '学習中...';
-  await startTraining(n, 20, (done, total, wr) => {
-    const pct = (done/total*100).toFixed(0);
+  await startTraining(mode, limit, 20, (done, total, wr, elapsed, totalMs) => {
+    let pct = 0;
+    if (mode === 'games') {
+      pct = (done / total * 100).toFixed(0);
+      document.getElementById('train-status').textContent = `${done}/${total}戦 完了 (直近勝率 ${wr}%)`;
+    } else {
+      pct = Math.min((elapsed / totalMs * 100), 100).toFixed(0);
+      const sec = Math.floor(elapsed / 1000);
+      const tot = Math.floor(totalMs / 1000);
+      document.getElementById('train-status').textContent = `${sec}/${tot}秒 | ${done}戦 完了 (直近勝率 ${wr}%)`;
+    }
     document.getElementById('train-bar').style.width = pct + '%';
-    document.getElementById('train-status').textContent = `${done}/${total}戦 完了 (直近勝率 ${wr}%)`;
   });
   document.getElementById('train-bar').style.width = '100%';
   document.getElementById('train-status').textContent = `✅ 完了 (累計${AI_TRAIN_STATS.games}戦 / エポック${AI_TRAIN_STATS.epoch})`;
