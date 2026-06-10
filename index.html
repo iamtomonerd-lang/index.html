@@ -1649,11 +1649,11 @@ function chargeToLand(landInstId) {
   const cardId = p.hand[hi];
   p.hand.splice(hi, 1);
   land.chargeCard = cardId;
-  land.tapped = true; // チャージした土地はそのターンタップ不可
+  land.tapped = false; // チャージで土地をアンタップ（再起動可能）
   G.chargingMode = false;
   G.selectedCard = null;
   G.chargeUsedThisTurn = true;
-  log(`チャージ: ${CARD_DB[cardId].name} を土地に置いた（このターンはタップ不可）`);
+  log(`チャージ: ${CARD_DB[cardId].name} を土地に置き、土地をアンタップ`);
   // wasure_heichi: draw 1 when charged
   const landCard = CARD_DB[land.cardId];
   if (landCard.chargeDrawTrigger) {
