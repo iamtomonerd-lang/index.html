@@ -965,8 +965,6 @@ function playCardFromHand(player, handIndex) {
   payMana(player, card.cost);
   p.hand.splice(handIndex, 1);
   const inst = newInstance(cardId);
-  // 格闘: still sick but can attack tapped creatures on entry turn
-  inst.sick = true;
   inst.entryTurn = G.turn;
   p.field.push(inst);
   log(`${card.name} を召喚 (${costToString(card.cost)})`, 'important');
@@ -1327,15 +1325,9 @@ function endPhase() {
 }
 
 function canCreatureAttack(player, inst) {
-  const card = CARD_DB[inst.cardId];
   if (G.cantAttackPermanent.has(inst.instanceId)) return false;
   if (inst.tapped) return false;
-  if (!inst.sick) return true;
-  // 格闘: 出たターンは状態問わず相手クリーチャーにのみ攻撃できる
-  if (card.kakutou && inst.entryTurn === G.turn) {
-    return G.players[1-player].field.length > 0;
-  }
-  return false;
+  return true;
 }
 
 function kakutouTargetsOnly(player) {
@@ -1862,7 +1854,6 @@ function aiTurn() {
         payMana(1, card.cost);
         ai.hand.splice(i, 1);
         const inst = newInstance(cid);
-        inst.sick = true;
         inst.entryTurn = G.turn;
         ai.field.push(inst);
         log(`AI: ${card.name} を召喚`);
@@ -1930,13 +1921,6 @@ function aiAttack() {
     const card = CARD_DB[c.cardId];
     if (G.cantAttackPermanent.has(c.instanceId)) return;
     if (c.tapped && !card.vigilance) return;
-    if (c.sick) {
-      // 格闘: 出たターンは任意の相手クリーチャーに攻撃可
-      if (card.kakutou && c.entryTurn === G.turn && player.field.length > 0) {
-        attackerInsts.push(c);
-      }
-      return;
-    }
     attackerInsts.push(c);
   });
 
