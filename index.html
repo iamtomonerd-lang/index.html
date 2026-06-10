@@ -1532,9 +1532,9 @@ function startCombat() {
   // Applied once per attack declaration (when first attacker is added, handled here preemptively)
   const aiHasArestia = G.players[1].field.some(c=>CARD_DB[c.cardId].id==='arestia');
   if (aiHasArestia && !G.arestiaBuffActive) {
-    G.players[0].field.forEach(c => { c.tempPower=(c.tempPower||0)+1; c.tempToughness=(c.tempToughness||0)+1; });
+    G.players[0].field.forEach(c => addPermanentBuff(0, c.instanceId, 1, 1));
     G.arestiaBuffActive = true;
-    log('アレスティア: 自分クリーチャー全体+1/+1（ターン終了時まで）', 'important');
+    log('アレスティア: 自分クリーチャー全体+1/+1（永続）', 'important');
   }
 
   log('攻撃クリーチャーを選択してください');
@@ -1759,6 +1759,16 @@ function toggleAttacker(instId) {
     log(`攻撃宣言: ${card.name}`);
     // 格闘: 出たターンはクリーチャーを対象に選ぶ
     if (card.kakutou && creature.entryTurn === G.turn) {
+      // 対象可能クリーチャー確認 (飛行制限込み)
+      const reachable = G.players[1].field.filter(c => card.flying || !CARD_DB[c.cardId].flying);
+      if (reachable.length === 0) {
+        // 対象なし → 攻撃取り消し
+        p.attackers.splice(p.attackers.indexOf(instId), 1);
+        if (!card.vigilance) creature.tapped = false;
+        log('格闘: 対象にできるクリーチャーがいません');
+        render(); updateHints();
+        return;
+      }
       G.kakutouTargetMode = true;
       G.pendingKakutouInstId = instId;
       log('格闘: 攻撃対象のクリーチャーを選択してください');
@@ -2210,8 +2220,8 @@ function aiAttack() {
   // アレスティア passive
   const playerHasArestia = player.field.some(c=>CARD_DB[c.cardId].id==='arestia');
   if (playerHasArestia) {
-    player.field.forEach(c=>{c.tempPower=(c.tempPower||0)+1;c.tempToughness=(c.tempToughness||0)+1;});
-    log('アレスティア: プレイヤークリーチャー全体+1/+1（ターン終了時まで）','important');
+    player.field.forEach(c => addPermanentBuff(0, c.instanceId, 1, 1));
+    log('アレスティア: プレイヤークリーチャー全体+1/+1（永続）','important');
   }
 
   // 攻撃宣言 & ターゲット設定
@@ -2531,6 +2541,7 @@ function renderLands(player) {
       pip.title = `チャージ: ${CARD_DB[land.chargeCard].name}`;
       el.appendChild(pip);
     }
+    el.dataset.cardId = land.cardId;
     el.onclick = () => handleLandClick(player, land.instanceId);
     zone.appendChild(el);
   });
@@ -2943,7 +2954,8 @@ function updateThresholdGauge() {
   const labelEl = document.getElementById('threshold-label');
   const fillEl = document.getElementById('threshold-fill');
   if (!labelEl || !fillEl) return;
-  labelEl.textContent = `墓地 ${cx} / CX:6 / OC:12`;
+  const status = cx >= 12 ? '🔴 OC発動中' : cx >= 6 ? '🟡 CX発動中' : '⚪ 通常';
+  labelEl.textContent = `土地+チャージ: ${cx} / 6でCX / 12でOC  ${status}`;
   const pct = Math.min(cx / 12 * 100, 100);
   fillEl.style.width = pct + '%';
   if (cx >= 12) {
@@ -3024,7 +3036,7 @@ function updateManaDisplay() {
       for (let i = 0; i < amt; i++) {
         const pip = document.createElement('div');
         pip.className = `mana-pip mana-${c}`;
-        pip.textContent = c;
+        pip.textContent = c === 'C' ? '' : c;
         manaEl.appendChild(pip);
       }
     }
