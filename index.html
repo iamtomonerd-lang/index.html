@@ -700,43 +700,45 @@ const CARD_DB = {
   'ten_kara_shisha': {
     id:'ten_kara_shisha', name:'天からの使者', type:'creature', color:'W',
     cost:{W:1,C:1}, power:1, toughness:1, subtype:'天使', icon:'👼',
-    keywords:['飛行'], text:'飛行\nETB: 対戦相手クリーチャー1体に1ダメージ',
+    keywords:['飛行'], text:'■飛行\n■出た時、相手のクリーチャー１体に1ダメージ',
     flying:true, etb:'damage1opponent'
   },
   'eiyuu_kouho': {
     id:'eiyuu_kouho', name:'英雄候補', type:'creature', color:'W',
     cost:{W:1,C:3}, power:3, toughness:5, subtype:'人間(戦士)', icon:'⚔️',
-    keywords:['格闘'], text:'格闘\nETB: 3ルック1(白)',
+    keywords:['格闘'], text:'■格闘\n■出た時、3ルック1(白)',
     kakutou:true, etb:'look3keep1white'
   },
   'serashia_heishi': {
     id:'serashia_heishi', name:'セラシアの兵士', type:'creature', color:'W',
     cost:{W:2,C:1}, power:2, toughness:5, subtype:'人間(戦士)', icon:'🗡️',
-    keywords:[], text:'ブロック時: カードを1枚引く',
+    keywords:[], text:'■ブロック時、1枚引く',
     onBlock:'draw1'
   },
   'serashia_junhei': {
     id:'serashia_junhei', name:'セラシアの盾兵', type:'creature', color:'W',
     cost:{W:2,C:1}, power:1, toughness:2, subtype:'人間(戦士)', icon:'🛡️',
-    keywords:[], text:'ETB: 対戦相手クリーチャー1体に次のターン攻撃強制\nブロック時: 攻撃クリーチャーに2ダメージ',
+    keywords:[], text:'■出た時、相手クリーチャー１体選ぶ。次の相手のターン中、そのクリーチャーは可能なら攻撃する\n■ブロック時、相手クリーチャー1体に2ダメージ',
     etb:'mustAttackTarget', onBlock:'damage2attacker'
   },
   'serashia_souryo': {
     id:'serashia_souryo', name:'セラシアの僧侶', type:'creature', color:'W',
     cost:{W:3,C:2}, power:3, toughness:5, subtype:'人間(戦士)', icon:'🙏',
-    keywords:['CX8'], text:'ETB: 対戦相手クリーチャーに3ダメージ\nブロック時: ライフ3回復\nCX8: ブロック時、自分クリーチャー1体+1/+1(永続)',
+    keywords:['CX8'], text:'■出た時、相手のクリーチャー１体に3ダメージ\n■ブロック時、自分のライフを3回復\n〈C8〉\nブロック時、自分のクリーチャー1体を+1/+1',
     etb:'damage3opponent', onBlock:'gain3life', cx8Block:'buff1ally'
   },
   'bastian': {
     id:'bastian', name:'絶対守護 バスティオン', type:'creature', color:'W',
     cost:{W:4}, power:3, toughness:2, subtype:'人間(戦士)', icon:'🏰',
-    keywords:['格闘','CX6','CX8'], text:'格闘\nETB: 対戦相手クリーチャー1体に2ダメージ\nCX6 ETB追加: 対戦相手クリーチャーに3ダメージ\nCX8: このクリーチャーは+3/+3(永続)\nOC: タップ中もブロック可能',
+    keywords:['格闘','CX6','CX8','OC'],
+    text:'■格闘\n■出た時、相手クリーチャー1体に2ダメージ\n〈C6〉\n■出た時、相手クリーチャー1体に3ダメージ\n〈C8〉\n■このクリーチャーは+3/+3される\n〈OC〉\n■このクリーチャーはタップしていてもブロックできる',
     kakutou:true, vigilance:false, etb:'damage2opponent_always_cx6damage3', cx8Buff:true, ocBlockWhileTapped:true
   },
   'arestia': {
     id:'arestia', name:'戦乙女 アレスティア', type:'creature', color:'W',
     cost:{W:3,C:5}, power:5, toughness:5, subtype:'人間(戦士)', icon:'⚡',
-    keywords:['還元'], text:'Passive: 対戦相手は可能なら攻撃必須\nPassive: 対戦相手攻撃宣言時、自分クリーチャー全体+1/+1(ターン終了時まで)\nブロック完了時: 自分ブロッカーが全滅しなかった場合、対戦相手に2ダメージ\n還元: 自分クリーチャー1体をアンタップ',
+    keywords:['還元'],
+    text:'■相手は可能なら攻撃する\n■相手クリーチャーのアタック時、このターン、自分のクリーチャー全てを＋1/＋1する\n■自分のクリーチャーのブロック終了時、このバトル中、自分のクリーチャーが破壊されていなければ、相手プレイヤーに2ダメージ\n■起動（還元）：自分のクリーチャー1体をアンタップする',
     arestiaPassive:true, onAttackOpponent:'buff_all_own', onBlockComplete:'damage2ifBlockersSurvive',
     activated:'untapOwn'
   },
@@ -744,44 +746,44 @@ const CARD_DB = {
   'junigeki': {
     id:'junigeki', name:'盾撃', type:'spell', color:'W',
     cost:{W:1}, icon:'🛡️', keywords:['Quick'],
-    text:'Quick: 対戦相手クリーチャー1体に2ダメージ、自分クリーチャー1体に+0/+1(ターン終了時まで)',
+    text:'■相手のクリーチャー1体に2ダメージ\n■自分のクリーチャー1体を+0/+1',
     effect:'junigeki'
   },
   'kaizen': {
     id:'kaizen', name:'介善', type:'spell', color:'W',
     cost:{W:4}, icon:'✨', keywords:['Quick'],
-    text:'Quick\n選択A: 対戦相手クリーチャーに2ダメージ、または選択B: 対戦相手クリーチャーに攻撃強制\nこのターン自分クリーチャーブロック時1ドロー\nOC: コスト≤8のクリーチャーを手札からBF(攻撃不可、同名1回限り)',
+    text:'■選択1\n(1)相手クリーチャー1体に2ダメージ\n(2)相手クリーチャー1体を選ぶ。このターン、それは可能なら攻撃する\n■このターン、自分のクリーチャーがブロックする時、1枚引く\n〈OC〉\n■自分の手札からマナ総量8以下のクリーチャーを出す。この能力によって出したクリーチャーはこのゲーム中、攻撃できない(ターン1:同名)',
     effect:'kaizen'
   },
   // LANDS
   'hito_heichi': {
     id:'hito_heichi', name:'人住まう平地', type:'land', color:'W',
     produces:'W', icon:'🌾',
-    text:'タップ: W追加\nチャージ+W3支払い: 3ルック1(白)',
+    text:'■起動(タップ)：白1マナ生成する\n■起動(タップ&白3)：3ルック1(白)。これはこの土地がチャージされている時のみ起動できる',
     chargedAbility:'look3keep1white'
   },
   'wasure_heichi': {
     id:'wasure_heichi', name:'忘れ去られし平地', type:'land', color:'W',
     produces:'W', icon:'🌿',
-    text:'タップ: W追加\nチャージ時: カードを1枚引く',
+    text:'■起動(タップ)：白1マナ生成\n■この土地がチャージされた時、1枚引く',
     chargeDrawTrigger:true
   },
   'shigen_heichi': {
     id:'shigen_heichi', name:'資源豊富な平地', type:'land', color:'W',
     produces:'W', icon:'⛏️',
-    text:'タップ: W追加\nチャージ+OC+還元: WW追加して土地デッキ底へ',
+    text:'■起動(タップ):白1マナ生成\n〈OC〉\n■起動(自身の還元):白2マナ生成。これはこの土地がチャージされている時のみ起動できる',
     chargedAbility:'kaizouReturn'
   },
   'kemono_heichi': {
     id:'kemono_heichi', name:'獣住む平地', type:'land', color:'W',
     produces:'W', icon:'🐾',
-    text:'タップ: W追加\nチャージ+還元: 対戦相手クリーチャーに2ダメージ',
+    text:'■起動(タップ):白1マナ生成\n■起動(自身の還元):相手クリーチャー1体に2ダメージ。これはこの土地がチャージされているときのみ起動できる',
     chargedAbility:'damage2opponent'
   },
   'serashia_miyako': {
     id:'serashia_miyako', name:'セラシアの都', type:'land', color:'C',
     produces:'C', icon:'🏛️',
-    text:'タップ: C追加\nチャージ+タップ: 自分白クリーチャーに+0/+1(永続)',
+    text:'■起動(タップ)：1マナ生成\n■起動(タップ)：自分の白のクリーチャー1体+0/+1。これはこの土地がチャージされている時のみ起動できる',
     chargedAbility:'buffWhiteCreature'
   },
 };
@@ -1606,6 +1608,14 @@ function startSingleAttack(player, atkInstId) {
 
   G.combatArrows = [{fromId: atkInstId, toId: null, color: '#ff8800'}];
 
+  // アレスティア passive: 攻撃宣言時、守備側がアレスティアを持っていれば守備側全クリーチャー+1/+1
+  const oppHasArestia = G.players[opp].field.some(c => CARD_DB[c.cardId].id === 'arestia');
+  if (oppHasArestia && !G.arestiaBuffActive) {
+    G.players[opp].field.forEach(c => addTempBuff(opp, c.instanceId, 1, 1));
+    G.arestiaBuffActive = true;
+    log('アレスティア: 全クリーチャー+1/+1（ターン終了時まで）');
+  }
+
   // 格闘: select target creature first, then priority window after target chosen
   if (card.kakutou && inst.entryTurn === G.turn) {
     const reachable = G.players[opp].field.filter(c => card.flying || !CARD_DB[c.cardId].flying);
@@ -1708,6 +1718,14 @@ function resolveSingleCombat(atkPlayer, atkInstId, kakutouTargetId, blockerInstI
       }
       checkCreatureDeath(opp, blockerInstId, atkPlayer);
       checkCreatureDeath(atkPlayer, atkInstId, opp);
+      // アレスティア onBlockComplete: ブロッカーが生存していれば相手プレイヤーに2ダメージ
+      const blockerSurvived = G.players[opp].field.some(c => c.instanceId === blockerInstId);
+      const defHasArestia = G.players[opp].field.some(c => CARD_DB[c.cardId].id === 'arestia');
+      if (blockerSurvived && defHasArestia) {
+        G.players[atkPlayer].life -= 2;
+        showFloatDamage(2, atkPlayer === 0 ? 'player' : 'ai');
+        log('アレスティア: ブロッカー生存 → 2ダメージ', 'damage');
+      }
     }
   } else {
     // Unblocked: deal damage to opponent player
@@ -2456,6 +2474,14 @@ function continueAIAttack() {
   if (!atkInst) { setTimeout(() => continueAIAttack(), 100); return; }
   const card = CARD_DB[atkInst.cardId];
   if (!card.vigilance) atkInst.tapped = true;
+
+  // アレスティア passive: AI攻撃時、プレイヤーがアレスティアを持っていれば全クリーチャー+1/+1
+  const playerHasArestia = G.players[0].field.some(c => CARD_DB[c.cardId].id === 'arestia');
+  if (playerHasArestia && !G.arestiaBuffActive) {
+    G.players[0].field.forEach(c => addTempBuff(0, c.instanceId, 1, 1));
+    G.arestiaBuffActive = true;
+    log('アレスティア: 全クリーチャー+1/+1（ターン終了時まで）');
+  }
 
   // 格闘
   if (card.kakutou && atkInst.entryTurn === G.turn) {
