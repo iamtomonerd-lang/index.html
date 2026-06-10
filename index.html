@@ -776,12 +776,14 @@ button.danger:hover { background: #6a2a2a; }
         <button id="btn-mulligan" onclick="doMulligan()" disabled>マリガン</button>
         <button id="btn-charge" onclick="startCharge()">チャージ</button>
         <button onclick="showTrainingPanel()" style="background:#1a2a1a;border-color:#446644;font-size:10px;">🧠 学習</button>
+        <button onclick="showDebugPanel()" style="background:#1a1a2a;border-color:#444466;font-size:10px;" title="フリーズ・バグ報告用デバッグ情報">🐛 debug</button>
       </div>
       <div id="mulligan-controls" style="display:none; gap:6px; margin-top:4px;">
         <button onclick="confirmStartMulligan()" style="flex:1; padding:6px 10px; background:#2a2a8a; border:1px solid #6060ff; color:#fff; border-radius:5px; font-size:11px; cursor:pointer;">確認（<span id="mulligan-count">0</span>枚入替）</button>
         <button onclick="skipStartMulligan()" style="flex:1; padding:6px 10px; background:#2a2a2a; border:1px solid #555; color:#ccc; border-radius:5px; font-size:11px; cursor:pointer;">しない</button>
       </div>
       <div id="action-hint"></div>
+      <div id="debug-freeze-warn" style="display:none;font-size:10px;color:#ffaa44;margin-top:4px;padding:4px 6px;background:#1a1400;border:1px solid #554400;border-radius:4px;cursor:pointer;" onclick="showDebugPanel()"></div>
     </div>
 
     <!-- ログ -->
@@ -2778,6 +2780,9 @@ function render() {
   if (pgc) pgc.textContent = G.players[NET_MY_IDX].graveyard.length;
   if (agc) agc.textContent = G.players[1-NET_MY_IDX].graveyard.length;
   netPostAction();
+  _resetFreezeTimer();
+  const fw = document.getElementById('debug-freeze-warn');
+  if (fw) fw.style.display = 'none';
 }
 
 function buildCardHTML(card, inst, playerOwner) {
@@ -4700,6 +4705,94 @@ function netTimerExpired() {
   netSyncToGuest();
 }
 
+// ============================================================
+// DEBUG / FREEZE REPORTER
+// ============================================================
+let _lastActionTime = Date.now();
+let _freezeCheckInterval = null;
+const FREEZE_THRESHOLD_MS = 30000; // 30秒操作なしで警告
+
+function _resetFreezeTimer() {
+  _lastActionTime = Date.now();
+}
+
+function _startFreezeDetector() {
+  if (_freezeCheckInterval) clearInterval(_freezeCheckInterval);
+  _freezeCheckInterval = setInterval(() => {
+    if (G.phase === 'ended' || G.mulliganMode) return;
+    const elapsed = Date.now() - _lastActionTime;
+    if (elapsed > FREEZE_THRESHOLD_MS) {
+      const el = document.getElementById('debug-freeze-warn');
+      if (el) { el.style.display = 'block'; el.textContent = `⚠️ ${Math.floor(elapsed/1000)}秒間操作なし — フリーズ？ 🐛debugボタンで状態を確認`; }
+    }
+  }, 5000);
+}
+
+function collectDebugState() {
+  const p0 = G.players[0], p1 = G.players[1];
+  const fieldStr = (p, idx) => p.field.map(c => {
+    const cd = CARD_DB[c.cardId];
+    const flags = [
+      c.tapped ? 'tapped' : 'untap',
+      c.sick ? 'sick' : '',
+      c.mustAttack ? 'mustAtk' : '',
+      c.damage ? `dmg${c.damage}` : '',
+      c.entryTurn === G.turn ? 'entryTurn' : '',
+    ].filter(Boolean).join(',');
+    return `  [${c.instanceId}] ${cd.name}(${cd.power}/${cd.toughness}) ${flags}`;
+  }).join('\n') || '  (なし)';
+
+  const lines = [
+    `=== DCG デバッグスナップショット ===`,
+    `ターン: ${G.turn}  アクティブ: P${G.activePlayer}  フェイズ: ${G.phase}`,
+    ``,
+    `[プレイヤー0] ライフ:${p0.life} 手札:${p0.hand.length} 山:${p0.deck.length} 土地:${p0.lands.length}`,
+    fieldStr(p0, 0),
+    `[プレイヤー1] ライフ:${p1.life} 手札:${p1.hand.length} 山:${p1.deck.length} 土地:${p1.lands.length}`,
+    fieldStr(p1, 1),
+    ``,
+    `優先権待ち: ${G.awaitingPriority}  優先権プレイヤー: ${G.priorityFor}`,
+    `ブロックモード: ${G.playerBlockMode}  targetMode: ${G.targetMode ? G.targetMode.type : 'null'}`,
+    `格闘モード: ${G.kakutouTargetMode}  攻撃モード: ${G.attackMode}`,
+    `チャージモード: ${G.chargingMode}  マリガン: ${G.mulliganMode}`,
+    `mustAttackCreatures: [${Array.from(G.mustAttackCreatures).join(',')}]`,
+    `aiCurrentAttackers: ${JSON.stringify(G.aiCurrentAttackers)}`,
+    `スタック: ${G.stack.length}件`,
+    ``,
+    `最後の操作から: ${Math.floor((Date.now()-_lastActionTime)/1000)}秒`,
+  ];
+  return lines.join('\n');
+}
+
+function showDebugPanel() {
+  const info = collectDebugState();
+  const html = `
+    <div style="font-size:10px;color:#aaa;margin-bottom:8px;">
+      このテキストをコピーしてエージェント（Claude）に貼り付けてください。
+    </div>
+    <textarea id="debug-snapshot" readonly style="width:100%;height:260px;background:#0a0a14;color:#88ffaa;border:1px solid #336633;border-radius:4px;padding:8px;font-size:10px;font-family:monospace;resize:vertical;">${info}</textarea>
+    <div style="display:flex;gap:8px;margin-top:8px;">
+      <button onclick="
+        const ta=document.getElementById('debug-snapshot');
+        ta.select(); ta.setSelectionRange(0,99999);
+        navigator.clipboard ? navigator.clipboard.writeText(ta.value).then(()=>this.textContent='✅ コピー済') : document.execCommand('copy');
+        this.textContent='✅ コピー済';
+      " style="flex:1;padding:8px;background:#1a2a1a;border:1px solid #446644;color:#88ff88;">📋 クリップボードにコピー</button>
+      <button onclick="
+        const ta=document.getElementById('debug-snapshot');
+        ta.value=collectDebugState();
+      " style="padding:8px;background:#1a1a2a;border:1px solid #444466;color:#8888ff;">🔄 更新</button>
+    </div>
+    <div style="font-size:10px;color:#666;margin-top:8px;">
+      フリーズ時は「何をしようとしたか」も一緒に伝えると修正しやすいです。
+    </div>
+  `;
+  showModal('🐛 デバッグ情報', html);
+}
+
+// render呼び出し時にフリーズタイマーをリセット
+// (netPostAction内ではなくrender内で直接リセット)
+
 // ── ゲスト: 操作権限チェック ──────────────────────────────────
 function netCanAct() {
   if (NET_MODE !== 'guest') return true;
@@ -4728,6 +4821,7 @@ function netPostTurnEnd() {
 
 // Show lobby on page load instead of immediately initing the game
 netShowLobby();
+_startFreezeDetector();
 
 </script>
 </body>
