@@ -673,7 +673,7 @@ button.danger:hover { background: #6a2a2a; }
 
 <!-- Mulligan Banner -->
 <div id="mulligan-banner" style="display:none; position:fixed; bottom:0; left:0; right:0; background:#1a1a3a; border-top:2px solid #6060ff; padding:10px 16px; z-index:200; align-items:center; gap:12px;">
-  <span style="font-size:12px; color:#aaccff; flex:1;">🃏 マリガン: 戻したいカードをクリックして選択し「確認」で同枚数引き直します。選択中: <span id="mulligan-count">0</span>枚</span>
+  <span style="font-size:12px; color:#aaccff; flex:1;">マリガン中 — 選択: <span id="mulligan-count">0</span>枚</span>
   <button onclick="confirmStartMulligan()" style="padding:8px 18px; background:#2a2a8a; border:1px solid #6060ff; color:#fff; border-radius:5px; font-size:12px; cursor:pointer;">確認</button>
   <button onclick="skipStartMulligan()" style="padding:8px 18px; background:#2a2a2a; border:1px solid #555; color:#ccc; border-radius:5px; font-size:12px; cursor:pointer;">マリガンしない</button>
 </div>
@@ -908,6 +908,9 @@ function showStartMulligan() {
   G.mulliganMode = true;
   G.mulliganSelected = new Set();
   render();
+  log('--- マリガン ---', 'important');
+  log('戻したいカードをクリックして選択（赤枠・半透明）し「確認」を押すと同枚数引き直します。');
+  log('右クリックでカード詳細を確認できます。問題なければ「マリガンしない」を押してください。');
   const banner = document.getElementById('mulligan-banner');
   if (banner) banner.style.display = 'flex';
 }
@@ -2552,6 +2555,7 @@ function renderHand(player) {
       el.className = `card color-${card.color}`;
       el.innerHTML = buildCardHTML(card);
       el.style.cursor = 'pointer';
+      el.dataset.cardId = card.id;
       if (G.mulliganSelected.has(i)) {
         el.style.opacity = '0.35';
         el.style.outline = '2px solid #ff6666';
