@@ -2697,7 +2697,7 @@ function renderInfoBar() {
   aiLifeEl.textContent = `❤️ ${p1.life}`;
   aiLifeEl.className = `life-display${p1.life <= 5 ? ' low' : ''}`;
 
-  const phases = { untap:'アンタップ', draw:'ドロー', main:'メイン', combat:'戦闘', end:'エンド', ended:'終了' };
+  const phases = { untap:'アンタップ', draw:'ドロー', main:'メイン', end:'エンド', ended:'終了' };
   document.getElementById('phase-name').textContent = phases[G.phase] || G.phase;
 
   // CX/OC status is shown via threshold gauge (updateThresholdGauge)
