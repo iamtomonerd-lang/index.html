@@ -416,6 +416,144 @@ button.danger:hover { background: #6a2a2a; }
 .highlight { background: rgba(255,255,100,0.05); border-radius: 4px; }
 .sep { width: 1px; background: var(--border); align-self: stretch; margin: 0 2px; }
 #action-hint { font-size: 11px; color: #aaaaff; }
+
+/* ── 1. カード詳細パネル ── */
+#card-detail-panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  flex-shrink: 0;
+  font-size: 11px;
+  max-height: 180px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+#card-detail-panel .cdp-title { font-size: 13px; font-weight: 700; color: #aaaaff; margin-bottom: 4px; }
+#card-detail-panel .cdp-type { font-size: 10px; color: #888; margin-bottom: 4px; }
+#card-detail-panel .cdp-pt { font-size: 12px; font-weight: 700; color: #ffcc44; margin-bottom: 4px; }
+#card-detail-panel .cdp-kw { margin-bottom: 4px; }
+#card-detail-panel .cdp-text { font-size: 10px; color: #aaa; white-space: pre-wrap; line-height: 1.5; }
+#card-detail-panel .cdp-placeholder { color: #444; font-size: 10px; }
+
+/* ── 2. キーワードツールチップ ── */
+.kw-tip {
+  position: relative;
+  cursor: help;
+  color: #ffcc44;
+  border-bottom: 1px dotted #ffcc44;
+}
+.kw-tip::after {
+  content: attr(data-def);
+  position: absolute;
+  bottom: 120%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #1a1a3a;
+  border: 1px solid #4444aa;
+  color: #ccccff;
+  font-size: 10px;
+  padding: 4px 8px;
+  border-radius: 5px;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s;
+  z-index: 500;
+  max-width: 220px;
+  white-space: normal;
+  width: max-content;
+  max-width: 200px;
+}
+.kw-tip:hover::after { opacity: 1; }
+
+/* ── 4. スタック常時表示 ── */
+#stack-area {
+  border: 1px solid #2a2a5a !important;
+  background: #0a0a16 !important;
+  padding: 4px 8px !important;
+  border-radius: 6px;
+  min-height: 32px;
+}
+
+/* ── 5. CX/OC閾値ゲージ ── */
+.threshold-gauge-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 110px;
+}
+.threshold-gauge-label { font-size: 9px; color: #888; }
+.threshold-gauge {
+  height: 8px;
+  background: #1a1a2a;
+  border-radius: 4px;
+  overflow: hidden;
+  border: 1px solid #333;
+}
+.threshold-gauge-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.3s, background 0.3s;
+}
+
+/* ── 6. ログ固定最新エントリ ── */
+#log-recent {
+  background: rgba(255,200,50,0.07);
+  border-bottom: 1px solid #333;
+  padding: 4px 6px;
+  margin-bottom: 4px;
+  border-radius: 4px 4px 0 0;
+}
+#log-recent p { margin: 1px 0; font-size: 10px; }
+
+/* ── 7. 攻撃矢印オーバーレイ ── */
+#arrow-overlay {
+  position: fixed;
+  top: 0; left: 0;
+  width: 100vw; height: 100vh;
+  pointer-events: none;
+  z-index: 50;
+}
+
+/* ── 9. AI バルーン ── */
+#ai-balloon {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(10,10,30,0.88);
+  border: 1px solid #6060ff;
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: 14px;
+  font-weight: 700;
+  color: #aaaaff;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.3s;
+  z-index: 30;
+  white-space: nowrap;
+}
+#ai-balloon.active { opacity: 1; }
+
+/* ── 10. フェイズフラッシュ ── */
+#phase-flash {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 48px;
+  font-weight: 900;
+  color: var(--gold);
+  pointer-events: none;
+  z-index: 300;
+  text-shadow: 0 0 30px #ccaa33, 0 2px 8px #000;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+#phase-flash.active { opacity: 1; }
+@keyframes phaseFlashOut { 0%{opacity:1} 70%{opacity:1} 100%{opacity:0} }
 </style>
 </head>
 <body>
@@ -429,9 +567,10 @@ button.danger:hover { background: #6a2a2a; }
     </div>
 
     <!-- AI フィールド -->
-    <div class="board-row ai-row" style="flex:1;">
+    <div class="board-row ai-row" style="flex:1; position:relative;">
       <div class="zone-label" style="min-width:52px;">相手フィールド</div>
       <div id="ai-field" class="field-zone" style="flex:1;"></div>
+      <div id="ai-balloon"></div>
     </div>
 
     <!-- AI 土地 -->
@@ -446,14 +585,19 @@ button.danger:hover { background: #6a2a2a; }
       <div class="sep"></div>
       <div class="phase-display" id="phase-name">アンタップ</div>
       <div class="sep"></div>
-      <div class="cx-display">CX: <span id="cx-value">0</span></div>
-      <div class="oc-display" id="oc-status">OC: ✗</div>
+      <div class="threshold-gauge-wrap" id="threshold-gauge-wrap">
+        <div class="threshold-gauge-label" id="threshold-label">墓地 0 / CX:6 / OC:12</div>
+        <div class="threshold-gauge"><div class="threshold-gauge-fill" id="threshold-fill" style="width:0%;background:#555;"></div></div>
+      </div>
       <div class="sep"></div>
       <span style="font-size:11px;">マナ:</span>
-      <div class="mana-display" id="mana-display"></div>
-      <div id="stack-area" style="flex:1; border:none; background:transparent; padding:0; margin-left:4px; min-height:auto;">
-        <span style="font-size:9px; color:#444;">スタック:</span>
-        <div id="stack-items" style="display:flex; gap:5px; flex-wrap:wrap;"></div>
+      <div id="mana-display-wrap" style="display:flex;flex-direction:column;gap:1px;">
+        <div class="mana-display" id="mana-display"></div>
+        <div style="font-size:9px;color:#555;" id="mana-untapped-label"></div>
+      </div>
+      <div id="stack-area" style="flex:1; margin-left:4px; min-height:32px;">
+        <span style="font-size:9px; color:#666;">スタック:</span>
+        <div id="stack-items" style="display:flex; gap:5px; flex-wrap:wrap; margin-top:2px;"></div>
       </div>
     </div>
 
@@ -483,8 +627,9 @@ button.danger:hover { background: #6a2a2a; }
       <h3>対戦相手</h3>
       <div style="display:flex; align-items:center; gap:8px;">
         <div class="life-display" id="ai-life">❤️ 20</div>
-        <div style="font-size:10px; color:#666; margin-left:auto;">
+        <div style="font-size:10px; color:#666; margin-left:auto; display:flex; gap:6px; align-items:center;">
           山札 <span id="ai-deck-count">40</span> / 土地 <span id="ai-land-deck-count">10</span>
+          <button onclick="showGraveyard(1)" style="font-size:9px;padding:2px 5px;background:#1a1a2a;border-color:#443344;">墓地: <span id="ai-grave-count">0</span>枚</button>
         </div>
       </div>
     </div>
@@ -494,10 +639,16 @@ button.danger:hover { background: #6a2a2a; }
       <h3>自分</h3>
       <div style="display:flex; align-items:center; gap:8px;">
         <div class="life-display" id="player-life">❤️ 20</div>
-        <div style="font-size:10px; color:#666; margin-left:auto;">
+        <div style="font-size:10px; color:#666; margin-left:auto; display:flex; gap:6px; align-items:center;">
           山札 <span id="player-deck-count">40</span> / 土地 <span id="player-land-deck-count">10</span>
+          <button onclick="showGraveyard(0)" style="font-size:9px;padding:2px 5px;background:#1a1a2a;border-color:#336633;">墓地: <span id="player-grave-count">0</span>枚</button>
         </div>
       </div>
+    </div>
+
+    <!-- カード詳細パネル -->
+    <div id="card-detail-panel">
+      <div class="cdp-placeholder">カードを右クリックで詳細表示</div>
     </div>
 
     <!-- コントロール -->
@@ -515,6 +666,12 @@ button.danger:hover { background: #6a2a2a; }
     <div id="log"></div>
   </div>
 </div>
+
+<!-- Arrow Overlay -->
+<svg id="arrow-overlay"></svg>
+
+<!-- Phase Flash -->
+<div id="phase-flash"></div>
 
 <!-- Modal -->
 <div id="modal">
@@ -2095,6 +2252,14 @@ function render() {
   renderInfoBar();
   renderStack();
   updateCounts();
+  updateThresholdGauge();
+  updateManaDisplay();
+  drawCombatArrows();
+  // update graveyard counts
+  const pgc = document.getElementById('player-grave-count');
+  const agc = document.getElementById('ai-grave-count');
+  if (pgc) pgc.textContent = G.players[0].graveyard.length;
+  if (agc) agc.textContent = G.players[1].graveyard.length;
 }
 
 function buildCardHTML(card, inst, playerOwner) {
@@ -2259,21 +2424,7 @@ function renderInfoBar() {
 
   document.getElementById('turn-indicator').textContent = `ターン ${G.turn} (${G.activePlayer===0?'自分':'AI'})`;
 
-  // Mana display
-  const manaEl = document.getElementById('mana-display');
-  manaEl.innerHTML = '';
-  const colors = ['R','U','G','W','B','C'];
-  colors.forEach(c => {
-    const amt = p0.mana[c] || 0;
-    if (amt > 0) {
-      for (let i = 0; i < amt; i++) {
-        const pip = document.createElement('div');
-        pip.className = `mana-pip mana-${c}`;
-        pip.textContent = c;
-        manaEl.appendChild(pip);
-      }
-    }
-  });
+  // Mana display handled by updateManaDisplay() called from render()
 }
 
 function renderStack() {
@@ -2558,6 +2709,215 @@ function log(msg, type) {
   p.textContent = msg;
   el.appendChild(p);
   el.scrollTop = el.scrollHeight;
+}
+
+// ============================================================
+// 1. CARD DETAIL PANEL
+// ============================================================
+const KEYWORD_DEFS = {
+  '格闘': '出たターンに限り、相手クリーチャーのみに攻撃できる',
+  '警戒': '攻撃してもタップしない',
+  '飛行': '飛行を持たないクリーチャーにブロックされない',
+  '還元': '墓地のカードをコストに起動する能力',
+  'Quick': '相手ターン・戦闘中でも使用できる',
+  'CX6': '墓地が6枚以上のとき効果が発動',
+  'CX8': '墓地が8枚以上のとき効果が発動',
+  'OC': '墓地が12枚以上のとき効果が発動',
+};
+
+function kwTipHtml(kw) {
+  const def = KEYWORD_DEFS[kw] || kw;
+  return `<span class="kw-tip" data-def="${def}">${kw}</span>`;
+}
+
+function showCardDetail(cardId) {
+  const card = CARD_DB[cardId];
+  if (!card) return;
+  const panel = document.getElementById('card-detail-panel');
+  let ptStr = card.type === 'creature' ? `<div class="cdp-pt">${card.power}/${card.toughness}</div>` : '';
+  let costStr = card.cost ? ` [${costToString(card.cost)}]` : '';
+  let kwHtml = '';
+  if (card.keywords && card.keywords.length) {
+    kwHtml = `<div class="cdp-kw">${card.keywords.map(kwTipHtml).join(' ')}</div>`;
+  }
+  panel.innerHTML = `
+    <div class="cdp-title">${card.icon} ${card.name}${costStr}</div>
+    <div class="cdp-type">${card.type === 'creature' ? card.subtype : card.type} (${card.color})</div>
+    ${ptStr}
+    ${kwHtml}
+    <div class="cdp-text">${(card.text || '(テキストなし)').replace(/\\n/g, '\n')}</div>
+  `;
+}
+
+// ============================================================
+// 3. GRAVEYARD VIEWER
+// ============================================================
+function showGraveyard(player) {
+  const p = G.players[player];
+  const name = player === 0 ? '自分' : '相手';
+  if (p.graveyard.length === 0) {
+    showModal(`${name}の墓地`, `<p style="color:#888;">墓地にカードはありません</p>`);
+    return;
+  }
+  let html = `<p style="margin-bottom:10px; font-size:11px; color:#888;">${p.graveyard.length}枚</p><div style="display:flex;flex-wrap:wrap;gap:8px;" id="grave-cards"></div>`;
+  showModal(`${name}の墓地`, html);
+  const container = document.getElementById('grave-cards');
+  // Show most recent first
+  [...p.graveyard].reverse().forEach(cid => {
+    const card = CARD_DB[cid];
+    if (!card) return;
+    const el = document.createElement('div');
+    el.className = `card color-${card.color}`;
+    el.style.cursor = 'default';
+    el.innerHTML = buildCardHTML(card);
+    el.title = card.text || card.name;
+    container.appendChild(el);
+  });
+}
+
+// ============================================================
+// 5. THRESHOLD GAUGE
+// ============================================================
+function updateThresholdGauge() {
+  const cx = getCXValue(0);
+  const labelEl = document.getElementById('threshold-label');
+  const fillEl = document.getElementById('threshold-fill');
+  if (!labelEl || !fillEl) return;
+  labelEl.textContent = `墓地 ${cx} / CX:6 / OC:12`;
+  const pct = Math.min(cx / 12 * 100, 100);
+  fillEl.style.width = pct + '%';
+  if (cx >= 12) {
+    fillEl.style.background = '#cc3333';
+  } else if (cx >= 6) {
+    fillEl.style.background = '#ccaa33';
+  } else {
+    fillEl.style.background = '#555';
+  }
+}
+
+// ============================================================
+// 6. LOG PINNED RECENT ENTRIES
+// ============================================================
+const _recentImportantLogs = [];
+function updateRecentLog() {
+  let el = document.getElementById('log-recent');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'log-recent';
+    const logEl = document.getElementById('log');
+    logEl.insertBefore(el, logEl.firstChild);
+  }
+  el.innerHTML = _recentImportantLogs.slice(-3).map(({msg, type}) => {
+    const cls = type || 'normal';
+    return `<p class="${cls}" style="font-size:10px;">${msg}</p>`;
+  }).join('');
+}
+
+// ============================================================
+// 7. COMBAT ARROWS
+// ============================================================
+function drawCombatArrows() {
+  const svg = document.getElementById('arrow-overlay');
+  if (!svg) return;
+  svg.innerHTML = '';
+  if (!G || !G.combatArrows || G.combatArrows.length === 0) return;
+  G.combatArrows.forEach(arrow => {
+    const fromEl = document.querySelector(`[data-inst="${arrow.fromId}"]`);
+    const toEl = arrow.toId ? document.querySelector(`[data-inst="${arrow.toId}"]`) : document.getElementById('ai-life');
+    if (!fromEl || !toEl) return;
+    const fr = fromEl.getBoundingClientRect();
+    const tr = toEl.getBoundingClientRect();
+    const x1 = fr.left + fr.width / 2;
+    const y1 = fr.top + fr.height / 2;
+    const x2 = tr.left + tr.width / 2;
+    const y2 = tr.top + tr.height / 2;
+    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    line.setAttribute('x1', x1); line.setAttribute('y1', y1);
+    line.setAttribute('x2', x2); line.setAttribute('y2', y2);
+    line.setAttribute('stroke', arrow.color || '#ff8800');
+    line.setAttribute('stroke-width', '2.5');
+    line.setAttribute('stroke-dasharray', '6 3');
+    line.setAttribute('marker-end', 'url(#arrowhead)');
+    line.setAttribute('opacity', '0.8');
+    svg.appendChild(line);
+  });
+  // arrowhead marker
+  if (!svg.querySelector('defs')) {
+    const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+    defs.innerHTML = `<marker id="arrowhead" markerWidth="8" markerHeight="6" refX="6" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#ff8800"/></marker>`;
+    svg.insertBefore(defs, svg.firstChild);
+  }
+}
+
+// ============================================================
+// 8. MANA DISPLAY ENHANCED
+// ============================================================
+function updateManaDisplay() {
+  const p0 = G.players[0];
+  // Current available mana
+  const manaEl = document.getElementById('mana-display');
+  manaEl.innerHTML = '';
+  const colors = ['R','U','G','W','B','C'];
+  colors.forEach(c => {
+    const amt = p0.mana[c] || 0;
+    if (amt > 0) {
+      for (let i = 0; i < amt; i++) {
+        const pip = document.createElement('div');
+        pip.className = `mana-pip mana-${c}`;
+        pip.textContent = c;
+        manaEl.appendChild(pip);
+      }
+    }
+  });
+  // Untapped lands potential mana
+  const untappedLabel = document.getElementById('mana-untapped-label');
+  if (untappedLabel) {
+    const potential = {};
+    p0.lands.forEach(land => {
+      if (!land.tapped) {
+        const lc = CARD_DB[land.cardId];
+        const mc = lc.produces || 'C';
+        potential[mc] = (potential[mc] || 0) + 1;
+      }
+    });
+    const parts = Object.entries(potential).map(([c, n]) => `${c}×${n}`);
+    untappedLabel.textContent = parts.length ? '未タップ: ' + parts.join(' ') : '';
+  }
+}
+
+// ============================================================
+// 9. AI BALLOON
+// ============================================================
+let _aiBalloonTimer = null;
+function showAIBalloon(text) {
+  const el = document.getElementById('ai-balloon');
+  if (!el) return;
+  el.textContent = text;
+  el.classList.add('active');
+  if (_aiBalloonTimer) clearTimeout(_aiBalloonTimer);
+  _aiBalloonTimer = setTimeout(() => { el.classList.remove('active'); }, 2000);
+}
+
+// ============================================================
+// 10. PHASE FLASH
+// ============================================================
+const PHASE_NAMES_JP = {
+  untap: 'アンタップ',
+  draw: 'ドロー',
+  main: 'メインフェイズ',
+  combat: '戦闘フェイズ',
+  end: 'エンドフェイズ',
+};
+let _phaseFlashTimer = null;
+function showPhaseFlash(phase) {
+  const el = document.getElementById('phase-flash');
+  if (!el) return;
+  const name = PHASE_NAMES_JP[phase] || phase;
+  el.textContent = name;
+  el.style.animation = 'none';
+  el.classList.add('active');
+  if (_phaseFlashTimer) clearTimeout(_phaseFlashTimer);
+  _phaseFlashTimer = setTimeout(() => { el.classList.remove('active'); }, 1500);
 }
 
 // ============================================================
