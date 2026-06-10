@@ -1970,11 +1970,10 @@ function aiAttack() {
     G.aiCurrentAttackers.push({instId: c.instanceId, targetType, targetInstId});
   });
 
-  // ブロック可能なクリーチャーが存在するか確認
+  // ブロック可能なクリーチャーが存在するか確認（召喚酔いでもブロック可、直接攻撃対象除く）
   const eligibleBlockers = player.field.filter(c => {
     const card = CARD_DB[c.cardId];
     return (!c.tapped || (card.ocBlockWhileTapped && isOCActive(0)))
-      && !c.sick
       && !G.directlyAttackedCreatures.has(c.instanceId);
   });
 
@@ -2180,7 +2179,7 @@ function renderField(player) {
         if (player === 0) {
           const card2 = CARD_DB[inst.cardId];
           const canBlk = (!inst.tapped || (card2.ocBlockWhileTapped && isOCActive(0)))
-            && !inst.sick && !G.directlyAttackedCreatures.has(inst.instanceId);
+            && !G.directlyAttackedCreatures.has(inst.instanceId);
           if (canBlk) el.classList.add('blockable');
           if (G.selectedBlockerToAssign === inst.instanceId) el.classList.add('selected');
           const isAssigned = Object.values(G.playerBlockAssignments).includes(inst.instanceId);
@@ -2359,7 +2358,7 @@ function handleFieldClick(player, instId) {
       if (!inst2) return;
       const card2 = CARD_DB[inst2.cardId];
       const canBlk = (!inst2.tapped || (card2.ocBlockWhileTapped && isOCActive(0)))
-        && !inst2.sick && !G.directlyAttackedCreatures.has(instId);
+        && !G.directlyAttackedCreatures.has(instId);
       if (!canBlk) { log(`${card2.name} はブロックできません`); return; }
       // トグル選択
       if (G.selectedBlockerToAssign === instId) {
