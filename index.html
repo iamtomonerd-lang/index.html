@@ -3767,6 +3767,11 @@ function showTrainingPanel() {
           <option value="300">5分</option>
           <option value="600">10分</option>
           <option value="1800">30分</option>
+          <option value="3600">1時間</option>
+          <option value="7200">2時間</option>
+          <option value="14400">4時間</option>
+          <option value="21600">6時間</option>
+          <option value="36000">10時間</option>
         </select>
         <button id="btn-train-start" onclick="uiStartTraining()" style="padding:6px 14px;background:#1a3a1a;border:1px solid #44aa44;color:#aaffaa;border-radius:4px;cursor:pointer;">▶ 開始</button>
         <button onclick="uiStopTraining()" style="padding:6px 10px;background:#3a1a1a;border:1px solid #aa4444;color:#ffaaaa;border-radius:4px;cursor:pointer;">■ 停止</button>
@@ -3822,9 +3827,10 @@ async function uiStartTraining() {
       document.getElementById('train-status').textContent = `${done}/${total}戦 完了 (直近勝率 ${wr}%)`;
     } else {
       pct = Math.min((elapsed / totalMs * 100), 100).toFixed(0);
+      const fmtTime = s => s >= 3600 ? `${Math.floor(s/3600)}時間${Math.floor(s%3600/60)}分` : s >= 60 ? `${Math.floor(s/60)}分${s%60}秒` : `${s}秒`;
       const sec = Math.floor(elapsed / 1000);
       const tot = Math.floor(totalMs / 1000);
-      document.getElementById('train-status').textContent = `${sec}/${tot}秒 | ${done}戦 完了 (直近勝率 ${wr}%)`;
+      document.getElementById('train-status').textContent = `${fmtTime(sec)} / ${fmtTime(tot)} | ${done}戦 完了 (直近勝率 ${wr}%)`;
     }
     document.getElementById('train-bar').style.width = pct + '%';
   });
