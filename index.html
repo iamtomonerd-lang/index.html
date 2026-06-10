@@ -83,9 +83,9 @@ body {
 
 /* ── カード ── */
 .card {
-  width: 84px;
-  height: 118px;
-  border-radius: 7px;
+  width: 66px;
+  height: 95px;
+  border-radius: 5px;
   border: 1.5px solid var(--border);
   cursor: pointer;
   position: relative;
@@ -95,12 +95,12 @@ body {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  font-size: 10px;
+  font-size: 9px;
 }
-.card:hover { transform: translateY(-6px) scale(1.06); z-index: 20; }
+.card:hover { transform: translateY(-5px) scale(1.06); z-index: 20; }
 .card.selected { box-shadow: 0 0 0 2px #ffff44, 0 0 14px #ffff44; }
-.card.tapped { transform: rotate(15deg); opacity: 0.85; margin-right: 10px; }
-.card.tapped:hover { transform: rotate(15deg) translateY(-6px) scale(1.06); }
+.card.tapped { transform: rotate(15deg); opacity: 0.85; margin-right: 12px; }
+.card.tapped:hover { transform: rotate(15deg) translateY(-5px) scale(1.06); }
 .card.tapped .card-pt { transform: rotate(-15deg); transform-origin: center bottom; }
 .card.face-down { background: linear-gradient(135deg, #1a1a3a 25%, #0d0d22 75%); }
 .card.face-down::after { content: '🎴'; font-size: 32px; position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); }
@@ -119,17 +119,17 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 26px;
+  font-size: 22px;
   border-bottom: 1px solid rgba(255,255,255,0.1);
 }
 .card-bottom {
-  padding: 3px 4px;
+  padding: 2px 3px;
   background: rgba(0,0,0,0.65);
 }
-.card-name { font-size: 8px; font-weight: 700; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.card-type-line { font-size: 7px; color: #999; }
-.card-pt { font-size: 10px; font-weight: 700; text-align: right; margin-top: 1px; }
-.card-cost { position: absolute; top: 3px; right: 3px; font-size: 8px; background: rgba(0,0,0,0.85); border-radius: 3px; padding: 1px 3px; }
+.card-name { font-size: 7px; font-weight: 700; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.card-type-line { font-size: 6px; color: #999; }
+.card-pt { font-size: 9px; font-weight: 700; text-align: right; margin-top: 1px; }
+.card-cost { position: absolute; top: 2px; right: 2px; font-size: 7px; background: rgba(0,0,0,0.85); border-radius: 3px; padding: 1px 3px; }
 .card-keywords { font-size: 6px; color: #ffcc44; }
 .damage-counter {
   position: absolute;
@@ -198,9 +198,9 @@ body {
 /* ── ゾーン ── */
 .hand-zone {
   display: flex;
-  gap: 5px;
-  padding: 5px 6px;
-  min-height: 132px;
+  gap: 4px;
+  padding: 4px 6px;
+  min-height: 108px;
   align-items: center;
   flex-wrap: nowrap;
   overflow-x: auto;
@@ -209,9 +209,9 @@ body {
 }
 .field-zone {
   display: flex;
-  gap: 8px;
-  padding: 5px 6px;
-  min-height: 132px;
+  gap: 6px;
+  padding: 4px 6px;
+  min-height: 108px;
   align-items: center;
   flex: 1;
 }
@@ -224,7 +224,7 @@ body {
   flex-wrap: wrap;
 }
 .field-slot {
-  width: 84px; height: 120px;
+  width: 66px; height: 95px;
   border: 1px dashed #252540;
   border-radius: 7px;
   display: flex;
@@ -1496,43 +1496,16 @@ function endPhase() {
   clearTargetMode();
 
   if (G.phase === 'main' && G.activePlayer === 0) {
-    // Check if can attack (including kakutou on entry turn vs tapped)
-    const canAttack = G.players[0].field.some(c => canCreatureAttack(0, c));
-    if (canAttack) {
-      startCombat();
-      return;
-    }
     endTurn();
     return;
   }
 
-  // プレイヤーブロック確定
+  // プレイヤーブロック確定 (AI turn: player assigns blockers for one AI attacker)
   if (G.playerBlockMode) {
     G.playerBlockMode = false;
     G.selectedBlockerToAssign = null;
     render();
     setTimeout(() => resolveAICombat(), 300);
-    return;
-  }
-
-  if (G.phase === 'combat') {
-    // 格闘ターゲット選択中なら確定待ち
-    if (G.kakutouTargetMode) {
-      log('格闘: 先に攻撃対象のクリーチャーを選んでください');
-      return;
-    }
-    if (G.combatStep === 'declare_attackers') {
-      if (G.players[0].attackers.length > 0) {
-        G.combatStep = 'declare_blockers';
-        log('ブロッカー宣言フェイズ（AIがブロッカーを選択中）');
-        render();
-        setTimeout(() => { aiDeclareBlockers(); resolveCombat(); }, 800);
-      } else {
-        endCombat();
-      }
-      return;
-    }
-    endCombat();
     return;
   }
 
@@ -1586,6 +1559,132 @@ function endCombat() {
   G.combatArrows = [];
   G.phase = 'main';
   endTurn();
+}
+
+// ============================================================
+// SINGLE CREATURE ATTACK (main phase, one at a time)
+// ============================================================
+function startSingleAttack(player, atkInstId) {
+  const p = G.players[player];
+  const opp = 1 - player;
+  const inst = p.field.find(c => c.instanceId === atkInstId);
+  if (!inst) return;
+  const card = CARD_DB[inst.cardId];
+
+  // Tap attacker (vigilance stays untapped)
+  if (!card.vigilance) inst.tapped = true;
+
+  G.combatArrows = [{fromId: atkInstId, toId: null, color: '#ff8800'}];
+
+  // 格闘: need to select a target creature first
+  if (card.kakutou && inst.entryTurn === G.turn) {
+    const reachable = G.players[opp].field.filter(c => card.flying || !CARD_DB[c.cardId].flying);
+    if (reachable.length === 0) {
+      log(`${card.name} 格闘: 対象クリーチャーがいません`);
+      if (!card.vigilance) inst.tapped = false;
+      G.combatArrows = [];
+      render(); updateHints(); return;
+    }
+    G.kakutouTargetMode = true;
+    G.pendingKakutouInstId = atkInstId;
+    G.kakutouTargets = {};
+    log(`${card.name} 格闘: 攻撃するAIクリーチャーを選択してください`);
+    render(); updateHints();
+    return;
+  }
+
+  // Normal attack: AI picks blocker
+  log(`${card.name} が攻撃宣言`);
+  render();
+  setTimeout(() => {
+    const aiBlocker = pickAIBlockerFor(player, atkInstId);
+    if (aiBlocker) {
+      G.combatArrows = [{fromId: atkInstId, toId: aiBlocker.instanceId, color: '#ff4444'}];
+      render();
+      setTimeout(() => resolveSingleCombat(player, atkInstId, null, aiBlocker.instanceId), 500);
+    } else {
+      resolveSingleCombat(player, atkInstId, null, null);
+    }
+  }, 300);
+}
+
+function pickAIBlockerFor(atkPlayer, atkInstId) {
+  const opp = 1 - atkPlayer;
+  const oppField = G.players[opp].field;
+  const atkInst = G.players[atkPlayer].field.find(c => c.instanceId === atkInstId);
+  if (!atkInst) return null;
+  return oppField.find(b => {
+    const bc = CARD_DB[b.cardId];
+    const eligible = !b.tapped || (bc.ocBlockWhileTapped && isOCActive(opp));
+    return eligible && canFlyBlock(atkInst, b);
+  }) || null;
+}
+
+function resolveSingleCombat(atkPlayer, atkInstId, kakutouTargetId, blockerInstId) {
+  const opp = 1 - atkPlayer;
+  const atkInst = G.players[atkPlayer].field.find(c => c.instanceId === atkInstId);
+  if (!atkInst) { G.combatArrows = []; render(); return; }
+  const atkCard = CARD_DB[atkInst.cardId];
+  const atkPow = getEffectivePower(atkPlayer, atkInst);
+
+  if (kakutouTargetId) {
+    // 格闘: mutual damage with target creature
+    const tgtInst = G.players[opp].field.find(c => c.instanceId === kakutouTargetId);
+    if (tgtInst) {
+      const tgtPow = getEffectivePower(opp, tgtInst);
+      tgtInst.damage += atkPow;
+      atkInst.damage += tgtPow;
+      log(`${atkCard.name} 格闘 → ${CARD_DB[tgtInst.cardId].name}: ${atkPow}ダメージ交換`, 'damage');
+      checkCreatureDeath(opp, kakutouTargetId, atkPlayer);
+      checkCreatureDeath(atkPlayer, atkInstId, opp);
+    }
+  } else if (blockerInstId) {
+    // Blocked: mutual damage
+    const blkInst = G.players[opp].field.find(c => c.instanceId === blockerInstId);
+    if (blkInst) {
+      const blkCard = CARD_DB[blkInst.cardId];
+      const blkPow = getEffectivePower(opp, blkInst);
+      blkInst.damage += atkPow;
+      atkInst.damage += blkPow;
+      log(`${atkCard.name} vs ${blkCard.name}: ${atkPow}/${blkPow}ダメージ交換`, 'damage');
+      // onBlock triggers
+      if (blkCard.onBlock === 'damage2attacker') { atkInst.damage += 2; log(`${blkCard.name}: 攻撃クリーチャーに+2ダメージ`, 'damage'); }
+      if (blkCard.onBlock === 'draw1') { drawCard(opp); log(`${blkCard.name}: 1ドロー`); }
+      if (blkCard.onBlock === 'gain3life') { G.players[opp].life += 3; log(`${blkCard.name}: ライフ+3`); }
+      if (blkCard.cx8Block === 'buff1ally' && getCXValue(opp) >= 8) {
+        if (opp === 0) {
+          G.targetMode = { type:'ownCreature', owner:0, callback:(tgt) => {
+            addPermanentBuff(0, tgt.instId, 1, 1);
+            log(`${blkCard.name} CX8: 味方+1/+1`, 'important');
+            G.targetMode = null; render(); updateHints();
+          }};
+        } else {
+          const ally = G.players[1].field.find(c=>c.instanceId!==blockerInstId);
+          if (ally) { addPermanentBuff(1, ally.instanceId, 1, 1); log(`AI ${blkCard.name} CX8: 味方+1/+1`,'important'); }
+        }
+      }
+      checkCreatureDeath(opp, blockerInstId, atkPlayer);
+      checkCreatureDeath(atkPlayer, atkInstId, opp);
+    }
+  } else {
+    // Unblocked: deal damage to opponent player
+    G.players[opp].life -= atkPow;
+    showFloatDamage(atkPow, opp === 0 ? 'player' : 'ai');
+    log(`${atkCard.name} が${atkPow}ダメージ！`, 'damage');
+  }
+
+  // Vigilance untap
+  if (atkCard.vigilance) atkInst.tapped = false;
+
+  checkDeath();
+  G.combatArrows = [];
+  render();
+  log('---');
+
+  // If AI is attacking: continue AI attack queue
+  if (atkPlayer === 1) {
+    setTimeout(() => continueAIAttack(), 400);
+  }
 }
 
 function endTurn() {
@@ -2268,19 +2367,16 @@ function aiPlaySpell(card, handIndex) {
 
 function aiAttack() {
   if (G.phase === 'ended') return;
+  // Build attacker queue
   const ai = G.players[1];
   const player = G.players[0];
-
-  // 攻撃クリーチャー収集
-  let attackerInsts = [];
+  const attackerInsts = [];
   ai.field.forEach(c => {
     const card = CARD_DB[c.cardId];
     if (G.cantAttackPermanent.has(c.instanceId)) return;
     if (c.tapped && !card.vigilance) return;
     if (c.sick) {
-      if (card.kakutou && c.entryTurn === G.turn && player.field.length > 0) {
-        attackerInsts.push(c);
-      }
+      if (card.kakutou && c.entryTurn === G.turn && player.field.length > 0) attackerInsts.push(c);
       return;
     }
     attackerInsts.push(c);
@@ -2295,152 +2391,76 @@ function aiAttack() {
     log('アレスティア: プレイヤークリーチャー全体+1/+1（永続）','important');
   }
 
-  // 攻撃宣言 & ターゲット設定
-  G.aiCurrentAttackers = [];
-  G.combatArrows = [];
-  G.directlyAttackedCreatures = new Set();
-  if (attackerInsts.length > 0) showAIBalloon('⚔️ 攻撃宣言！');
-  attackerInsts.forEach(c => {
-    const card = CARD_DB[c.cardId];
-    if (!card.vigilance) c.tapped = true;
-    let targetType = 'player';
-    let targetInstId = null;
-    if (card.kakutou && c.entryTurn === G.turn) {
-      // 格闘: 飛行を持たない場合は非飛行クリーチャーのみ対象
-      const reachable = player.field.filter(pc => {
-        const pc_card = CARD_DB[pc.cardId];
-        return card.flying || !pc_card.flying;
-      });
-      if (reachable.length === 0) {
-        // 対象なし: 通常攻撃に切り替え
-        log(`AI ${card.name} (格闘): 対象なし、通常攻撃`);
-        G.combatArrows.push({fromId: c.instanceId, toId: null, color: '#ff8800'});
-        G.aiCurrentAttackers.push({instId: c.instanceId, targetType: 'player', targetInstId: null});
-        return;
-      }
-      targetType = 'creature';
-      const strongest = reachable.reduce((a,b)=>getEffectivePower(0,b)>getEffectivePower(0,a)?b:a);
-      targetInstId = strongest.instanceId;
-      G.directlyAttackedCreatures.add(targetInstId);
-      log(`AI ${card.name} (格闘) → ${CARD_DB[strongest.cardId].name} を攻撃`);
-      G.combatArrows.push({fromId: c.instanceId, toId: targetInstId, color: '#ff4444'});
-    } else {
-      log(`AI ${card.name} が攻撃宣言`);
-      G.combatArrows.push({fromId: c.instanceId, toId: null, color: '#ff8800'});
+  showAIBalloon('⚔️ 攻撃宣言！');
+  G._aiAttackQueue = attackerInsts.map(c => c.instanceId);
+  setTimeout(() => continueAIAttack(), 400);
+}
+
+function continueAIAttack() {
+  if (G.phase === 'ended') return;
+  if (!G._aiAttackQueue || G._aiAttackQueue.length === 0) {
+    setTimeout(() => endTurn(), 300);
+    return;
+  }
+  const atkInstId = G._aiAttackQueue.shift();
+  const ai = G.players[1];
+  const player = G.players[0];
+  const atkInst = ai.field.find(c => c.instanceId === atkInstId);
+  if (!atkInst) { setTimeout(() => continueAIAttack(), 100); return; }
+  const card = CARD_DB[atkInst.cardId];
+  if (!card.vigilance) atkInst.tapped = true;
+
+  // 格闘
+  if (card.kakutou && atkInst.entryTurn === G.turn) {
+    const reachable = player.field.filter(pc => card.flying || !CARD_DB[pc.cardId].flying);
+    if (reachable.length === 0) {
+      log(`AI ${card.name} 格闘: 対象なし`);
+      G.combatArrows = [];
+      render();
+      setTimeout(() => continueAIAttack(), 400);
+      return;
     }
-    G.aiCurrentAttackers.push({instId: c.instanceId, targetType, targetInstId});
-  });
-
-  // ブロック可能なクリーチャーが存在するか確認（召喚酔いでもブロック可、直接攻撃対象除く）
-  const eligibleBlockers = player.field.filter(c => {
-    const card = CARD_DB[c.cardId];
-    return (!c.tapped || (card.ocBlockWhileTapped && isOCActive(0)))
-      && !G.directlyAttackedCreatures.has(c.instanceId);
-  });
-
-  if (eligibleBlockers.length === 0) {
-    // ブロック不可 → 即解決
-    log('ブロック可能なクリーチャーがいないため戦闘解決');
-    G.playerBlockAssignments = {};
-    G.selectedBlockerToAssign = null;
+    const tgt = reachable.reduce((a,b)=>getEffectivePower(0,b)>getEffectivePower(0,a)?b:a);
+    log(`AI ${card.name} 格闘 → ${CARD_DB[tgt.cardId].name}`);
+    G.combatArrows = [{fromId: atkInstId, toId: tgt.instanceId, color: '#ff4444'}];
     render();
-    setTimeout(() => resolveAICombat(), 400);
+    setTimeout(() => resolveSingleCombat(1, atkInstId, tgt.instanceId, null), 600);
     return;
   }
 
-  // プレイヤーブロック宣言フェイズへ
+  // Normal: player may block
+  log(`AI ${card.name} が攻撃宣言`);
+  G.combatArrows = [{fromId: atkInstId, toId: null, color: '#ff8800'}];
+  const eligibleBlockers = player.field.filter(c => {
+    const bc = CARD_DB[c.cardId];
+    return (!c.tapped || (bc.ocBlockWhileTapped && isOCActive(0))) && canFlyBlock(atkInst, c);
+  });
+  if (eligibleBlockers.length === 0) {
+    render();
+    setTimeout(() => resolveSingleCombat(1, atkInstId, null, null), 500);
+    return;
+  }
+  // Player block phase for this single attacker
+  G.aiCurrentAttackers = [{instId: atkInstId, targetType:'player', targetInstId:null}];
   G.playerBlockMode = true;
   G.playerBlockAssignments = {};
   G.selectedBlockerToAssign = null;
-  log('--- ブロッカーを宣言してください ---', 'important');
-  log('自分のクリーチャーをクリック → AIの攻撃クリーチャーをクリックでブロック割り当て');
-  log('「フェイズ終了」ボタンでブロック確定');
+  log(`--- ${card.name} に対してブロッカーを宣言（任意）→「ブロック確定」 ---`, 'important');
   render(); updateHints();
-}
 
 function resolveAICombat() {
   if (G.phase === 'ended') return;
-  const ai = G.players[1];
-  const player = G.players[0];
-  const usedBlockers = new Set(Object.values(G.playerBlockAssignments));
+  // Single-attacker block confirmed: get the one queued attacker
+  const {instId: atkId} = G.aiCurrentAttackers[0] || {};
+  const blkId = atkId ? G.playerBlockAssignments[atkId] : null;
 
-  G.aiCurrentAttackers.forEach(({instId: atkId, targetType, targetInstId}) => {
-    const attacker = ai.field.find(c=>c.instanceId===atkId);
-    if (!attacker) return;
-    const atkCard = CARD_DB[attacker.cardId];
-    const atkPow = getEffectivePower(1, attacker);
-
-    const blkId = G.playerBlockAssignments[atkId];
-    const blocker = blkId ? player.field.find(c=>c.instanceId===blkId) : null;
-
-    if (blocker) {
-      // ブロックあり
-      const blkCard = CARD_DB[blocker.cardId];
-      const blkPow = getEffectivePower(0, blocker);
-      log(`${atkCard.name} vs ${blkCard.name} (ブロック)`);
-      blocker.damage += atkPow;
-      attacker.damage += blkPow;
-
-      // ブロック時トリガー
-      if (blkCard.onBlock === 'draw1') { drawCard(0); log(`${blkCard.name}: ブロック時1ドロー`); }
-      if (blkCard.onBlock === 'gain3life') { player.life += 3; log(`${blkCard.name}: ブロック時ライフ3回復`,'heal'); }
-      if (blkCard.onBlock === 'damage2attacker') { attacker.damage += 2; log(`${blkCard.name}: ブロック時2ダメージ`,'damage'); }
-      if (blkCard.cx8Block === 'buff1ally' && getCXValue(0) >= 8) {
-        const allies = player.field.filter(pc=>pc.instanceId!==blocker.instanceId);
-        if (allies.length > 0) { addPermanentBuff(0, allies[0].instanceId, 1, 1); log(`${blkCard.name} CX8: 味方+1/+1`); }
-      }
-      if (G.blockDrawTrigger) { drawCard(0); log('介善: ブロック時1ドロー'); }
-
-      checkCreatureDeath(0, blocker.instanceId, 1);
-      checkCreatureDeath(1, atkId, 0);
-    } else {
-      // ブロックなし
-      if (targetType === 'creature' && targetInstId) {
-        // 格闘: 対象クリーチャーに直接ダメージ
-        const tgtInst = player.field.find(c=>c.instanceId===targetInstId);
-        if (tgtInst) {
-          const tgtPow = getEffectivePower(0, tgtInst);
-          tgtInst.damage += atkPow;
-          attacker.damage += tgtPow;
-          log(`AI ${atkCard.name} (格闘) が ${CARD_DB[tgtInst.cardId].name} に${atkPow}ダメージ`, 'damage');
-          checkCreatureDeath(0, targetInstId, 1);
-          checkCreatureDeath(1, atkId, 0);
-        }
-      } else {
-        player.life -= atkPow;
-        showFloatDamage(atkPow, 'player');
-        log(`AI ${atkCard.name} が${atkPow}ダメージ！`, 'damage');
-      }
-    }
-  });
-
-  // アレスティア: ブロッカー全生存 → 2ダメージ
-  if (player.field.some(c=>CARD_DB[c.cardId].id==='arestia')) {
-    const hadBlockers = Object.keys(G.playerBlockAssignments).length > 0;
-    const anyBlockerDied = Object.values(G.playerBlockAssignments).some(bid=>!player.field.some(c=>c.instanceId===bid));
-    if (hadBlockers && !anyBlockerDied) {
-      ai.life -= 2;
-      showFloatDamage(2, 'ai');
-      log('アレスティア: ブロッカー全生存 → 2ダメージ', 'damage');
-    }
-  }
-
-  // 警戒: AIアタッカーをアンタップ
-  G.aiCurrentAttackers.forEach(({instId}) => {
-    const atk = ai.field.find(c=>c.instanceId===instId);
-    if (atk && CARD_DB[atk.cardId].vigilance) atk.tapped = false;
-  });
-
-  checkDeath();
   G.playerBlockMode = false;
   G.aiCurrentAttackers = [];
   G.playerBlockAssignments = {};
   G.selectedBlockerToAssign = null;
-  G.directlyAttackedCreatures = new Set();
-  G.blockDrawTrigger = false;
   G.combatArrows = [];
-  render();
-  setTimeout(() => endTurn(), 600);
+
+  resolveSingleCombat(1, atkId, null, blkId || null);
 }
 
 // ============================================================
@@ -2541,10 +2561,9 @@ function renderField(player) {
       const el = document.createElement('div');
       el.className = `card color-${card.color}`;
       if (inst.tapped) el.classList.add('tapped');
-      // 攻撃宣言ハイライト
-      if (player === 0 && G.attackMode && G.combatStep === 'declare_attackers') {
+      // 攻撃可能ハイライト (メインフェイズ)
+      if (player === 0 && G.activePlayer === 0 && G.phase === 'main' && !G.kakutouTargetMode && !G.targetMode) {
         if (canCreatureAttack(0, inst)) el.classList.add('attackable');
-        if (G.players[0].attackers.includes(inst.instanceId)) el.classList.add('selected');
       }
       // 格闘ターゲット選択 (AI側クリーチャーをハイライト、飛行制限あり)
       if (G.kakutouTargetMode && player === 1) {
@@ -2702,11 +2721,14 @@ function handleFieldClick(player, instId) {
       log('飛行クリーチャーは飛行を持たないクリーチャーに攻撃されません');
       return;
     }
-    G.kakutouTargets[G.pendingKakutouInstId] = instId;
-    log(`格闘対象: ${atkCard?.name} → ${tgtCard?.name}`);
+    const atkInstId = G.pendingKakutouInstId;
+    G.kakutouTargets[atkInstId] = instId;
+    G.combatArrows = [{fromId: atkInstId, toId: instId, color: '#ff4444'}];
+    log(`格闘: ${atkCard?.name} → ${tgtCard?.name}`);
     G.kakutouTargetMode = false;
     G.pendingKakutouInstId = null;
-    render(); updateHints();
+    render();
+    setTimeout(() => resolveSingleCombat(0, atkInstId, instId, null), 500);
     return;
   }
 
@@ -2776,18 +2798,13 @@ function handleFieldClick(player, instId) {
     return;
   }
 
-  // 攻撃宣言モード (player's creatures)
-  if (player === 0 && G.attackMode && G.combatStep === 'declare_attackers') {
-    toggleAttacker(instId);
-    return;
-  }
-
-  // Activated abilities on player's own creatures
+  // メインフェイズに1体ずつ攻撃
   if (player === 0 && G.activePlayer === 0 && G.phase === 'main') {
     const p = G.players[0];
     const inst = p.field.find(c => c.instanceId === instId);
     if (!inst) return;
     const card = CARD_DB[inst.cardId];
+
     // アレスティア 還元: untap own creature
     if (card.id === 'arestia' && !inst.tapped) {
       G.targetMode = { type:'ownCreature', owner:0, callback:(tgt) => {
@@ -2797,7 +2814,14 @@ function handleFieldClick(player, instId) {
       }};
       log('アレスティア 還元: アンタップするクリーチャーを選択');
       render(); updateHints();
+      return;
     }
+
+    // 攻撃可能なら攻撃開始
+    if (canCreatureAttack(0, inst)) {
+      startSingleAttack(0, instId);
+    }
+    return;
   }
 }
 
@@ -2907,8 +2931,8 @@ function updateHints() {
   } else if (G.chargingMode === 'pick_land') {
     hint.textContent = '土地を選択してチャージ';
     hint.style.color = '#ffaa00';
-  } else if (G.attackMode && G.combatStep === 'declare_attackers') {
-    hint.textContent = '攻撃クリーチャーを選択→フェイズ終了で攻撃確定';
+  } else if (G.phase === 'main' && G.activePlayer === 0 && G.players[0].field.some(c => canCreatureAttack(0, c))) {
+    hint.textContent = '光るクリーチャーをクリックして1体ずつ攻撃できます';
     hint.style.color = '#ff8800';
   } else if (G.awaitingPriority && G.priorityFor === 0) {
     hint.textContent = '⚡ 対応できます: Quickスペルを使用するか、優先権パスしてください';
