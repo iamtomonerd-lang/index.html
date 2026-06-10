@@ -536,17 +536,38 @@ button.danger:hover { background: #6a2a2a; }
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  font-size: 48px;
-  font-weight: 900;
-  color: var(--gold);
   pointer-events: none;
   z-index: 300;
-  text-shadow: 0 0 30px #ccaa33, 0 2px 8px #000;
   opacity: 0;
-  transition: opacity 0.2s;
+  text-align: center;
+  transition: none;
 }
-#phase-flash.active { opacity: 1; }
-@keyframes phaseFlashOut { 0%{opacity:1} 70%{opacity:1} 100%{opacity:0} }
+#phase-flash.active {
+  animation: phaseFlashAnim 2s forwards;
+}
+#phase-flash .pf-main {
+  font-size: 52px;
+  font-weight: 900;
+  color: var(--gold);
+  text-shadow: 0 0 40px #ccaa33, 0 2px 12px #000;
+  display: block;
+  line-height: 1.1;
+}
+#phase-flash .pf-sub {
+  font-size: 18px;
+  font-weight: 700;
+  color: #aaaaff;
+  display: block;
+  margin-top: 4px;
+  text-shadow: 0 0 12px #6060ff, 0 2px 6px #000;
+}
+@keyframes phaseFlashAnim {
+  0%   { opacity: 0; transform: translate(-50%, -50%) scale(0.7); }
+  12%  { opacity: 1; transform: translate(-50%, -50%) scale(1.08); }
+  25%  { opacity: 1; transform: translate(-50%, -50%) scale(1.0); }
+  75%  { opacity: 1; transform: translate(-50%, -50%) scale(1.0); }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(1.0); }
+}
 
 /* ── オンライン対戦UI ── */
 #net-lobby {
@@ -1073,8 +1094,8 @@ function _doSkipStartMulligan() {
 }
 
 function startFirstTurn() {
-  // 先攻1ターン目: 土地1枚配置、ドローなし
   placeLands(0, 1);
+  showPhaseFlash('ターン 1', 'あなたのターン');
   log(`--- ターン${G.turn} プレイヤーのターン ---`, 'important');
   log('ターン1: プレイヤーのメインフェイズ', 'important');
   document.getElementById('btn-mulligan').disabled = true;
@@ -1447,19 +1468,8 @@ function fireETB(player, instanceId) {
     const oppField = G.players[opp].field;
     if (player === 0) {
       if (oppField.length > 0) {
-        // Choose: ETB damage OR kakutou attack
-        const html = `
-          <p style="margin-bottom:10px; font-size:12px;">バスティオンの能力を選んでください：</p>
-          <div style="display:flex; flex-direction:column; gap:8px;">
-            <button onclick="bastianChooseETB()" style="padding:10px; background:#2a2a8a; border:1px solid #6060ff; color:#fff; border-radius:5px; font-size:12px; cursor:pointer;">
-              ETBダメージ（2ダメージ${hasCX6 ? ' + CX6: 3ダメージ' : ''}）
-            </button>
-            <button onclick="bastianChooseKakutou(${inst.instanceId})" style="padding:10px; background:#4a1a1a; border:1px solid #cc4444; color:#fff; border-radius:5px; font-size:12px; cursor:pointer;">
-              格闘攻撃（対戦相手クリーチャーと戦闘）
-            </button>
-          </div>
-        `;
-        showModal('バスティオン ETB', html);
+        // ETB: ダメージのみ（格闘はフィールド起動）
+        bastianChooseETB(inst.instanceId, hasCX6);
       }
     } else {
       const targets = G.players[opp].field;
@@ -1476,38 +1486,33 @@ function fireETB(player, instanceId) {
   }
 }
 
-function bastianChooseETB() {
+function bastianChooseETB(instanceId, hasCX6Override) {
   closeModal();
-  const hasCX6 = getCXValue(0) >= 6;
+  const hasCX6 = hasCX6Override !== undefined ? hasCX6Override : getCXValue(0) >= 6;
   const opp = 1;
-  // Step 1: pick target for 2 damage
   G.targetMode = { type:'opponentCreature', callback:(tgt) => {
     applyDamageToCreature(opp, tgt.instId, 2, 0);
-    log('バスティオン ETB: 2ダメージ', 'damage');
+    log('バスティオン 出た時: 2ダメージ', 'damage');
     G.targetMode = null;
     checkDeath();
     render(); updateHints();
-    if (hasCX6) {
-      // Step 2: pick target for CX6 3 damage (separate)
-      if (G.players[opp].field.length > 0) {
-        G.targetMode = { type:'opponentCreature', callback:(tgt2) => {
-          applyDamageToCreature(opp, tgt2.instId, 3, 0);
-          log('バスティオン CX6 ETB: 3ダメージ', 'damage');
-          G.targetMode = null;
-          checkDeath();
-          render(); updateHints();
-        }};
-        log('バスティオン CX6 ETB: 追加3ダメージの対象を選択');
+    if (hasCX6 && G.players[opp].field.length > 0) {
+      G.targetMode = { type:'opponentCreature', callback:(tgt2) => {
+        applyDamageToCreature(opp, tgt2.instId, 3, 0);
+        log('バスティオン 出た時 CX6: 追加3ダメージ', 'damage');
+        G.targetMode = null;
+        checkDeath();
         render(); updateHints();
-      }
+      }};
+      log('バスティオン 出た時 CX6: 3ダメージの対象を選択');
+      render(); updateHints();
     }
   }};
-  log('バスティオン ETB: 2ダメージの対象を選択');
+  log('バスティオン 出た時: 2ダメージの対象を選択');
   render(); updateHints();
 }
 
 function bastianChooseKakutou(instanceId) {
-  closeModal();
   const inst = G.players[0].field.find(c => c.instanceId === instanceId);
   if (!inst) return;
   const opp = 1;
@@ -1915,6 +1920,8 @@ function endTurn() {
   G.phase = 'untap';
 
   const ap = G.activePlayer;
+  const apName = NET_MODE !== 'local' ? (ap === NET_MY_IDX ? 'あなたのターン' : '相手のターン') : (ap === 0 ? 'あなたのターン' : 'AIのターン');
+  showPhaseFlash(`ターン ${G.turn}`, apName);
   log(`--- ターン${G.turn} ${ap===0?'プレイヤー':'AI'}のターン ---`, 'important');
 
   // Untap
@@ -2840,6 +2847,11 @@ function renderField(player, zoneId) {
       // 攻撃可能ハイライト (メインフェイズ)
       if (player === 0 && G.activePlayer === 0 && G.phase === 'main' && !G.kakutouTargetMode && !G.targetMode) {
         if (canCreatureAttack(0, inst)) el.classList.add('attackable');
+        // 格闘ハイライト（バスティオン: アンタップ＆非sick）
+        if (card.id === 'bastian' && card.kakutou && !inst.tapped && !inst.sick
+            && G.players[1].field.some(c => !CARD_DB[c.cardId].flying || card.flying)) {
+          el.classList.add('attackable');
+        }
       }
       // 格闘ターゲット選択 (AI側クリーチャーをハイライト、飛行制限あり)
       if (G.kakutouTargetMode && player === 1) {
@@ -3145,6 +3157,15 @@ function handleFieldClick(player, instId) {
       return;
     }
 
+    // バスティオン 格闘: タップして相手クリーチャーと戦闘（メインフェイズ、アンタップ状態）
+    if (card.id === 'bastian' && card.kakutou && !inst.tapped && !inst.sick) {
+      const opp = 1;
+      const reachable = G.players[opp].field.filter(c => !CARD_DB[c.cardId].flying || card.flying);
+      if (reachable.length === 0) { log('バスティオン 格闘: 対象クリーチャーがいません'); return; }
+      bastianChooseKakutou(instId);
+      return;
+    }
+
     // 攻撃可能なら攻撃開始
     if (canCreatureAttack(0, inst)) {
       startSingleAttack(0, instId);
@@ -3250,42 +3271,58 @@ function updateHints() {
   document.getElementById('btn-end-phase').textContent =
     G.playerBlockMode ? 'ブロック確定' : 'フェイズ終了';
 
+  const isOnline = NET_MODE !== 'local';
+  const myTurn = G.activePlayer === NET_MY_IDX;
+  const oppName = isOnline ? '相手' : 'AI';
+
   if (G.playerBlockMode) {
     if (G.selectedBlockerToAssign) {
-      hint.textContent = 'AIの攻撃クリーチャーをクリックしてブロック割り当て';
+      hint.innerHTML = '🛡️ <b>ブロック割当中</b> — 相手の攻撃クリーチャーをクリックして割り当て';
       hint.style.color = '#ff88aa';
     } else {
-      hint.textContent = '自分クリーチャーを選択→AI攻撃クリーチャーを選択 | 「ブロック確定」でスキップ可';
+      hint.innerHTML = '🛡️ <b>ブロック宣言</b> — 自分クリーチャー → 攻撃クリーチャーの順にクリック（「ブロック確定」でスキップ）';
       hint.style.color = '#ff88aa';
     }
   } else if (G.kakutouTargetMode) {
-    hint.textContent = '格闘: 攻撃するAIクリーチャーを選択してください';
+    hint.innerHTML = '⚔️ <b>格闘</b> — 対象の相手クリーチャーをクリックしてください';
     hint.style.color = '#ffaa00';
   } else if (G.targetMode) {
-    hint.textContent = '対象を選択中...（キャンセルはフェイズ終了ボタン）';
-    hint.style.color = '#ffcc00';
+    const tmType = G.targetMode.type;
+    if (tmType === 'opponentCreature') {
+      hint.innerHTML = '🎯 <b>対象選択</b> — 相手クリーチャーをクリックしてください（紫枠）';
+    } else if (tmType === 'ownCreature') {
+      hint.innerHTML = '🎯 <b>対象選択</b> — 自分クリーチャーをクリックしてください（紫枠）';
+    } else if (tmType === 'ownLand') {
+      hint.innerHTML = '🎯 <b>還元コスト</b> — アンタップ状態の土地をクリックしてください（紫枠）';
+    } else {
+      hint.innerHTML = '🎯 <b>対象選択中</b> — 対象をクリックしてください';
+    }
+    hint.style.color = '#ff88ff';
   } else if (G.chargingMode === true) {
-    hint.textContent = '手札からチャージするカードを選択';
+    hint.innerHTML = '⭐ <b>チャージ</b> — 手札からチャージするカードを選択';
     hint.style.color = '#ffaa00';
   } else if (G.chargingMode === 'pick_land') {
-    hint.textContent = '土地を選択してチャージ';
+    hint.innerHTML = '⭐ <b>チャージ</b> — チャージする土地をクリックしてください';
     hint.style.color = '#ffaa00';
-  } else if (G.phase === 'main' && G.activePlayer === 0 && G.players[0].field.some(c => canCreatureAttack(0, c))) {
-    hint.textContent = '光るクリーチャーをクリックして1体ずつ攻撃できます';
-    hint.style.color = '#ff8800';
-  } else if (G.awaitingPriority && G.priorityFor === 0) {
-    // Player is non-turn player: Quick only
-    hint.textContent = '⚡ 優先権: Quickスペルを使用できます（優先権パスで続行）';
+  } else if (G.mulliganMode) {
+    hint.innerHTML = '🔄 <b>マリガン</b> — 戻すカードをクリック（赤枠）して「確認」を押す';
+    hint.style.color = '#aaaaff';
+  } else if (G.awaitingPriority && G.priorityFor === NET_MY_IDX) {
+    hint.innerHTML = '⚡ <b>優先権</b> — Quickスペルを使用できます（「優先権パス」で続行）';
     hint.style.color = '#ffcc44';
-  } else if (G.awaitingPriority && G.activePlayer === 0 && G.priorityFor === 1) {
-    // Player is turn player, AI has priority: player can still play any card
-    hint.textContent = '⚡ 優先権ウィンドウ中: 手札のカードも使用できます（AIが応答中）';
+  } else if (G.awaitingPriority && !myTurn && G.priorityFor !== NET_MY_IDX) {
+    hint.innerHTML = `⚡ <b>優先権</b> — ${oppName}が応答中です...`;
     hint.style.color = '#aaddff';
-  } else if (G.phase === 'main' && G.activePlayer === 0) {
-    hint.textContent = '土地をクリックでマナ、手札をクリックでプレイ';
-    hint.style.color = '#6688ff';
-  } else if (G.activePlayer === 1) {
-    hint.textContent = 'AIのターン...';
+  } else if (myTurn && G.phase === 'main') {
+    const canAtk = G.players[NET_MY_IDX].field.some(c => canCreatureAttack(NET_MY_IDX, c));
+    if (canAtk) {
+      hint.innerHTML = '🗡️ 土地でマナ / 手札でカードプレイ / <b>オレンジのクリーチャーをクリックで攻撃</b>';
+    } else {
+      hint.innerHTML = '🎮 土地をクリックでマナ追加 / 手札をクリックでカードプレイ';
+    }
+    hint.style.color = '#88aaff';
+  } else if (!myTurn) {
+    hint.innerHTML = `⏳ <b>${oppName}のターン</b>`;
     hint.style.color = '#888';
   } else {
     hint.textContent = '';
@@ -3529,16 +3566,24 @@ const PHASE_NAMES_JP = {
   end: 'エンドフェイズ',
 };
 let _phaseFlashTimer = null;
-function showPhaseFlash(phase) {
+function showPhaseFlash(mainText, subText) {
   const el = document.getElementById('phase-flash');
   if (!el) return;
-  const name = PHASE_NAMES_JP[phase] || phase;
-  el.textContent = name;
-  el.style.animation = 'none';
+  el.innerHTML = `<span class="pf-main">${mainText}</span>${subText ? `<span class="pf-sub">${subText}</span>` : ''}`;
+  el.classList.remove('active');
+  void el.offsetWidth; // reflow to restart animation
   el.classList.add('active');
   if (_phaseFlashTimer) clearTimeout(_phaseFlashTimer);
-  _phaseFlashTimer = setTimeout(() => { el.classList.remove('active'); }, 1500);
+  _phaseFlashTimer = setTimeout(() => { el.classList.remove('active'); }, 2000);
 }
+
+const PHASE_NAMES_FLASH = {
+  untap: 'アンタップ',
+  draw:  'ドロー',
+  main:  'メインフェイズ',
+  end:   'エンドフェイズ',
+  ended: 'ゲーム終了',
+};
 
 // ============================================================
 // GLOBAL RIGHT-CLICK HANDLER (card detail)
