@@ -2735,7 +2735,17 @@ function renderLands(player) {
   zone.innerHTML = '';
   const p = G.players[player];
 
-  p.lands.forEach(land => {
+  const sortedLands = [...p.lands].sort((a, b) => {
+    // 1. タップ済みは右
+    if (a.tapped !== b.tapped) return a.tapped ? 1 : -1;
+    // 2. あいうえお順（同名同士が隣接）
+    const nameCmp = CARD_DB[a.cardId].name.localeCompare(CARD_DB[b.cardId].name, 'ja');
+    if (nameCmp !== 0) return nameCmp;
+    // 3. 同名内: チャージ済みは右
+    return (a.chargeCard ? 1 : 0) - (b.chargeCard ? 1 : 0);
+  });
+
+  sortedLands.forEach(land => {
     const card = CARD_DB[land.cardId];
     const el = document.createElement('div');
     el.className = `land-card color-${card.color}`;
