@@ -1898,6 +1898,24 @@ function aiAttack() {
     G.aiCurrentAttackers.push({instId: c.instanceId, targetType, targetInstId});
   });
 
+  // ブロック可能なクリーチャーが存在するか確認
+  const eligibleBlockers = player.field.filter(c => {
+    const card = CARD_DB[c.cardId];
+    return (!c.tapped || (card.ocBlockWhileTapped && isOCActive(0)))
+      && !c.sick
+      && !G.directlyAttackedCreatures.has(c.instanceId);
+  });
+
+  if (eligibleBlockers.length === 0) {
+    // ブロック不可 → 即解決
+    log('ブロック可能なクリーチャーがいないため戦闘解決');
+    G.playerBlockAssignments = {};
+    G.selectedBlockerToAssign = null;
+    render();
+    setTimeout(() => resolveAICombat(), 400);
+    return;
+  }
+
   // プレイヤーブロック宣言フェイズへ
   G.playerBlockMode = true;
   G.playerBlockAssignments = {};
