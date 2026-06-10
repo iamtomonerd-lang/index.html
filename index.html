@@ -2549,7 +2549,7 @@ function updateHints() {
   const btnCharge = document.getElementById('btn-charge');
   btnCharge.disabled = G.activePlayer !== 0 || G.phase !== 'main';
   const btnEnd = document.getElementById('btn-end-phase');
-  btnEnd.disabled = G.activePlayer !== 0 || G.phase === 'ended';
+  btnEnd.disabled = (!G.playerBlockMode && G.activePlayer !== 0) || G.phase === 'ended';
 }
 
 // ============================================================
