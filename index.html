@@ -1,0 +1,1571 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DCG - デジタルカードゲーム</title>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Noto+Sans+JP:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #0a0a14;
+  --panel: #12121e;
+  --border: #2a2a4a;
+  --text: #c8c8e8;
+  --accent: #6060ff;
+  --red: #cc3333;
+  --blue: #3366cc;
+  --green: #336633;
+  --white: #ccccaa;
+  --black: #443344;
+  --gold: #ccaa33;
+  --danger: #ff4444;
+  --heal: #44ff88;
+}
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Noto Sans JP', sans-serif;
+  min-height: 100vh;
+  overflow-x: hidden;
+  font-size: 12px;
+}
+#game {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 4px;
+  gap: 3px;
+}
+.zone-label {
+  font-size: 9px;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  padding: 0 4px;
+}
+/* Card styles */
+.card {
+  width: 68px;
+  height: 96px;
+  border-radius: 6px;
+  border: 1.5px solid var(--border);
+  cursor: pointer;
+  position: relative;
+  transition: transform 0.15s, box-shadow 0.15s;
+  user-select: none;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  font-size: 9px;
+}
+.card:hover { transform: translateY(-4px) scale(1.05); z-index: 10; }
+.card.selected { box-shadow: 0 0 0 2px #ffff44, 0 0 12px #ffff44; }
+.card.tapped { transform: rotate(15deg); opacity: 0.85; }
+.card.tapped:hover { transform: rotate(15deg) translateY(-4px) scale(1.05); }
+.card.face-down { background: linear-gradient(135deg, #1a1a3a 25%, #0d0d22 75%); }
+.card.face-down::after { content: '🎴'; font-size: 28px; position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); }
+.card.playable { box-shadow: 0 0 8px #44ff44; border-color: #44ff44; }
+.card.attackable { box-shadow: 0 0 8px #ff8800; border-color: #ff8800; cursor: crosshair; }
+.card.blockable { box-shadow: 0 0 8px #ff4488; border-color: #ff4488; cursor: crosshair; }
+.card.targetable { box-shadow: 0 0 8px #ff44ff; border-color: #ff44ff; cursor: crosshair; }
+.card.damaged { animation: shake 0.3s; }
+.card.dying { animation: die 0.5s forwards; }
+@keyframes shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-4px)} 75%{transform:translateX(4px)} }
+@keyframes die { to { transform: scale(0) rotate(180deg); opacity: 0; } }
+@keyframes slideIn { from { transform: translateY(40px); opacity: 0; } to { transform: none; opacity: 1; } }
+.card-art {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+.card-bottom {
+  padding: 2px 3px;
+  background: rgba(0,0,0,0.6);
+}
+.card-name { font-size: 7px; font-weight: 700; line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.card-type-line { font-size: 6px; color: #aaa; }
+.card-pt { font-size: 8px; font-weight: 700; text-align: right; }
+.card-cost { position: absolute; top: 2px; right: 2px; font-size: 7px; background: rgba(0,0,0,0.8); border-radius: 3px; padding: 0 2px; }
+.card-keywords { font-size: 5px; color: #ffcc44; }
+.damage-counter {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  background: #cc0000;
+  color: white;
+  border-radius: 50%;
+  width: 14px;
+  height: 14px;
+  font-size: 8px;
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.charge-indicator {
+  position: absolute;
+  bottom: 24px;
+  right: 2px;
+  background: #ffaa00;
+  color: #000;
+  border-radius: 2px;
+  font-size: 6px;
+  padding: 0 2px;
+}
+/* COLOR themes for cards */
+.color-R { background: linear-gradient(160deg, #2a0a0a, #1a0505); border-color: #883333; }
+.color-R .card-art { color: #ff6633; }
+.color-U { background: linear-gradient(160deg, #0a0a2a, #05051a); border-color: #333388; }
+.color-U .card-art { color: #4488ff; }
+.color-G { background: linear-gradient(160deg, #0a1a0a, #051005); border-color: #338833; }
+.color-G .card-art { color: #44cc44; }
+.color-W { background: linear-gradient(160deg, #1e1e12, #141408); border-color: #888844; }
+.color-W .card-art { color: #eeeebb; }
+.color-B { background: linear-gradient(160deg, #14091a, #0a0510); border-color: #554455; }
+.color-B .card-art { color: #aa66cc; }
+.color-C { background: linear-gradient(160deg, #1a1a1a, #0d0d0d); border-color: #555555; }
+.color-C .card-art { color: #aaaaaa; }
+/* Land cards */
+.land-card { width: 60px; height: 42px; border-radius: 4px; border: 1.5px solid var(--border); cursor: pointer; position: relative; transition: transform 0.15s, box-shadow 0.15s; user-select: none; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 16px; overflow: hidden; }
+.land-card:hover { transform: scale(1.08); z-index: 5; }
+.land-card.tapped { transform: rotate(15deg); }
+.land-card.tapped:hover { transform: rotate(15deg) scale(1.08); }
+.land-card.selected { box-shadow: 0 0 0 2px #ffff44; }
+.land-card .land-name { position: absolute; bottom: 1px; left: 0; right: 0; text-align: center; font-size: 6px; color: rgba(255,255,255,0.7); }
+.land-card .charge-pip { position: absolute; top: 1px; right: 1px; background: #ffaa00; border-radius: 50%; width: 8px; height: 8px; font-size: 5px; display: flex; align-items: center; justify-content: center; color: #000; }
+/* Zones */
+.hand-zone { display: flex; gap: 4px; padding: 4px; min-height: 108px; align-items: center; flex-wrap: nowrap; overflow-x: auto; }
+.field-zone { display: flex; gap: 6px; padding: 4px; min-height: 112px; align-items: center; }
+.land-zone { display: flex; gap: 4px; padding: 4px; min-height: 52px; align-items: center; flex-wrap: wrap; }
+.field-slot {
+  width: 68px; height: 100px;
+  border: 1px dashed #2a2a4a;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: #333;
+  font-size: 10px;
+  position: relative;
+}
+/* Info bar */
+#info-bar {
+  display: flex;
+  gap: 8px;
+  padding: 4px 8px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.life-display {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 14px;
+  font-weight: 700;
+}
+.life-display.low { color: var(--danger); animation: pulse 1s infinite; }
+@keyframes pulse { 50% { opacity: 0.5; } }
+.phase-display {
+  background: var(--accent);
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
+}
+.cx-display { background: #2a1a4a; padding: 2px 6px; border-radius: 4px; font-size: 11px; }
+.oc-display { background: #4a1a2a; padding: 2px 6px; border-radius: 4px; font-size: 11px; color: #ff88aa; }
+.mana-display { display: flex; gap: 3px; align-items: center; }
+.mana-pip { width: 14px; height: 14px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 7px; font-weight: bold; }
+.mana-R { background: #cc3333; color: white; }
+.mana-U { background: #3366cc; color: white; }
+.mana-G { background: #336633; color: white; }
+.mana-W { background: #cccc88; color: #333; }
+.mana-B { background: #553355; color: white; }
+.mana-C { background: #555; color: white; }
+/* Stack */
+#stack-area {
+  display: flex;
+  gap: 6px;
+  padding: 4px 8px;
+  background: #0d0d1a;
+  border: 1px solid #2a2a5a;
+  border-radius: 6px;
+  min-height: 30px;
+  align-items: center;
+}
+.stack-item {
+  background: #1a1a3a;
+  border: 1px solid #4444aa;
+  border-radius: 4px;
+  padding: 3px 6px;
+  font-size: 10px;
+  color: #aaaaff;
+}
+/* Controls */
+#controls {
+  display: flex;
+  gap: 6px;
+  padding: 4px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+button {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 5px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 11px;
+  transition: background 0.1s;
+}
+button:hover { background: #2a2a4a; }
+button:disabled { opacity: 0.4; cursor: default; }
+button.primary { background: #2a2a8a; border-color: var(--accent); }
+button.primary:hover { background: #3a3aaa; }
+button.danger { background: #4a1a1a; border-color: #cc3333; }
+button.danger:hover { background: #6a2a2a; }
+/* Message log */
+#log {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px 8px;
+  font-size: 10px;
+  max-height: 80px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: #8888aa;
+}
+#log p { margin: 1px 0; }
+#log p.important { color: #ffcc44; }
+#log p.damage { color: #ff6644; }
+#log p.heal { color: #44ff88; }
+/* Modal overlay */
+#modal {
+  display: none;
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.85);
+  z-index: 100;
+  align-items: center;
+  justify-content: center;
+}
+#modal.active { display: flex; }
+#modal-box {
+  background: #12121e;
+  border: 2px solid var(--accent);
+  border-radius: 10px;
+  padding: 20px;
+  max-width: 600px;
+  width: 95%;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+#modal-title { font-size: 18px; font-weight: 700; margin-bottom: 10px; color: #aaaaff; }
+#modal-cards { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
+#modal-btn { margin-top: 10px; }
+/* Floating damage */
+.float-damage {
+  position: fixed;
+  font-size: 22px;
+  font-weight: 900;
+  pointer-events: none;
+  z-index: 200;
+  animation: floatUp 1.2s forwards;
+  text-shadow: 0 0 8px currentColor;
+}
+@keyframes floatUp { 0%{opacity:1;transform:translateY(0)} 100%{opacity:0;transform:translateY(-60px)} }
+/* Turn indicator */
+#turn-indicator {
+  font-size: 10px;
+  color: #666;
+}
+.highlight { background: rgba(255,255,100,0.05); border-radius: 4px; }
+/* separator */
+.sep { width: 1px; background: var(--border); align-self: stretch; margin: 0 4px; }
+</style>
+</head>
+<body>
+<div id="game">
+  <!-- Opponent area -->
+  <div style="display:flex; gap:4px; align-items:center;">
+    <div class="zone-label">対戦相手の手札</div>
+    <div id="ai-hand" class="hand-zone"></div>
+    <div style="margin-left:auto; display:flex; gap:6px; align-items:center;">
+      <div class="life-display" id="ai-life">❤️ 20</div>
+      <div style="font-size:9px; color:#666;">山札: <span id="ai-deck-count">40</span> / 土地: <span id="ai-land-deck-count">10</span></div>
+    </div>
+  </div>
+  <div style="display:flex; gap:4px; align-items:center;">
+    <div class="zone-label">敵フィールド</div>
+    <div id="ai-field" class="field-zone"></div>
+  </div>
+  <div style="display:flex; gap:4px; align-items:center;">
+    <div class="zone-label">敵土地</div>
+    <div id="ai-lands" class="land-zone"></div>
+  </div>
+
+  <!-- Info bar -->
+  <div id="info-bar">
+    <div id="turn-indicator">ターン 1</div>
+    <div class="sep"></div>
+    <div class="phase-display" id="phase-name">アンタップ</div>
+    <div class="sep"></div>
+    <div class="cx-display">CX: <span id="cx-value">0</span></div>
+    <div class="oc-display" id="oc-status">OC: ✗</div>
+    <div class="sep"></div>
+    <div style="font-size:10px;">マナ:</div>
+    <div class="mana-display" id="mana-display"></div>
+    <div class="sep"></div>
+    <div style="font-size:10px;">山札: <span id="player-deck-count">40</span> / 土地: <span id="player-land-deck-count">10</span></div>
+  </div>
+
+  <!-- Stack -->
+  <div id="stack-area">
+    <span style="font-size:9px; color:#555; margin-right:4px;">スタック:</span>
+    <div id="stack-items" style="display:flex; gap:6px; flex-wrap:wrap;"></div>
+  </div>
+
+  <!-- Player lands -->
+  <div style="display:flex; gap:4px; align-items:center;">
+    <div class="zone-label">自分の土地</div>
+    <div id="player-lands" class="land-zone"></div>
+  </div>
+
+  <!-- Player field -->
+  <div style="display:flex; gap:4px; align-items:center;">
+    <div class="zone-label">自分フィールド</div>
+    <div id="player-field" class="field-zone"></div>
+  </div>
+
+  <!-- Player hand -->
+  <div style="display:flex; gap:4px; align-items:center;">
+    <div class="zone-label">手札</div>
+    <div id="player-hand" class="hand-zone"></div>
+    <div style="margin-left:auto; display:flex; gap:6px; align-items:center;">
+      <div class="life-display" id="player-life">❤️ 20</div>
+    </div>
+  </div>
+
+  <!-- Controls + Log -->
+  <div style="display:flex; gap:4px;">
+    <div id="controls">
+      <button id="btn-end-phase" class="primary" onclick="endPhase()">フェイズ終了</button>
+      <button id="btn-pass" onclick="passPriority()">優先権パス</button>
+      <button id="btn-mulligan" onclick="doMulligan()" disabled>マリガン</button>
+      <button id="btn-charge" onclick="startCharge()">チャージ</button>
+      <span id="action-hint" style="font-size:10px; color:#aaaaff;"></span>
+    </div>
+    <div id="log" style="flex:1;"></div>
+  </div>
+</div>
+
+<!-- Modal -->
+<div id="modal">
+  <div id="modal-box">
+    <div id="modal-title"></div>
+    <div id="modal-content"></div>
+    <div id="modal-cards"></div>
+    <button id="modal-btn" onclick="closeModal()">閉じる</button>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// CARD DATABASE
+// ============================================================
+const CARD_DB = {
+  // CREATURES
+  'fire_drake': { id:'fire_drake', name:'ファイアドレイク', type:'creature', color:'R', cost:{R:1,C:3}, power:4, toughness:3, subtype:'Dragon', icon:'🐉', keywords:[], text:'' },
+  'water_spirit': { id:'water_spirit', name:'ウォータースピリット', type:'creature', color:'U', cost:{U:1,C:2}, power:2, toughness:4, subtype:'Spirit', icon:'💧', keywords:['Quick'], text:'Quick' },
+  'forest_wolf': { id:'forest_wolf', name:'フォレストウルフ', type:'creature', color:'G', cost:{G:1,C:1}, power:2, toughness:2, subtype:'Beast', icon:'🐺', keywords:['還元'], text:'還元: カードを1枚引く' },
+  'stone_golem': { id:'stone_golem', name:'ストーンゴーレム', type:'creature', color:'C', cost:{C:4}, power:4, toughness:5, subtype:'Construct', icon:'🗿', keywords:[], text:'' },
+  'shadow_rogue': { id:'shadow_rogue', name:'シャドウローグ', type:'creature', color:'B', cost:{B:1,C:1}, power:2, toughness:1, subtype:'Rogue', icon:'🗡️', keywords:['Deathtouch'], text:'Deathtouch: ダメージを与えたクリーチャーを破壊する' },
+  'thunder_bird': { id:'thunder_bird', name:'サンダーバード', type:'creature', color:'R', cost:{R:2,C:2}, power:5, toughness:3, subtype:'Bird', icon:'⚡', keywords:[], text:'' },
+  'ice_mage': { id:'ice_mage', name:'アイスメイジ', type:'creature', color:'U', cost:{U:2,C:2}, power:3, toughness:4, subtype:'Wizard', icon:'🧊', keywords:[], text:'起動能力(UU): クリーチャー1体をタップする' },
+  'ancient_tree': { id:'ancient_tree', name:'エンシェントツリー', type:'creature', color:'G', cost:{G:2,C:3}, power:5, toughness:6, subtype:'Plant', icon:'🌲', keywords:['還元'], text:'還元: ライフを2点回復する' },
+  'bone_knight': { id:'bone_knight', name:'ボーンナイト', type:'creature', color:'B', cost:{B:2,C:2}, power:3, toughness:3, subtype:'Undead', icon:'💀', keywords:['CX5'], text:'CX5: +2/+0' },
+  'light_angel': { id:'light_angel', name:'ライトエンジェル', type:'creature', color:'W', cost:{W:2,C:3}, power:4, toughness:4, subtype:'Angel', icon:'👼', keywords:['OC'], text:'OC: このクリーチャーはブロックされない' },
+  'goblin_raider': { id:'goblin_raider', name:'ゴブリンレイダー', type:'creature', color:'R', cost:{R:1,C:1}, power:2, toughness:1, subtype:'Goblin', icon:'👺', keywords:[], text:'' },
+  'sea_serpent': { id:'sea_serpent', name:'シーサーペント', type:'creature', color:'U', cost:{U:1,C:3}, power:4, toughness:4, subtype:'Serpent', icon:'🐍', keywords:[], text:'' },
+  'vine_elemental': { id:'vine_elemental', name:'バインエレメンタル', type:'creature', color:'G', cost:{G:1,C:2}, power:3, toughness:3, subtype:'Elemental', icon:'🌿', keywords:[], text:'' },
+  'dark_sorcerer': { id:'dark_sorcerer', name:'ダークソーサラー', type:'creature', color:'B', cost:{B:1,C:3}, power:3, toughness:3, subtype:'Wizard', icon:'🔮', keywords:[], text:'起動能力(B): 対戦相手は1点ライフを失う' },
+  'paladin': { id:'paladin', name:'パラディン', type:'creature', color:'W', cost:{W:1,C:2}, power:2, toughness:4, subtype:'Knight', icon:'⚔️', keywords:[], text:'' },
+  // SPELLS
+  'fireball': { id:'fireball', name:'ファイアボール', type:'spell', color:'R', cost:{R:1,C:2}, icon:'🔥', keywords:[], text:'任意の対象に3ダメージ', effect:'damage3' },
+  'counter_spell': { id:'counter_spell', name:'カウンタースペル', type:'spell', color:'U', cost:{U:1,C:1}, icon:'🌀', keywords:['Quick'], text:'Quick: 対象のスペルを打ち消す', effect:'counter' },
+  'dark_ritual': { id:'dark_ritual', name:'ダークリチュアル', type:'spell', color:'B', cost:{B:1}, icon:'🕯️', keywords:[], text:'マナプールにBBBを加える', effect:'ritual' },
+  'healing_light': { id:'healing_light', name:'ヒーリングライト', type:'spell', color:'W', cost:{W:1,C:1}, icon:'✨', keywords:[], text:'ライフを5点回復する', effect:'heal5' },
+  'giant_growth': { id:'giant_growth', name:'ジャイアントグロウス', type:'spell', color:'G', cost:{G:1}, icon:'💪', keywords:['Quick'], text:'Quick: クリーチャー1体は+2/+2を得る(ターン終了時まで)', effect:'pump22' },
+  // LANDS
+  'mountain': { id:'mountain', name:'山', type:'land', color:'R', produces:'R', icon:'⛰️' },
+  'island': { id:'island', name:'島', type:'land', color:'U', produces:'U', icon:'🏝️' },
+  'forest': { id:'forest', name:'森', type:'land', color:'G', produces:'G', icon:'🌳' },
+  'plains': { id:'plains', name:'平地', type:'land', color:'W', produces:'W', icon:'🌾' },
+  'swamp': { id:'swamp', name:'沼', type:'land', color:'B', produces:'B', icon:'🌑' },
+};
+
+// Build decks
+function buildMainDeck() {
+  const creatures = ['fire_drake','water_spirit','forest_wolf','stone_golem','shadow_rogue',
+    'thunder_bird','ice_mage','ancient_tree','bone_knight','light_angel',
+    'goblin_raider','sea_serpent','vine_elemental','dark_sorcerer','paladin'];
+  const spells = ['fireball','counter_spell','dark_ritual','healing_light','giant_growth'];
+  let deck = [];
+  creatures.forEach(c => { deck.push(c); deck.push(c); deck.push(c); }); // 45 -> trim
+  spells.forEach(s => { deck.push(s); deck.push(s); });  // +10 = 55 -> trim to 40
+  deck = shuffle(deck).slice(0, 40);
+  return deck;
+}
+function buildLandDeck() {
+  const lands = ['mountain','island','forest','plains','swamp'];
+  let deck = [];
+  lands.forEach(l => { deck.push(l); deck.push(l); });
+  return shuffle(deck);
+}
+function shuffle(arr) {
+  const a = [...arr];
+  for (let i = a.length-1; i > 0; i--) {
+    const j = Math.floor(Math.random()*(i+1));
+    [a[i],a[j]] = [a[j],a[i]];
+  }
+  return a;
+}
+
+// ============================================================
+// GAME STATE
+// ============================================================
+let G; // global game state
+
+function initGame() {
+  G = {
+    turn: 1,
+    activePlayer: 0, // 0=player, 1=ai
+    phase: 'untap', // untap, draw, main, combat, end
+    combatStep: null, // declare_attackers, declare_blockers, damage
+    priority: 0,
+    stack: [],
+    players: [
+      {
+        life: 20,
+        deck: buildMainDeck(),
+        landDeck: buildLandDeck(),
+        hand: [],
+        field: [], // {instanceId, cardId, tapped, damage, sick, charges, tempBuff}
+        lands: [], // {instanceId, cardId, tapped, chargeCard}
+        graveyard: [],
+        exile: [],
+        mana: {R:0,U:0,G:0,W:0,B:0,C:0},
+        mulliganUsed: false,
+        attackers: [],
+        blockers: {}, // attackerId -> [blockerId]
+      },
+      {
+        life: 20,
+        deck: buildMainDeck(),
+        landDeck: buildLandDeck(),
+        hand: [],
+        field: [],
+        lands: [],
+        graveyard: [],
+        exile: [],
+        mana: {R:0,U:0,G:0,W:0,B:0,C:0},
+        mulliganUsed: false,
+        attackers: [],
+        blockers: {},
+      }
+    ],
+    nextInstanceId: 1,
+    firstTurn: true,
+    chargingMode: false,
+    targetMode: null, // {type, callback}
+    attackMode: false,
+    blockMode: false,
+    selectedAttacker: null,
+    selectedCard: null, // {owner, zone, index}
+    tempBuffs: [], // {instanceId, power, toughness, untilEnd}
+    landPlacedThisTurn: 0,
+  };
+
+  // Draw initial hands
+  for (let p = 0; p < 2; p++) {
+    for (let i = 0; i < 7; i++) drawCard(p);
+  }
+
+  G.phase = 'main';
+  // First turn special: place 1 land, no draw
+  placeLands(0, 1);
+
+  log('ゲーム開始！', 'important');
+  log('ターン1: プレイヤーのメインフェイズ', 'important');
+  document.getElementById('btn-mulligan').disabled = false;
+  render();
+  updateHints();
+}
+
+function newInstance(cardId) {
+  return { instanceId: G.nextInstanceId++, cardId, tapped: false, damage: 0, sick: false, chargeCard: null, tempPower: 0, tempToughness: 0 };
+}
+
+// ============================================================
+// CORE ACTIONS
+// ============================================================
+function drawCard(player) {
+  const p = G.players[player];
+  if (p.deck.length === 0) {
+    log(`プレイヤー${player+1}の山札がなくなりました！`, 'important');
+    endGame(1 - player);
+    return false;
+  }
+  if (p.hand.length >= 10) {
+    log(`プレイヤー${player+1}は手札が10枚以上のため引けません`);
+    return false;
+  }
+  const cardId = p.deck.shift();
+  p.hand.push(cardId);
+  return true;
+}
+
+function placeLands(player, count) {
+  const p = G.players[player];
+  for (let i = 0; i < count; i++) {
+    if (p.landDeck.length === 0) break;
+    if (p.lands.length >= 10) break;
+    const cardId = p.landDeck.shift();
+    const inst = newInstance(cardId);
+    inst.tapped = false;
+    p.lands.push(inst);
+    G.landPlacedThisTurn++;
+    const card = CARD_DB[cardId];
+    // Check 還元 triggers on OTHER lands when untapped land goes to bottom - actually on placement, no
+    // 還元 triggers when an untapped land is sent to bottom (not on placement)
+  }
+}
+
+function untapAll(player) {
+  const p = G.players[player];
+  p.field.forEach(c => { c.tapped = false; c.sick = false; });
+  p.lands.forEach(l => { l.tapped = false; });
+}
+
+function tapLandForMana(player, instId) {
+  const p = G.players[player];
+  const land = p.lands.find(l => l.instanceId === instId);
+  if (!land || land.tapped) return false;
+  land.tapped = true;
+  const card = CARD_DB[land.cardId];
+  p.mana[card.produces]++;
+  log(`土地をタップ: ${card.produces}マナを追加`);
+  render();
+  return true;
+}
+
+function canAfford(player, cost) {
+  const p = G.players[player];
+  const mana = {...p.mana};
+  for (const [c, amt] of Object.entries(cost)) {
+    if (c === 'C') continue;
+    if ((mana[c] || 0) < amt) return false;
+    mana[c] -= amt;
+  }
+  const colorless = cost.C || 0;
+  const total = Object.values(mana).reduce((a,b)=>a+b,0);
+  return total >= colorless;
+}
+
+function payMana(player, cost) {
+  const p = G.players[player];
+  for (const [c, amt] of Object.entries(cost)) {
+    if (c === 'C') continue;
+    p.mana[c] -= amt;
+  }
+  let colorless = cost.C || 0;
+  const colors = ['R','U','G','W','B','C'];
+  for (const c of colors) {
+    if (colorless <= 0) break;
+    const take = Math.min(p.mana[c], colorless);
+    p.mana[c] -= take;
+    colorless -= take;
+  }
+}
+
+function costToString(cost) {
+  let s = '';
+  if (cost.C) s += cost.C;
+  ['R','U','G','W','B'].forEach(c => { if (cost[c]) s += c.repeat(cost[c]); });
+  return s || '0';
+}
+
+function playCardFromHand(player, handIndex) {
+  const p = G.players[player];
+  const cardId = p.hand[handIndex];
+  const card = CARD_DB[cardId];
+  if (!card) return;
+
+  if (card.type === 'land') {
+    log('土地は手札から直接プレイできません（土地デッキから自動配置）');
+    return;
+  }
+
+  // Check turn & phase
+  const isMyTurn = G.activePlayer === player;
+  const inMain = G.phase === 'main';
+  const isQuick = card.keywords && card.keywords.includes('Quick');
+
+  if (!isMyTurn && !isQuick) { log('あなたのターンではありません'); return; }
+  if (!inMain && !isQuick) { log('メインフェイズ以外ではカードをプレイできません'); return; }
+  if (G.combatStep) { log('戦闘フェイズ中はプレイできません'); return; }
+
+  if (!canAfford(player, card.cost)) {
+    log('マナが足りません');
+    return;
+  }
+
+  // Handle spell effects
+  if (card.type === 'spell') {
+    if (card.effect === 'damage3') {
+      // needs target
+      G.targetMode = { type: 'any', callback: (tgt) => {
+        payMana(player, card.cost);
+        p.hand.splice(handIndex, 1);
+        applyDamage3(player, tgt);
+        p.graveyard.push(cardId);
+        log(`${card.name}: 3ダメージ`, 'damage');
+        G.targetMode = null;
+        render(); updateHints();
+      }};
+      log('対象を選択してください（クリーチャーまたは対戦相手のライフ）');
+      G.selectedCard = {owner: player, zone: 'hand', index: handIndex};
+      render(); updateHints();
+      return;
+    } else if (card.effect === 'counter') {
+      if (G.stack.length === 0) { log('打ち消す対象がありません'); return; }
+      payMana(player, card.cost);
+      p.hand.splice(handIndex, 1);
+      const top = G.stack.pop();
+      p.graveyard.push(cardId);
+      log(`${card.name}: スタックのトップを打ち消した`, 'important');
+      render(); updateHints();
+      return;
+    } else if (card.effect === 'ritual') {
+      payMana(player, card.cost);
+      p.hand.splice(handIndex, 1);
+      p.mana.B += 3;
+      p.graveyard.push(cardId);
+      log(`${card.name}: BBBをマナプールに追加`);
+      render(); updateHints();
+      return;
+    } else if (card.effect === 'heal5') {
+      payMana(player, card.cost);
+      p.hand.splice(handIndex, 1);
+      p.life += 5;
+      p.graveyard.push(cardId);
+      log(`${card.name}: ライフを5回復`, 'heal');
+      render(); updateHints();
+      return;
+    } else if (card.effect === 'pump22') {
+      G.targetMode = { type: 'creature', owner: player, callback: (tgt) => {
+        payMana(player, card.cost);
+        p.hand.splice(handIndex, 1);
+        // tgt = {player, instId}
+        const pf = G.players[tgt.player];
+        const c = pf.field.find(x => x.instanceId === tgt.instId);
+        if (c) { c.tempPower = (c.tempPower||0)+2; c.tempToughness = (c.tempToughness||0)+2; }
+        G.tempBuffs.push({instanceId: tgt.instId, power: 2, toughness: 2});
+        p.graveyard.push(cardId);
+        log(`${card.name}: クリーチャーが+2/+2を得た`);
+        G.targetMode = null;
+        render(); updateHints();
+      }};
+      G.selectedCard = {owner: player, zone: 'hand', index: handIndex};
+      log('強化するクリーチャーを選択してください');
+      render(); updateHints();
+      return;
+    }
+    payMana(player, card.cost);
+    p.hand.splice(handIndex, 1);
+    p.graveyard.push(cardId);
+    log(`${card.name} を使用`);
+    render(); updateHints();
+    return;
+  }
+
+  // Creature
+  if (p.field.length >= 5) { log('フィールドがいっぱいです（最大5体）'); return; }
+  payMana(player, card.cost);
+  p.hand.splice(handIndex, 1);
+  const inst = newInstance(cardId);
+  inst.sick = true;
+  p.field.push(inst);
+  log(`${card.name} を召喚 (${costToString(card.cost)})`, 'important');
+  render(); updateHints();
+}
+
+function applyDamage3(sourcePlayer, target) {
+  if (target.type === 'player') {
+    G.players[target.player].life -= 3;
+    showFloatDamage(3, target.player === 0 ? 'player' : 'ai');
+    checkDeath();
+  } else if (target.type === 'creature') {
+    const pf = G.players[target.player];
+    const c = pf.field.find(x => x.instanceId === target.instId);
+    if (c) { c.damage += 3; checkCreatureDeath(target.player, target.instId, sourcePlayer); }
+  }
+}
+
+function checkCreatureDeath(player, instId, sourcePlayer) {
+  const p = G.players[player];
+  const idx = p.field.findIndex(x => x.instanceId === instId);
+  if (idx === -1) return;
+  const c = p.field[idx];
+  const card = CARD_DB[c.cardId];
+  const toughness = card.toughness + (c.tempToughness||0);
+  // Deathtouch check: if attacked by deathtouch source
+  const dead = c.damage >= toughness;
+  if (dead) {
+    p.field.splice(idx, 1);
+    p.graveyard.push(c.cardId);
+    log(`${card.name} が破壊された`, 'damage');
+  }
+}
+
+function checkDeath() {
+  for (let i = 0; i < 2; i++) {
+    if (G.players[i].life <= 0) { endGame(1 - i); }
+  }
+}
+
+function endGame(winner) {
+  const who = winner === 0 ? 'あなたの' : 'AIの';
+  log(`ゲーム終了！ ${who}勝利！`, 'important');
+  showModal('ゲーム終了', `<p style="font-size:24px; text-align:center; margin:20px 0;">${who}勝利！</p><button onclick="location.reload()" style="width:100%;padding:10px;">もう一度プレイ</button>`);
+  G.phase = 'ended';
+}
+
+// ============================================================
+// PHASE MANAGEMENT
+// ============================================================
+function endPhase() {
+  if (G.phase === 'ended') return;
+  clearTargetMode();
+
+  if (G.phase === 'main' && G.activePlayer === 0) {
+    // Check if we want combat
+    if (G.players[0].field.some(c => !c.tapped && !c.sick)) {
+      startCombat();
+      return;
+    }
+    // Skip to end
+    endTurn();
+    return;
+  }
+
+  if (G.phase === 'combat') {
+    if (G.combatStep === 'declare_attackers') {
+      if (G.players[0].attackers.length > 0) {
+        G.combatStep = 'declare_blockers';
+        log('ブロッカー宣言フェイズ（AIがブロッカーを選択中）');
+        render();
+        setTimeout(() => { aiDeclareBlockers(); resolveCombat(); }, 800);
+      } else {
+        endCombat();
+      }
+      return;
+    }
+    endCombat();
+    return;
+  }
+
+  endTurn();
+}
+
+function startCombat() {
+  G.phase = 'combat';
+  G.combatStep = 'declare_attackers';
+  G.players[0].attackers = [];
+  G.players[0].blockers = {};
+  G.attackMode = true;
+  log('攻撃クリーチャーを選択してください（タップ可能なクリーチャー）');
+  render(); updateHints();
+}
+
+function endCombat() {
+  G.attackMode = false;
+  G.blockMode = false;
+  G.players[0].attackers = [];
+  G.players[0].blockers = {};
+  G.combatStep = null;
+  G.phase = 'main';
+  // Actually go to end turn
+  endTurn();
+}
+
+function endTurn() {
+  // Clear temp buffs
+  G.tempBuffs = [];
+  G.players.forEach(p => {
+    p.field.forEach(c => { c.tempPower = 0; c.tempToughness = 0; });
+    // Clear mana pool
+    p.mana = {R:0,U:0,G:0,W:0,B:0,C:0};
+  });
+  G.attackMode = false;
+  G.blockMode = false;
+  G.chargingMode = false;
+
+  G.activePlayer = 1 - G.activePlayer;
+  G.turn++;
+  G.landPlacedThisTurn = 0;
+  G.phase = 'untap';
+
+  const ap = G.activePlayer;
+  log(`--- ターン${G.turn} ${ap===0?'プレイヤー':'AI'}のターン ---`, 'important');
+
+  // Untap
+  untapAll(ap);
+  G.phase = 'draw';
+
+  // Place 2 lands, draw 1
+  placeLands(ap, 2);
+  if (!G.firstTurn) drawCard(ap);
+  G.firstTurn = false;
+
+  G.phase = 'main';
+  render();
+
+  if (ap === 1) {
+    // AI turn
+    setTimeout(aiTurn, 500);
+  } else {
+    log('あなたのメインフェイズ');
+    document.getElementById('btn-mulligan').disabled = true;
+    updateHints();
+  }
+}
+
+// ============================================================
+// CHARGE SYSTEM
+// ============================================================
+function startCharge() {
+  if (G.activePlayer !== 0) { log('あなたのターンではありません'); return; }
+  if (G.phase !== 'main') { log('メインフェイズ中のみチャージできます'); return; }
+  if (G.players[0].hand.length === 0) { log('手札がありません'); return; }
+
+  // Check if any land can still be charged
+  const validLands = G.players[0].lands.filter(l => !l.chargeCard);
+  if (validLands.length === 0) { log('チャージできる土地がありません'); return; }
+
+  G.chargingMode = true;
+  log('チャージするカードを手札から選んでください');
+  render(); updateHints();
+}
+
+function doCharge(handIndex) {
+  const p = G.players[0];
+  const cardId = p.hand[handIndex];
+  // Now need to pick a land
+  G.chargingMode = 'pick_land';
+  G.selectedCard = {owner: 0, zone: 'hand', index: handIndex};
+  log('土地を選んでください（チャージカードを置く）');
+  render(); updateHints();
+}
+
+function chargeToLand(landInstId) {
+  const p = G.players[0];
+  const land = p.lands.find(l => l.instanceId === landInstId);
+  if (!land || land.chargeCard) { log('その土地にはチャージできません'); return; }
+  const hi = G.selectedCard.index;
+  const cardId = p.hand[hi];
+  p.hand.splice(hi, 1);
+  land.chargeCard = cardId;
+  land.tapped = false; // untap the land
+  G.chargingMode = false;
+  G.selectedCard = null;
+  log(`チャージ: ${CARD_DB[cardId].name} を土地に置き、土地をアンタップ`);
+  render(); updateHints();
+}
+
+// ============================================================
+// COMBAT
+// ============================================================
+function toggleAttacker(instId) {
+  const p = G.players[0];
+  const creature = p.field.find(c => c.instanceId === instId);
+  if (!creature || creature.tapped || creature.sick) return;
+  const idx = p.attackers.indexOf(instId);
+  if (idx === -1) {
+    p.attackers.push(instId);
+    creature.tapped = true;
+    log(`攻撃宣言: ${CARD_DB[creature.cardId].name}`);
+  } else {
+    p.attackers.splice(idx, 1);
+    creature.tapped = false;
+  }
+  render();
+}
+
+function aiDeclareBlockers() {
+  const ai = G.players[1];
+  const player = G.players[0];
+  player.blockers = {};
+  // Simple: each untapped AI creature blocks one attacker
+  const untappedAI = ai.field.filter(c => !c.tapped);
+  let aidx = 0;
+  player.attackers.forEach(atkId => {
+    if (aidx < untappedAI.length) {
+      const blocker = untappedAI[aidx++];
+      player.blockers[atkId] = [blocker.instanceId];
+      log(`AIブロック: ${CARD_DB[blocker.cardId].name} が ${CARD_DB[player.field.find(c=>c.instanceId===atkId).cardId].name} をブロック`);
+    }
+  });
+}
+
+function resolveCombat() {
+  const player = G.players[0];
+  const ai = G.players[1];
+
+  player.attackers.forEach(atkId => {
+    const attacker = player.field.find(c => c.instanceId === atkId);
+    if (!attacker) return;
+    const atkCard = CARD_DB[attacker.cardId];
+    const atkPow = atkCard.power + (attacker.tempPower||0) + getCXBonus(0, attacker);
+    const blockers = player.blockers[atkId] || [];
+
+    if (blockers.length === 0) {
+      // Unblocked: deal damage to opponent
+      // Check OC evasion
+      const hasOC = atkCard.keywords && atkCard.keywords.includes('OC');
+      const ocActive = isOCActive(0);
+      ai.life -= atkPow;
+      showFloatDamage(atkPow, 'ai');
+      log(`${atkCard.name} が${atkPow}ダメージを与えた`, 'damage');
+    } else {
+      // Blocked
+      let totalBlockPow = 0;
+      blockers.forEach(blkId => {
+        const blocker = ai.field.find(c => c.instanceId === blkId);
+        if (!blocker) return;
+        const blkCard = CARD_DB[blocker.cardId];
+        const blkPow = blkCard.power + (blocker.tempPower||0);
+        const blkTough = blkCard.toughness + (blocker.tempToughness||0);
+
+        // Attacker deals power to each blocker
+        blocker.damage += atkPow;
+        // Blocker deals power to attacker
+        attacker.damage += blkPow;
+
+        // Deathtouch
+        const atkHasDeathtouch = atkCard.keywords && atkCard.keywords.includes('Deathtouch');
+        if (atkHasDeathtouch) {
+          const bidx = ai.field.findIndex(c => c.instanceId === blkId);
+          if (bidx !== -1) { ai.field.splice(bidx,1); ai.graveyard.push(blkCard.id||blocker.cardId); log(`Deathtouch: ${blkCard.name} が破壊された`,'damage'); }
+        } else {
+          checkCreatureDeath(1, blkId, 0);
+        }
+      });
+      checkCreatureDeath(0, atkId, 1);
+    }
+  });
+
+  checkDeath();
+  G.players[0].attackers = [];
+  G.players[0].blockers = {};
+  G.combatStep = null;
+  G.attackMode = false;
+  G.phase = 'main';
+  render();
+  setTimeout(() => endTurn(), 400);
+}
+
+function getCXBonus(player, creature) {
+  const card = CARD_DB[creature.cardId];
+  if (!card.keywords) return 0;
+  if (card.keywords.includes('CX5') && getCXValue(player) >= 5) return 2;
+  return 0;
+}
+
+function getCXValue(player) {
+  const p = G.players[player];
+  let landCount = p.lands.length;
+  let chargeCount = p.lands.filter(l => l.chargeCard).length;
+  return landCount + chargeCount;
+}
+
+function isOCActive(player) {
+  return getCXValue(player) >= 10;
+}
+
+function passPriority() {
+  if (G.stack.length > 0) {
+    resolveStack();
+  } else {
+    log('スタックは空です');
+  }
+}
+
+function resolveStack() {
+  if (G.stack.length === 0) return;
+  const item = G.stack.pop();
+  log(`スタックを解決: ${item.name}`);
+  if (item.resolve) item.resolve();
+  render();
+}
+
+// ============================================================
+// MULLIGAN
+// ============================================================
+function doMulligan() {
+  const p = G.players[0];
+  if (p.mulliganUsed) { log('マリガンは1回のみ使用できます'); return; }
+  p.mulliganUsed = true;
+  document.getElementById('btn-mulligan').disabled = true;
+
+  // Show mulligan modal - choose cards to return
+  const cards = p.hand.map((cid, i) => ({cid, i}));
+  let chosen = new Set();
+
+  const html = `
+    <p style="margin-bottom:10px; font-size:11px;">戻すカードを選択（選択したカードをデッキの底に戻し、同じ枚数ドロー）</p>
+    <div style="display:flex; flex-wrap:wrap; gap:6px;" id="mulligan-cards"></div>
+    <button onclick="confirmMulligan()" style="margin-top:10px; width:100%;">確認</button>
+  `;
+  showModal('マリガン', html);
+
+  const container = document.getElementById('mulligan-cards');
+  cards.forEach(({cid, i}) => {
+    const card = CARD_DB[cid];
+    const el = document.createElement('div');
+    el.className = `card color-${card.color}`;
+    el.style.cursor = 'pointer';
+    el.innerHTML = buildCardHTML(card);
+    el.onclick = () => {
+      if (chosen.has(i)) { chosen.delete(i); el.style.opacity = '1'; }
+      else { chosen.add(i); el.style.opacity = '0.4'; }
+      window._mulliganChosen = chosen;
+    };
+    container.appendChild(el);
+  });
+  window._mulliganHand = p.hand;
+  window._mulliganChosen = chosen;
+}
+
+function confirmMulligan() {
+  const p = G.players[0];
+  const chosen = window._mulliganChosen || new Set();
+  const count = chosen.size;
+  if (count === 0) { closeModal(); return; }
+  // Return chosen cards to deck bottom
+  const newHand = [];
+  p.hand.forEach((cid, i) => {
+    if (chosen.has(i)) { p.deck.push(cid); }
+    else { newHand.push(cid); }
+  });
+  p.hand = newHand;
+  // Shuffle deck
+  p.deck = shuffle(p.deck);
+  // Draw same count
+  for (let i = 0; i < count; i++) drawCard(0);
+  closeModal();
+  log(`マリガン: ${count}枚入れ替え`);
+  render();
+}
+
+// ============================================================
+// AI LOGIC
+// ============================================================
+function aiTurn() {
+  if (G.phase === 'ended') return;
+  const ai = G.players[1];
+  log('AIのターン...', 'important');
+
+  // Tap lands for mana
+  ai.lands.forEach(land => {
+    if (!land.tapped) tapLandForMana(1, land.instanceId);
+  });
+
+  // Play creatures/spells
+  let played = true;
+  let attempts = 0;
+  while (played && attempts < 20) {
+    played = false; attempts++;
+    // Sort hand by cost descending (play expensive cards first)
+    const playable = ai.hand.map((cid, i) => ({cid, i, card: CARD_DB[cid]}))
+      .filter(({card}) => card.type !== 'land' && canAfford(1, card.cost))
+      .sort((a,b) => totalCost(b.card.cost) - totalCost(a.card.cost));
+
+    if (playable.length > 0) {
+      const {cid, i, card} = playable[0];
+      if (card.type === 'creature' && ai.field.length < 5) {
+        payMana(1, card.cost);
+        ai.hand.splice(i, 1);
+        const inst = newInstance(cid);
+        inst.sick = true;
+        ai.field.push(inst);
+        log(`AI: ${card.name} を召喚`);
+        played = true;
+        render();
+      } else if (card.type === 'spell') {
+        aiPlaySpell(card, i);
+        played = true;
+        render();
+      }
+    }
+  }
+
+  // Attack
+  setTimeout(() => {
+    aiAttack();
+  }, 600);
+}
+
+function totalCost(cost) {
+  return Object.values(cost).reduce((a,b)=>a+b,0);
+}
+
+function aiPlaySpell(card, handIndex) {
+  const ai = G.players[1];
+  payMana(1, card.cost);
+  ai.hand.splice(handIndex, 1);
+  ai.graveyard.push(card.id);
+
+  if (card.effect === 'damage3') {
+    // Target player with most life or lowest
+    G.players[0].life -= 3;
+    showFloatDamage(3, 'player');
+    log(`AI: ${card.name} でプレイヤーに3ダメージ`, 'damage');
+  } else if (card.effect === 'heal5') {
+    ai.life += 5;
+    log(`AI: ${card.name} でライフ5回復`, 'heal');
+  } else if (card.effect === 'ritual') {
+    ai.mana.B += 3;
+    log(`AI: ダークリチュアル、BBB追加`);
+  } else {
+    log(`AI: ${card.name} を使用`);
+  }
+  checkDeath();
+}
+
+function aiAttack() {
+  if (G.phase === 'ended') return;
+  const ai = G.players[1];
+  const player = G.players[0];
+  const attackers = ai.field.filter(c => !c.tapped && !c.sick);
+  if (attackers.length === 0) { setTimeout(() => endTurn(), 300); return; }
+
+  log('AI攻撃！');
+  attackers.forEach(c => {
+    c.tapped = true;
+    const card = CARD_DB[c.cardId];
+    const pow = card.power + (c.tempPower||0) + getCXBonus(1, c);
+    // Check for blockers
+    const blockers = player.field.filter(b => !b.tapped);
+    if (blockers.length > 0) {
+      const blocker = blockers[0]; // Simple: first available blocker
+      const blkCard = CARD_DB[blocker.cardId];
+      log(`${card.name} が攻撃 -> ${blkCard.name} がブロック`);
+      blocker.damage += pow;
+      c.damage += blkCard.power + (blocker.tempPower||0);
+      // Deathtouch
+      if (card.keywords && card.keywords.includes('Deathtouch')) {
+        const bidx = player.field.findIndex(x=>x.instanceId===blocker.instanceId);
+        if (bidx !== -1) { player.field.splice(bidx,1); player.graveyard.push(blocker.cardId); log(`Deathtouch: ${blkCard.name} 破壊`,'damage'); }
+      } else {
+        checkCreatureDeath(0, blocker.instanceId, 1);
+      }
+      checkCreatureDeath(1, c.instanceId, 0);
+    } else {
+      // Direct damage
+      player.life -= pow;
+      showFloatDamage(pow, 'player');
+      log(`${card.name} が${pow}ダメージ！`, 'damage');
+    }
+  });
+  checkDeath();
+  render();
+  setTimeout(() => endTurn(), 600);
+}
+
+// ============================================================
+// RENDERING
+// ============================================================
+function render() {
+  if (G.phase === 'ended' && !G._endedRendered) {
+    G._endedRendered = true;
+  }
+  renderHand(0);
+  renderHand(1);
+  renderField(0);
+  renderField(1);
+  renderLands(0);
+  renderLands(1);
+  renderInfoBar();
+  renderStack();
+  updateCounts();
+}
+
+function buildCardHTML(card, inst) {
+  const pt = card.type === 'creature' ? `<div class="card-pt">${(card.power+(inst?.tempPower||0))+(inst?getCXBonus(inst.owner||0,inst):0)}/${card.toughness+(inst?.tempToughness||0)}</div>` : '';
+  const costStr = card.cost ? `<div class="card-cost">${costToString(card.cost)}</div>` : '';
+  const keywords = card.keywords && card.keywords.length ? `<div class="card-keywords">${card.keywords.join(', ')}</div>` : '';
+  const dmg = inst && inst.damage > 0 ? `<div class="damage-counter">${inst.damage}</div>` : '';
+  const chg = inst && inst.chargeCard ? `<div class="charge-indicator">CG</div>` : '';
+  return `
+    <div class="card-art">${card.icon}</div>
+    <div class="card-bottom">
+      <div class="card-name">${card.name}</div>
+      <div class="card-type-line">${card.type === 'creature' ? card.subtype : card.type}</div>
+      ${keywords}
+      ${pt}
+    </div>
+    ${costStr}${dmg}${chg}
+  `;
+}
+
+function renderHand(player) {
+  const zone = document.getElementById(player === 0 ? 'player-hand' : 'ai-hand');
+  zone.innerHTML = '';
+  const p = G.players[player];
+
+  p.hand.forEach((cardId, i) => {
+    const card = CARD_DB[cardId];
+    const el = document.createElement('div');
+    if (player === 1) {
+      el.className = 'card face-down';
+    } else {
+      el.className = `card color-${card.color}`;
+      // Determine if playable
+      const isMain = G.phase === 'main' && G.activePlayer === 0;
+      const isQuick = card.keywords && card.keywords.includes('Quick');
+      const affordable = card.type !== 'land' && canAfford(0, card.cost);
+      if ((isMain || isQuick) && affordable) el.classList.add('playable');
+      el.innerHTML = buildCardHTML(card);
+      el.onclick = () => handleHandClick(player, i);
+      el.title = card.text || card.name;
+    }
+    el.style.animation = 'slideIn 0.2s ease';
+    zone.appendChild(el);
+  });
+}
+
+function renderField(player) {
+  const zone = document.getElementById(player === 0 ? 'player-field' : 'ai-field');
+  zone.innerHTML = '';
+  const p = G.players[player];
+
+  for (let slot = 0; slot < 5; slot++) {
+    const slotEl = document.createElement('div');
+    slotEl.className = 'field-slot';
+    if (slot < p.field.length) {
+      const inst = p.field[slot];
+      const card = CARD_DB[inst.cardId];
+      const el = document.createElement('div');
+      el.className = `card color-${card.color}`;
+      if (inst.tapped) el.classList.add('tapped');
+      // Attack mode highlights
+      if (player === 0 && G.attackMode && G.combatStep === 'declare_attackers') {
+        if (!inst.tapped && !inst.sick) el.classList.add('attackable');
+        if (G.players[0].attackers.includes(inst.instanceId)) el.classList.add('selected');
+      }
+      // Target mode
+      if (G.targetMode && G.targetMode.type === 'creature') {
+        el.classList.add('targetable');
+      }
+      if (G.targetMode && G.targetMode.type === 'any') {
+        el.classList.add('targetable');
+      }
+      el.innerHTML = buildCardHTML(card, inst);
+      el.onclick = () => handleFieldClick(player, inst.instanceId);
+      slotEl.appendChild(el);
+    } else {
+      slotEl.textContent = '';
+    }
+    zone.appendChild(slotEl);
+  }
+}
+
+function renderLands(player) {
+  const zone = document.getElementById(player === 0 ? 'player-lands' : 'ai-lands');
+  zone.innerHTML = '';
+  const p = G.players[player];
+
+  p.lands.forEach(land => {
+    const card = CARD_DB[land.cardId];
+    const el = document.createElement('div');
+    el.className = `land-card color-${card.color}`;
+    if (land.tapped) el.classList.add('tapped');
+    if (G.chargingMode === 'pick_land' && player === 0 && !land.chargeCard) el.classList.add('selected');
+    el.innerHTML = `${card.icon}<div class="land-name">${card.name}</div>`;
+    if (land.chargeCard) {
+      const pip = document.createElement('div');
+      pip.className = 'charge-pip';
+      pip.textContent = '★';
+      pip.title = `チャージ: ${CARD_DB[land.chargeCard].name}`;
+      el.appendChild(pip);
+    }
+    el.onclick = () => handleLandClick(player, land.instanceId);
+    zone.appendChild(el);
+  });
+}
+
+function renderInfoBar() {
+  const p0 = G.players[0];
+  const p1 = G.players[1];
+
+  const lifeEl = document.getElementById('player-life');
+  lifeEl.textContent = `❤️ ${p0.life}`;
+  lifeEl.className = `life-display${p0.life <= 5 ? ' low' : ''}`;
+
+  const aiLifeEl = document.getElementById('ai-life');
+  aiLifeEl.textContent = `❤️ ${p1.life}`;
+  aiLifeEl.className = `life-display${p1.life <= 5 ? ' low' : ''}`;
+
+  const phases = { untap:'アンタップ', draw:'ドロー', main:'メイン', combat:'戦闘', end:'エンド', ended:'終了' };
+  document.getElementById('phase-name').textContent = phases[G.phase] || G.phase;
+
+  const cx = getCXValue(0);
+  document.getElementById('cx-value').textContent = cx;
+  const oc = isOCActive(0);
+  const ocEl = document.getElementById('oc-status');
+  ocEl.textContent = `OC: ${oc ? '✓' : '✗'}`;
+  ocEl.style.background = oc ? '#2a4a2a' : '#4a1a2a';
+  ocEl.style.color = oc ? '#44ff88' : '#ff88aa';
+
+  document.getElementById('turn-indicator').textContent = `ターン ${G.turn} (${G.activePlayer===0?'自分':'AI'})`;
+
+  // Mana display
+  const manaEl = document.getElementById('mana-display');
+  manaEl.innerHTML = '';
+  const colors = ['R','U','G','W','B','C'];
+  colors.forEach(c => {
+    const amt = p0.mana[c] || 0;
+    if (amt > 0) {
+      for (let i = 0; i < amt; i++) {
+        const pip = document.createElement('div');
+        pip.className = `mana-pip mana-${c}`;
+        pip.textContent = c;
+        manaEl.appendChild(pip);
+      }
+    }
+  });
+}
+
+function renderStack() {
+  const el = document.getElementById('stack-items');
+  el.innerHTML = '';
+  G.stack.forEach(item => {
+    const div = document.createElement('div');
+    div.className = 'stack-item';
+    div.textContent = item.name;
+    el.appendChild(div);
+  });
+}
+
+function updateCounts() {
+  document.getElementById('player-deck-count').textContent = G.players[0].deck.length;
+  document.getElementById('player-land-deck-count').textContent = G.players[0].landDeck.length;
+  document.getElementById('ai-deck-count').textContent = G.players[1].deck.length;
+  document.getElementById('ai-land-deck-count').textContent = G.players[1].landDeck.length;
+}
+
+// ============================================================
+// CLICK HANDLERS
+// ============================================================
+function handleHandClick(player, index) {
+  if (player !== 0) return; // Can't click AI hand
+  if (G.activePlayer !== 0 && G.phase !== 'ended') {
+    // Allow quick spells
+    const cardId = G.players[0].hand[index];
+    const card = CARD_DB[cardId];
+    if (!(card.keywords && card.keywords.includes('Quick'))) {
+      log('AIのターン中は使用できません（Quickのみ可能）');
+      return;
+    }
+  }
+
+  if (G.chargingMode === true) {
+    doCharge(index);
+    return;
+  }
+
+  playCardFromHand(player, index);
+}
+
+function handleFieldClick(player, instId) {
+  // Target mode
+  if (G.targetMode) {
+    if (G.targetMode.type === 'creature' || G.targetMode.type === 'any') {
+      G.targetMode.callback({type:'creature', player, instId});
+      return;
+    }
+  }
+
+  // Attack mode (player's creatures)
+  if (player === 0 && G.attackMode && G.combatStep === 'declare_attackers') {
+    toggleAttacker(instId);
+    return;
+  }
+
+  // Tap AI creature to attack it (direct attack)
+  if (player === 1 && G.targetMode && G.targetMode.type === 'any') {
+    G.targetMode.callback({type:'creature', player:1, instId});
+    return;
+  }
+
+  // Activate ability: ice_mage
+  if (player === 0) {
+    const p = G.players[0];
+    const inst = p.field.find(c => c.instanceId === instId);
+    if (!inst) return;
+    const card = CARD_DB[inst.cardId];
+    if (card.id === 'ice_mage' && !inst.tapped) {
+      if (canAfford(0, {U:2})) {
+        payMana(0, {U:2});
+        inst.tapped = true;
+        // Target an opponent creature
+        G.targetMode = {type:'creature', callback: (tgt) => {
+          const tc = G.players[tgt.player].field.find(c=>c.instanceId===tgt.instId);
+          if (tc) tc.tapped = true;
+          log('アイスメイジ: クリーチャーをタップ');
+          G.targetMode = null;
+          render(); updateHints();
+        }};
+        log('タップするクリーチャーを選択してください');
+        render(); updateHints();
+      }
+    }
+    if (card.id === 'dark_sorcerer' && !inst.tapped && G.activePlayer === 0) {
+      if (canAfford(0, {B:1})) {
+        payMana(0, {B:1});
+        inst.tapped = true;
+        G.players[1].life -= 1;
+        showFloatDamage(1, 'ai');
+        log('ダークソーサラー: 対戦相手に1ダメージ', 'damage');
+        checkDeath();
+        render(); updateHints();
+      }
+    }
+  }
+}
+
+function handleLandClick(player, instId) {
+  if (G.chargingMode === 'pick_land' && player === 0) {
+    chargeToLand(instId);
+    return;
+  }
+  if (player !== 0) return;
+  if (G.targetMode) return;
+  // Tap for mana
+  if (G.activePlayer === 0) {
+    tapLandForMana(0, instId);
+  }
+}
+
+// Direct damage target on life display
+document.getElementById('ai-life').addEventListener('click', () => {
+  if (G.targetMode && G.targetMode.type === 'any') {
+    G.targetMode.callback({type:'player', player:1});
+  }
+});
+
+// ============================================================
+// FLOATING DAMAGE
+// ============================================================
+function showFloatDamage(amount, target) {
+  const el = document.createElement('div');
+  el.className = 'float-damage';
+  el.style.color = '#ff4444';
+  el.textContent = `-${amount}`;
+  const zone = document.getElementById(target === 'player' ? 'player-field' : 'ai-field');
+  const rect = zone.getBoundingClientRect();
+  el.style.left = (rect.left + rect.width/2) + 'px';
+  el.style.top = (rect.top + rect.height/2) + 'px';
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 1200);
+}
+
+// ============================================================
+// MODAL
+// ============================================================
+function showModal(title, content) {
+  document.getElementById('modal-title').textContent = title;
+  document.getElementById('modal-content').innerHTML = content;
+  document.getElementById('modal-cards').innerHTML = '';
+  document.getElementById('modal').classList.add('active');
+}
+function closeModal() {
+  document.getElementById('modal').classList.remove('active');
+}
+
+// ============================================================
+// HINTS
+// ============================================================
+function clearTargetMode() {
+  if (G.targetMode) {
+    G.targetMode = null;
+    log('対象選択をキャンセルしました');
+  }
+  G.chargingMode = false;
+  G.selectedCard = null;
+}
+
+function updateHints() {
+  const hint = document.getElementById('action-hint');
+  if (G.targetMode) {
+    hint.textContent = '対象を選択中...（キャンセルはフェイズ終了ボタン）';
+    hint.style.color = '#ffcc00';
+  } else if (G.chargingMode === true) {
+    hint.textContent = '手札からチャージするカードを選択';
+    hint.style.color = '#ffaa00';
+  } else if (G.chargingMode === 'pick_land') {
+    hint.textContent = '土地を選択してチャージ';
+    hint.style.color = '#ffaa00';
+  } else if (G.attackMode && G.combatStep === 'declare_attackers') {
+    hint.textContent = '攻撃クリーチャーを選択→フェイズ終了で攻撃確定';
+    hint.style.color = '#ff8800';
+  } else if (G.phase === 'main' && G.activePlayer === 0) {
+    hint.textContent = '土地をクリックでマナ、手札をクリックでプレイ';
+    hint.style.color = '#6688ff';
+  } else if (G.activePlayer === 1) {
+    hint.textContent = 'AIのターン...';
+    hint.style.color = '#888';
+  } else {
+    hint.textContent = '';
+  }
+
+  const btnCharge = document.getElementById('btn-charge');
+  btnCharge.disabled = G.activePlayer !== 0 || G.phase !== 'main';
+  const btnEnd = document.getElementById('btn-end-phase');
+  btnEnd.disabled = G.activePlayer !== 0 || G.phase === 'ended';
+}
+
+// ============================================================
+// LOG
+// ============================================================
+function log(msg, type) {
+  const el = document.getElementById('log');
+  const p = document.createElement('p');
+  if (type) p.className = type;
+  p.textContent = msg;
+  el.appendChild(p);
+  el.scrollTop = el.scrollHeight;
+}
+
+// ============================================================
+// INIT
+// ============================================================
+initGame();
+</script>
+</body>
+</html>
