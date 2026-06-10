@@ -439,34 +439,25 @@ button.danger:hover { background: #6a2a2a; }
 
 /* ── 2. キーワードツールチップ ── */
 .kw-tip {
-  position: relative;
   cursor: help;
   color: #ffcc44;
   border-bottom: 1px dotted #ffcc44;
 }
-.kw-tip::after {
-  content: attr(data-def);
-  position: absolute;
-  bottom: 120%;
-  left: 50%;
-  transform: translateX(-50%);
+#kw-tooltip {
+  position: fixed;
   background: #1a1a3a;
   border: 1px solid #4444aa;
   color: #ccccff;
-  font-size: 10px;
-  padding: 4px 8px;
+  font-size: 11px;
+  padding: 5px 10px;
   border-radius: 5px;
-  white-space: nowrap;
   pointer-events: none;
-  opacity: 0;
-  transition: opacity 0.15s;
-  z-index: 500;
+  z-index: 9999;
   max-width: 220px;
   white-space: normal;
-  width: max-content;
-  max-width: 200px;
+  display: none;
+  line-height: 1.4;
 }
-.kw-tip:hover::after { opacity: 1; }
 
 /* ── 4. スタック常時表示 ── */
 #stack-area {
@@ -674,6 +665,9 @@ button.danger:hover { background: #6a2a2a; }
 <!-- Arrow Overlay -->
 <svg id="arrow-overlay"></svg>
 
+<!-- Keyword Tooltip -->
+<div id="kw-tooltip"></div>
+
 <!-- Phase Flash -->
 <div id="phase-flash"></div>
 
@@ -731,8 +725,8 @@ const CARD_DB = {
   'bastian': {
     id:'bastian', name:'絶対守護 バスティオン', type:'creature', color:'W',
     cost:{W:4}, power:3, toughness:2, subtype:'人間(戦士)', icon:'🏰',
-    keywords:['格闘','警戒','CX6','CX8'], text:'格闘、警戒\nCX6 ETB: 対戦相手クリーチャーに3ダメージ\nCX8: このクリーチャーは+3/+3(永続)\nOC: タップ中もブロック可能',
-    kakutou:true, vigilance:true, etb:'cx6damage3opponent', cx8Buff:true, ocBlockWhileTapped:true
+    keywords:['格闘','CX6','CX8'], text:'格闘\nETB: 対戦相手クリーチャー1体に2ダメージ\nCX6 ETB追加: 対戦相手クリーチャーに3ダメージ\nCX8: このクリーチャーは+3/+3(永続)\nOC: タップ中もブロック可能',
+    kakutou:true, vigilance:false, etb:'damage2opponent_always_cx6damage3', cx8Buff:true, ocBlockWhileTapped:true
   },
   'arestia': {
     id:'arestia', name:'戦乙女 アレスティア', type:'creature', color:'W',
@@ -910,16 +904,23 @@ function showStartMulligan() {
     container.innerHTML = '';
     p.hand.forEach((cid, i) => {
       const card = CARD_DB[cid];
+      const wrap = document.createElement('div');
+      wrap.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;';
       const el = document.createElement('div');
       el.className = `card color-${card.color}`;
       el.style.cursor = 'pointer';
       el.innerHTML = buildCardHTML(card);
-      el.onclick = () => {
-        if (chosen.has(i)) { chosen.delete(i); el.style.opacity = '1'; }
-        else { chosen.add(i); el.style.opacity = '0.4'; }
+      const info = document.createElement('div');
+      info.style.cssText = 'width:84px;font-size:9px;color:#ccc;line-height:1.4;text-align:left;background:#1a1a2a;border:1px solid #333;border-radius:4px;padding:4px;white-space:pre-wrap;';
+      info.textContent = (card.text || '（テキストなし）');
+      wrap.appendChild(el);
+      wrap.appendChild(info);
+      wrap.onclick = () => {
+        if (chosen.has(i)) { chosen.delete(i); wrap.style.opacity = '1'; }
+        else { chosen.add(i); wrap.style.opacity = '0.4'; }
         document.getElementById('mulligan-count').textContent = chosen.size;
       };
-      container.appendChild(el);
+      container.appendChild(wrap);
     });
   };
 
@@ -1327,23 +1328,33 @@ function fireETB(player, instanceId) {
         log(`AI ${card.name} ETB: 3ダメージ`, 'damage');
       }
     }
-  } else if (card.etb === 'cx6damage3opponent') {
-    // Bastian CX6 ETB
-    if (getCXValue(player) >= 6) {
-      if (player === 0) {
+  } else if (card.etb === 'damage2opponent_always_cx6damage3') {
+    // Bastian ETB: always 2 damage to one opponent creature; CX6 adds 3 more
+    const hasCX6 = getCXValue(player) >= 6;
+    if (player === 0) {
+      const oppField = G.players[opp].field;
+      if (oppField.length > 0) {
         G.targetMode = { type:'opponentCreature', callback:(tgt) => {
-          applyDamageToCreature(opp, tgt.instId, 3, player);
-          log(`${card.name} CX6 ETB: 3ダメージ`, 'damage');
+          applyDamageToCreature(opp, tgt.instId, 2, player);
+          log(`${card.name} ETB: 2ダメージ`, 'damage');
+          if (hasCX6) {
+            applyDamageToCreature(opp, tgt.instId, 3, player);
+            log(`${card.name} CX6 ETB追加: さらに3ダメージ`, 'damage');
+          }
           G.targetMode = null; render(); updateHints();
         }};
-        log(`${card.name} CX6 ETB: 対象を選択（3ダメージ）`);
+        log(`${card.name} ETB: 対象を選択（2ダメージ${hasCX6 ? ' +CX6: 3ダメージ' : ''}）`);
         render(); updateHints();
-      } else {
-        const targets = G.players[opp].field;
-        if (targets.length > 0) {
-          const tgt = targets.reduce((a,b)=>getEffectivePower(opp,b)>getEffectivePower(opp,a)?b:a);
+      }
+    } else {
+      const targets = G.players[opp].field;
+      if (targets.length > 0) {
+        const tgt = targets.reduce((a,b)=>getEffectivePower(opp,b)>getEffectivePower(opp,a)?b:a);
+        applyDamageToCreature(opp, tgt.instanceId, 2, player);
+        log(`AI ${card.name} ETB: 2ダメージ`, 'damage');
+        if (hasCX6) {
           applyDamageToCreature(opp, tgt.instanceId, 3, player);
-          log(`AI ${card.name} CX6 ETB: 3ダメージ`, 'damage');
+          log(`AI ${card.name} CX6 ETB: さらに3ダメージ`, 'damage');
         }
       }
     }
@@ -2074,16 +2085,23 @@ function doMulligan() {
   const container = document.getElementById('mulligan-cards');
   cards.forEach(({cid, i}) => {
     const card = CARD_DB[cid];
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;';
     const el = document.createElement('div');
     el.className = `card color-${card.color}`;
     el.style.cursor = 'pointer';
     el.innerHTML = buildCardHTML(card);
-    el.onclick = () => {
-      if (chosen.has(i)) { chosen.delete(i); el.style.opacity = '1'; }
-      else { chosen.add(i); el.style.opacity = '0.4'; }
+    const info = document.createElement('div');
+    info.style.cssText = 'width:84px;font-size:9px;color:#ccc;line-height:1.4;text-align:left;background:#1a1a2a;border:1px solid #333;border-radius:4px;padding:4px;white-space:pre-wrap;';
+    info.textContent = (card.text || '（テキストなし）');
+    wrap.appendChild(el);
+    wrap.appendChild(info);
+    wrap.onclick = () => {
+      if (chosen.has(i)) { chosen.delete(i); wrap.style.opacity = '1'; }
+      else { chosen.add(i); wrap.style.opacity = '0.4'; }
       window._mulliganChosen = chosen;
     };
-    container.appendChild(el);
+    container.appendChild(wrap);
   });
   window._mulliganHand = p.hand;
   window._mulliganChosen = chosen;
@@ -3165,6 +3183,31 @@ document.addEventListener('contextmenu', function(e) {
     showCardDetail(card.dataset.cardId);
   }
 }, true);
+
+// ============================================================
+// KEYWORD TOOLTIP (fixed overlay, avoids overflow:hidden clipping)
+// ============================================================
+(function() {
+  const tip = document.getElementById('kw-tooltip');
+  document.addEventListener('mouseover', e => {
+    const el = e.target.closest('.kw-tip');
+    if (!el) { tip.style.display = 'none'; return; }
+    tip.textContent = el.dataset.def || el.textContent;
+    tip.style.display = 'block';
+    const r = el.getBoundingClientRect();
+    let left = r.left + r.width / 2 - tip.offsetWidth / 2;
+    let top = r.top - tip.offsetHeight - 6;
+    if (left < 4) left = 4;
+    if (left + tip.offsetWidth > window.innerWidth - 4) left = window.innerWidth - tip.offsetWidth - 4;
+    if (top < 4) top = r.bottom + 6;
+    tip.style.left = left + 'px';
+    tip.style.top = top + 'px';
+  });
+  document.addEventListener('mouseout', e => {
+    if (!e.target.closest('.kw-tip')) tip.style.display = 'none';
+  });
+  document.addEventListener('scroll', () => { tip.style.display = 'none'; }, true);
+})();
 
 // ============================================================
 // INIT
