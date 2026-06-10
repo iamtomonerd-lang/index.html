@@ -2032,8 +2032,10 @@ function activateChargedLand(player, instId) {
   const opp = 1-player;
 
   if (landCard.chargedAbility === 'look3keep1white') {
-    // Cost: W3 (1W+3C)
-    if (!canAfford(player, {W:1,C:3})) { log('マナ不足 (W+CCC)'); return; }
+    // Cost: タップ(この土地) + W3
+    if (land.tapped) { log(`${landCard.name}: タップ済みのため起動できません`); return; }
+    if (!canAfford(player, {W:1,C:3})) { log('マナ不足 (白＋無色3)'); return; }
+    land.tapped = true;
     payMana(player, {W:1,C:3});
     doLook3Keep1White(player);
     log(`${landCard.name}: 3ルック1(白)`);
@@ -2847,8 +2849,8 @@ function renderField(player, zoneId) {
       // 攻撃可能ハイライト (メインフェイズ)
       if (player === 0 && G.activePlayer === 0 && G.phase === 'main' && !G.kakutouTargetMode && !G.targetMode) {
         if (canCreatureAttack(0, inst)) el.classList.add('attackable');
-        // 格闘ハイライト（バスティオン: アンタップ＆非sick）
-        if (card.id === 'bastian' && card.kakutou && !inst.tapped && !inst.sick
+        // 格闘ハイライト（バスティオン: 出たターンのみ、アンタップ）
+        if (card.id === 'bastian' && card.kakutou && inst.entryTurn === G.turn && !inst.tapped
             && G.players[1].field.some(c => !CARD_DB[c.cardId].flying || card.flying)) {
           el.classList.add('attackable');
         }
@@ -3157,8 +3159,8 @@ function handleFieldClick(player, instId) {
       return;
     }
 
-    // バスティオン 格闘: タップして相手クリーチャーと戦闘（メインフェイズ、アンタップ状態）
-    if (card.id === 'bastian' && card.kakutou && !inst.tapped && !inst.sick) {
+    // バスティオン 格闘: 出たターンのみ起動可（タップして相手クリーチャーと戦闘）
+    if (card.id === 'bastian' && card.kakutou && inst.entryTurn === G.turn && !inst.tapped) {
       const opp = 1;
       const reachable = G.players[opp].field.filter(c => !CARD_DB[c.cardId].flying || card.flying);
       if (reachable.length === 0) { log('バスティオン 格闘: 対象クリーチャーがいません'); return; }
@@ -3202,11 +3204,14 @@ function handleLandClick(player, instId) {
   // 起動効果はすべてクイック: フェイズ・ターン問わずタップ可能
   if (land.chargeCard && landCard.chargedAbility) {
     if (!land.tapped) {
-      // Show choice: mana or special
+      // Show choice: mana or special ability
+      // look3keep1white costs tap+W3, so show ability as available
+      const canActivate = landCard.chargedAbility !== 'look3keep1white' || canAfford(0, {W:1,C:3});
+      const abilityLabel = landCard.text.split('\n').find(l => l.includes('起動') && l.includes('チャージ')) || landCard.text.split('\n')[1] || '特殊能力';
       const html = `
         <p style="margin-bottom:10px;">${landCard.name} の使用方法を選択:</p>
         <button onclick="closeModal(); tapLandForMana(0,${instId}); render();" style="width:100%;margin-bottom:8px;padding:8px;">マナを追加 (${landCard.produces||'C'})</button>
-        <button onclick="closeModal(); activateChargedLand(0,${instId});" style="width:100%;padding:8px;">チャージ能力: ${landCard.text.split('\n')[1]||'特殊能力'}</button>
+        <button onclick="closeModal(); activateChargedLand(0,${instId});" style="width:100%;padding:8px;${canActivate?'':'opacity:0.4;cursor:not-allowed;'}">${abilityLabel}</button>
       `;
       showModal(landCard.name, html);
       return;
@@ -3842,7 +3847,8 @@ class SimGame {
       const lc = CARD_DB[land.cardId];
       if (!lc.chargedAbility) continue;
       if (lc.chargedAbility === 'look3keep1white') {
-        if (!this.canAfford(p,{W:1,C:3})) continue;
+        if (land.tapped || !this.canAfford(p,{W:1,C:3})) continue;
+        land.tapped = true;
         this.payMana(p,{W:1,C:3});
         if (p.deck.length) p.hand.push(p.deck.shift());
       } else if (lc.chargedAbility === 'kaizouReturn') {
