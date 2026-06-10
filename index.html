@@ -965,6 +965,7 @@ function playCardFromHand(player, handIndex) {
   payMana(player, card.cost);
   p.hand.splice(handIndex, 1);
   const inst = newInstance(cardId);
+  inst.sick = true;
   inst.entryTurn = G.turn;
   p.field.push(inst);
   log(`${card.name} を召喚 (${costToString(card.cost)})`, 'important');
@@ -1325,9 +1326,15 @@ function endPhase() {
 }
 
 function canCreatureAttack(player, inst) {
+  const card = CARD_DB[inst.cardId];
   if (G.cantAttackPermanent.has(inst.instanceId)) return false;
   if (inst.tapped) return false;
-  return true;
+  if (!inst.sick) return true;
+  // 格闘: 出たターンは状態問わず相手クリーチャーにのみ攻撃できる
+  if (card.kakutou && inst.entryTurn === G.turn) {
+    return G.players[1-player].field.length > 0;
+  }
+  return false;
 }
 
 function kakutouTargetsOnly(player) {
@@ -1854,6 +1861,7 @@ function aiTurn() {
         payMana(1, card.cost);
         ai.hand.splice(i, 1);
         const inst = newInstance(cid);
+        inst.sick = true;
         inst.entryTurn = G.turn;
         ai.field.push(inst);
         log(`AI: ${card.name} を召喚`);
@@ -1921,6 +1929,12 @@ function aiAttack() {
     const card = CARD_DB[c.cardId];
     if (G.cantAttackPermanent.has(c.instanceId)) return;
     if (c.tapped && !card.vigilance) return;
+    if (c.sick) {
+      if (card.kakutou && c.entryTurn === G.turn && player.field.length > 0) {
+        attackerInsts.push(c);
+      }
+      return;
+    }
     attackerInsts.push(c);
   });
 
@@ -2423,8 +2437,8 @@ function handleLandClick(player, instId) {
 
   const landCard = CARD_DB[land.cardId];
 
-  // If land has charged ability and is charged, show choice: tap for mana or use ability
-  if (land.chargeCard && landCard.chargedAbility && G.activePlayer === 0 && G.phase === 'main') {
+  // 起動効果はすべてクイック: フェイズ・ターン問わずタップ可能
+  if (land.chargeCard && landCard.chargedAbility) {
     if (!land.tapped) {
       // Show choice: mana or special
       const html = `
@@ -2437,10 +2451,8 @@ function handleLandClick(player, instId) {
     }
   }
 
-  // Tap for mana
-  if (G.activePlayer === 0) {
-    tapLandForMana(0, instId);
-  }
+  // Tap for mana (Quick: any time)
+  tapLandForMana(0, instId);
 }
 
 // Direct damage target on life display
