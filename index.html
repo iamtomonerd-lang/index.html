@@ -2447,6 +2447,7 @@ function continueAIAttack() {
   G.selectedBlockerToAssign = null;
   log(`--- ${card.name} に対してブロッカーを宣言（任意）→「ブロック確定」 ---`, 'important');
   render(); updateHints();
+}
 
 function resolveAICombat() {
   if (G.phase === 'ended') return;
