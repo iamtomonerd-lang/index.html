@@ -1928,10 +1928,13 @@ function resolveSingleCombat(atkPlayer, atkInstId, kakutouTargetId, blockerInstI
 }
 
 function endTurn() {
-  // Clear temp buffs
+  // Clear temp buffs and any leftover modes
   G.tempBuffs = [];
   G.blockDrawTrigger = false;
   G.arestiaBuffActive = false;
+  G.targetMode = null;
+  G.kakutouTargetMode = false;
+  G.pendingKakutouInstId = null;
   G.players.forEach(p => {
     p.field.forEach(c => { c.tempPower = 0; c.tempToughness = 0; });
     p.mana = {R:0,U:0,G:0,W:0,B:0,C:0};
