@@ -1086,9 +1086,13 @@ function playCardFromHand(player, handIndex) {
   const inMain = G.phase === 'main';
   const isQuick = card.keywords && card.keywords.includes('Quick');
 
-  if (!isMyTurn && !isQuick) { log('あなたのターンではありません'); return; }
-  if (!inMain && !isQuick) { log('メインフェイズ以外ではカードをプレイできません'); return; }
-  if (G.combatStep && !isQuick) { log('戦闘フェイズ中はプレイできません'); return; }
+  const inPriorityWindow = G.awaitingPriority;
+  // ターンプレイヤーは優先権ウィンドウ中も通常通り使える
+  // 非ターンプレイヤーはQuickのみ
+  if (!isMyTurn && !isQuick) { log('非ターンプレイヤーはQuickのみ使用できます'); return; }
+  // メインフェイズ外では優先権ウィンドウ中のみ許可（ターンプレイヤーは何でも、非ターンはQuick）
+  if (!inMain && !isQuick && !inPriorityWindow) { log('メインフェイズ以外ではカードをプレイできません'); return; }
+  if (!inMain && !isQuick && !isMyTurn) { log('非ターンプレイヤーはQuickのみ使用できます'); return; }
   // 非ターンプレイヤーはQuickのみスタックに積める
   if (G.stack.length > 0 && !isMyTurn && !isQuick) { log('スタック処理中は唱えられません（非ターンプレイヤーはQuickのみ対応可）'); return; }
 
@@ -1732,13 +1736,17 @@ function endTurn() {
   G.phase = 'main';
   render();
 
-  if (ap === 1) {
-    setTimeout(aiTurn, 500);
-  } else {
-    log('あなたのメインフェイズ');
-    document.getElementById('btn-mulligan').disabled = true;
-    updateHints();
-  }
+  // メインフェイズ開始前に非ターンプレイヤーへ優先権
+  const nonTurn = 1 - ap;
+  openPriorityWindow(nonTurn, () => {
+    if (ap === 1) {
+      setTimeout(aiTurn, 300);
+    } else {
+      log('あなたのメインフェイズ');
+      document.getElementById('btn-mulligan').disabled = true;
+      updateHints();
+    }
+  });
 }
 
 // ============================================================
@@ -2537,8 +2545,14 @@ function renderHand(player) {
       const isMain = G.phase === 'main' && G.activePlayer === 0;
       const isQuick = card.keywords && card.keywords.includes('Quick');
       const affordable = card.type !== 'land' && canAfford(0, card.cost);
-      const inPriorityWindow = G.awaitingPriority && G.priorityFor === 0;
-      if ((isMain || isQuick || (inPriorityWindow && isQuick)) && affordable) el.classList.add('playable');
+      const inPriorityWindow = G.awaitingPriority;
+      // ターンプレイヤーは優先権ウィンドウ中も通常カード使用可; 非ターンはQuickのみ
+      const canPlay = affordable && (
+        isMain ||
+        isQuick ||
+        (inPriorityWindow && G.activePlayer === 0) // player is turn player during priority window
+      );
+      if (canPlay) el.classList.add('playable');
       el.innerHTML = buildCardHTML(card);
       el.onclick = () => handleHandClick(player, i);
       el.title = card.text || card.name;
@@ -2936,8 +2950,13 @@ function updateHints() {
     hint.textContent = '光るクリーチャーをクリックして1体ずつ攻撃できます';
     hint.style.color = '#ff8800';
   } else if (G.awaitingPriority && G.priorityFor === 0) {
-    hint.textContent = '⚡ 対応できます: Quickスペルを使用するか、優先権パスしてください';
+    // Player is non-turn player: Quick only
+    hint.textContent = '⚡ 優先権: Quickスペルを使用できます（優先権パスで続行）';
     hint.style.color = '#ffcc44';
+  } else if (G.awaitingPriority && G.activePlayer === 0 && G.priorityFor === 1) {
+    // Player is turn player, AI has priority: player can still play any card
+    hint.textContent = '⚡ 優先権ウィンドウ中: 手札のカードも使用できます（AIが応答中）';
+    hint.style.color = '#aaddff';
   } else if (G.phase === 'main' && G.activePlayer === 0) {
     hint.textContent = '土地をクリックでマナ、手札をクリックでプレイ';
     hint.style.color = '#6688ff';
