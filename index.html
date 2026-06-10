@@ -1080,6 +1080,7 @@ function playCardFromHand(player, handIndex) {
   if (!isMyTurn && !isQuick) { log('あなたのターンではありません'); return; }
   if (!inMain && !isQuick) { log('メインフェイズ以外ではカードをプレイできません'); return; }
   if (G.combatStep && !isQuick) { log('戦闘フェイズ中はプレイできません'); return; }
+  if (G.stack.length > 0) { log('スタック処理中は使用できません（優先権パスで解決してください）'); return; }
 
   if (!canAfford(player, card.cost)) { log('マナが足りません'); return; }
 
@@ -1528,8 +1529,8 @@ function endCombat() {
   G.players[0].attackers = [];
   G.players[0].blockers = {};
   G.combatStep = null;
+  G.combatArrows = [];
   G.phase = 'main';
-  // Actually go to end turn
   endTurn();
 }
 
@@ -2240,6 +2241,7 @@ function resolveAICombat() {
   G.selectedBlockerToAssign = null;
   G.directlyAttackedCreatures = new Set();
   G.blockDrawTrigger = false;
+  G.combatArrows = [];
   render();
   setTimeout(() => endTurn(), 600);
 }
@@ -2482,7 +2484,21 @@ function handleHandClick(player, index) {
 }
 
 function handleFieldClick(player, instId) {
-  // Target mode
+  // 格闘ターゲット選択を最優先 (飛行含む全クリーチャーが対象)
+  if (G.kakutouTargetMode && player === 1) {
+    G.kakutouTargets[G.pendingKakutouInstId] = instId;
+    const atkInst = G.players[0].field.find(c=>c.instanceId===G.pendingKakutouInstId);
+    const atkCard = atkInst ? CARD_DB[atkInst.cardId] : null;
+    const tgtInst = G.players[1].field.find(c=>c.instanceId===instId);
+    const tgtCard = tgtInst ? CARD_DB[tgtInst.cardId] : null;
+    log(`格闘対象: ${atkCard?.name} → ${tgtCard?.name}`);
+    G.kakutouTargetMode = false;
+    G.pendingKakutouInstId = null;
+    render(); updateHints();
+    return;
+  }
+
+  // Target mode (spell/ability targeting)
   if (G.targetMode) {
     const tm = G.targetMode.type;
     if (tm === 'creature' || tm === 'any') {
@@ -2497,20 +2513,6 @@ function handleFieldClick(player, instId) {
       G.targetMode.callback({type:'creature', player, instId});
       return;
     }
-  }
-
-  // 格闘ターゲット選択 (AIクリーチャーをクリック)
-  if (G.kakutouTargetMode && player === 1) {
-    G.kakutouTargets[G.pendingKakutouInstId] = instId;
-    const atkInst = G.players[0].field.find(c=>c.instanceId===G.pendingKakutouInstId);
-    const atkCard = atkInst ? CARD_DB[atkInst.cardId] : null;
-    const tgtInst = G.players[1].field.find(c=>c.instanceId===instId);
-    const tgtCard = tgtInst ? CARD_DB[tgtInst.cardId] : null;
-    log(`格闘対象: ${atkCard?.name} → ${tgtCard?.name}`);
-    G.kakutouTargetMode = false;
-    G.pendingKakutouInstId = null;
-    render(); updateHints();
-    return;
   }
 
   // ブロック宣言: 自分クリーチャー選択 or AI攻撃クリーチャー選択
