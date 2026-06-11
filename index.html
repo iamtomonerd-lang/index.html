@@ -596,7 +596,7 @@ button.danger:hover { background: #6a2a2a; }
 /* ── Card Detail Panel ── */
 #card-detail-panel {
   position: fixed;
-  bottom: 150px;
+  top: 40%;
   left: 10px;
   width: 200px;
   background: rgba(12,12,24,0.90);
@@ -3826,7 +3826,7 @@ function kwTipHtml(kw) {
   return `<span class="kw-tip" data-def="${def}">${kw}</span>`;
 }
 
-function showCardDetail(cardId) {
+function showCardDetail(cardId, mouseX, mouseY) {
   const card = CARD_DB[cardId];
   if (!card) return;
   const panel = document.getElementById('card-detail-panel');
@@ -3843,6 +3843,18 @@ function showCardDetail(cardId) {
     ${kwHtml}
     <div class="cdp-text">${(card.text || '(テキストなし)').replace(/\\n/g, '\n')}</div>
   `;
+  if (mouseX !== undefined && mouseY !== undefined) {
+    // マウス付近に表示（画面端からはみ出さないよう調整）
+    const pw = 200, ph = 200, margin = 12;
+    let x = mouseX + margin;
+    let y = mouseY - ph / 2;
+    if (x + pw > window.innerWidth)  x = mouseX - pw - margin;
+    if (y < 4) y = 4;
+    if (y + ph > window.innerHeight) y = window.innerHeight - ph - 4;
+    panel.style.left   = x + 'px';
+    panel.style.top    = y + 'px';
+    panel.style.bottom = 'auto';
+  }
 }
 
 // ============================================================
@@ -4039,7 +4051,7 @@ document.addEventListener('contextmenu', function(e) {
   if (card) {
     e.preventDefault();
     e.stopPropagation();
-    showCardDetail(card.dataset.cardId);
+    showCardDetail(card.dataset.cardId, e.clientX, e.clientY);
   }
 }, true);
 
