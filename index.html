@@ -1595,6 +1595,14 @@ function addPermanentBuff(player, instanceId, power, toughness) {
   G.permanentBuffs.push({instanceId, power, toughness});
 }
 
+function addTempBuff(player, instanceId, power, toughness) {
+  const inst = G.players[player].field.find(c => c.instanceId === instanceId);
+  if (!inst) return;
+  inst.tempPower  = (inst.tempPower  || 0) + power;
+  inst.tempToughness = (inst.tempToughness || 0) + toughness;
+  G.tempBuffs.push({instanceId, power, toughness});
+}
+
 function getPermanentBuff(instanceId) {
   let pw=0, th=0;
   G.permanentBuffs.forEach(b=>{ if(b.instanceId===instanceId){pw+=b.power;th+=b.toughness;} });
@@ -2662,13 +2670,6 @@ function aiAttack() {
   });
 
   if (attackerInsts.length === 0) { setTimeout(() => endTurnAfterMainPhase(), 300); return; }
-
-  // アレスティア passive
-  const playerHasArestia = player.field.some(c=>CARD_DB[c.cardId].id==='arestia');
-  if (playerHasArestia) {
-    player.field.forEach(c => addPermanentBuff(0, c.instanceId, 1, 1));
-    log('アレスティア: プレイヤークリーチャー全体+1/+1（永続）','important');
-  }
 
   showAIBalloon('⚔️ 攻撃宣言！');
   G._aiAttackQueue = attackerInsts.map(c => c.instanceId);
