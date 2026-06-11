@@ -739,55 +739,49 @@ button.danger:hover { background: #6a2a2a; }
    ══════════════════════════════════════════════════════ */
 @media (max-width: 1024px) and (orientation: landscape) {
 
-  /* ── ボードをグリッドに変更 ── */
-  /* 行割り当て: AI情報 / AIフィールド / 仕切り / PLフィールド / PLアクション / PL手札 */
+  /* ── MTGアリーナ風レイアウト: flex縦積み ── */
+  /* 固定バー + 比例フィールド。AIフィールドを大きく取る */
   #board {
-    display: grid;
-    grid-template-columns: 1fr;
-    /* 固定+1fr+1fr: 合計からフィールドが残りを等分 */
-    grid-template-rows:
-      26px   /* 1: AI情報バー */
-      1fr    /* 2: AIフィールド ← flex:1相当 */
-      22px   /* 3: 中央仕切りバー */
-      1fr    /* 4: PLフィールド */
-      38px   /* 5: PLアクションバー */
-      82px;  /* 6: PL手札 */
-    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    height: 100svh; /* safe-area対応 */
     overflow: hidden;
+    gap: 0;
   }
 
-  /* 不要行を非表示にしてグリッドから除外 */
-  #ai-hand-row  { display: none; }
-  #ai-lands-row { display: none; }
-  #player-lands-row { display: none; }
+  /* 不要行を非表示 */
+  #ai-hand-row      { display: none !important; }
+  #ai-lands-row     { display: none !important; }
+  #player-lands-row { display: none !important; }
 
-  /* 各要素をグリッド行に割り当て */
-  #ai-info-strip   { grid-row: 1; }
-  #ai-field-row    { grid-row: 2; }
-  #info-bar        { grid-row: 3; }
-  #player-field-row{ grid-row: 4; }
-  #player-action-bar{ grid-row: 5; }
-  #player-hand-row { grid-row: 6; }
-
-  /* ── AIフィールドに手札枚数・土地情報をoverlay ── */
-  #ai-field-row { position: relative; }
+  /* ── 固定バー ── */
   #ai-info-strip {
-    height: 26px; min-height: 26px;
+    flex: 0 0 28px;
+    height: 28px; min-height: 28px;
     padding: 0 10px; gap: 8px;
-    background: rgba(50,8,8,0.82);
-    border-bottom: 1px solid rgba(180,60,60,0.25);
+    background: rgba(50,8,8,0.88);
+    border-bottom: 1px solid rgba(180,60,60,0.3);
   }
   #ai-info-strip .life-display { font-size: 18px; min-width: 48px; }
   #ai-info-strip .info-count { font-size: 9px; }
 
-  /* ── 中央仕切りバー: 最小限 ── */
+  /* ── AIフィールド: 残りの3/5 ── */
+  #ai-field-row {
+    flex: 3 3 0;
+    min-height: 0;
+    background: rgba(40,8,8,0.20);
+    overflow: hidden;
+  }
+
+  /* ── 中央バー: フェイズ表示 ── */
   #info-bar {
+    flex: 0 0 22px;
     height: 22px; min-height: 22px;
     padding: 0 8px; gap: 5px;
     flex-wrap: nowrap; overflow: hidden;
     border-top: 1px solid rgba(80,80,180,0.35);
     border-bottom: 1px solid rgba(80,80,180,0.35);
-    background: rgba(6,6,18,0.92);
+    background: rgba(6,6,18,0.95);
     align-items: center;
   }
   #info-bar #turn-indicator { font-size: 10px; white-space: nowrap; }
@@ -802,64 +796,80 @@ button.danger:hover { background: #6a2a2a; }
     margin-left: 4px;
   }
 
+  /* ── PLフィールド: 残りの2/5 ── */
+  #player-field-row {
+    flex: 2 2 0;
+    min-height: 0;
+    background: rgba(8,30,8,0.20);
+    overflow: hidden;
+  }
+
   /* ── フィールドゾーン ── */
-  .field-zone { padding: 4px 8px; gap: 6px; }
-  #ai-field-row    { background: rgba(40,8,8,0.22); }
-  #player-field-row{ background: rgba(8,30,8,0.22); }
+  .field-zone { padding: 4px 6px; gap: 5px; align-content: center; }
 
   /* ── PLアクションバー ── */
   #player-action-bar {
-    height: 38px; min-height: 38px;
-    padding: 3px 10px; gap: 6px;
+    flex: 0 0 40px;
+    height: 40px; min-height: 40px;
+    padding: 0 10px; gap: 6px;
     flex-wrap: nowrap; overflow: visible;
-    background: rgba(8,40,14,0.88);
-    border-top: 1px solid rgba(40,160,60,0.25);
+    background: rgba(8,40,14,0.92);
+    border-top: 1px solid rgba(40,160,60,0.3);
+    align-items: center;
   }
   #player-action-bar .life-display { font-size: 18px; min-width: 48px; }
   #player-action-bar .info-count   { display: none; }
   #player-action-bar .sep          { display: none; }
-  /* 墓地ボタンは非表示 */
   #player-action-bar > button      { display: none; }
 
   /* コントロールボタン */
-  #controls      { gap: 4px; flex-wrap: nowrap; overflow: visible; }
+  #controls      { gap: 4px; flex-wrap: nowrap; overflow: visible; align-items: center; }
   #controls-btns { gap: 4px; flex-wrap: nowrap; }
   #controls-btns button { padding: 4px 9px; font-size: 11px; }
   #btn-end-phase { padding: 5px 14px; font-size: 12px; font-weight: 700; }
-  #action-hint   { font-size: 9px; max-width: 140px; white-space: normal; }
-  /* 学習・デバッグは非表示 */
+  #action-hint   { font-size: 9px; max-width: 120px; white-space: normal; line-height: 1.2; }
   #controls-btns button[onclick="showTrainingPanel()"],
   #controls-btns button[onclick="showDebugPanel()"] { display: none; }
 
-  /* ── 手札: カード重ね表示（SVスタイル） ── */
+  /* ── 手札: 固定88px、カード重ね表示 ── */
+  #player-hand-row {
+    flex: 0 0 88px;
+    height: 88px; min-height: 88px;
+    overflow: visible;
+  }
   #player-hand.hand-zone {
-    min-height: 82px; max-height: 82px;
-    padding: 3px 12px;
-    gap: 0; /* gapをなくしてネガティブマージンで重ねる */
+    height: 100%;
+    padding: 4px 16px 4px;
+    gap: 0;
     overflow: visible;
     align-items: flex-end;
+    justify-content: center;
   }
   #player-hand .card {
-    margin-right: -16px; /* 重ね表示 */
-    transition: transform 0.15s, margin 0.15s;
+    margin-right: -20px;
+    transition: transform 0.15s, margin 0.15s, z-index 0s;
+    flex-shrink: 0;
   }
   #player-hand .card:hover,
   #player-hand .card:last-child {
     margin-right: 2px;
-    z-index: 20;
+    z-index: 30;
+    transform: translateY(-6px);
   }
 
-  /* カードサイズ */
-  .card { width: 52px; height: 74px; font-size: 8px; }
-  .field-slot { width: 52px; height: 74px; }
-  .card-art { font-size: 18px; }
-  .card-pt { font-size: 9px; }
-  .land-card { width: 34px; height: 28px; font-size: 13px; }
+  /* ── カードサイズ: アリーナ風コンパクト ── */
+  .card { width: 50px; height: 70px; font-size: 8px; border-radius: 4px; }
+  .field-slot { width: 50px; height: 70px; }
+  .card-art { font-size: 16px; }
+  .card-name { font-size: 7px; line-height: 1.1; }
+  .card-pt { font-size: 8px; padding: 1px 2px; }
+  .card-cost { font-size: 7px; }
+  .land-card { width: 32px; height: 26px; font-size: 12px; }
   .land-card .land-name { display: none; }
 
-  /* ログ・カード詳細は非表示 */
-  #log-overlay       { display: none; }
-  #card-detail-panel { display: none; }
+  /* ── ログ・詳細パネルは非表示 ── */
+  #log-overlay       { display: none !important; }
+  #card-detail-panel { display: none !important; }
 
   /* マリガン */
   #mulligan-controls { flex-wrap: nowrap; }
