@@ -872,10 +872,32 @@ button.danger:hover { background: #6a2a2a; }
     gap: 0;
   }
 
-  /* 不要行を非表示 */
+  /* AI手札のみ非表示、土地は表示 */
   #ai-hand-row      { display: none !important; }
-  #ai-lands-row     { display: none !important; }
-  #player-lands-row { display: none !important; }
+
+  /* ── AI土地: コンパクト行 ── */
+  #ai-lands-row {
+    flex: 0 0 24px !important;
+    height: 24px; min-height: 24px;
+    padding: 2px 8px;
+    overflow: hidden;
+  }
+  #ai-lands-row .land-zone { min-height: 0; gap: 3px; padding: 0; flex-wrap: nowrap; }
+  #ai-lands-row .land-card { width: 24px; height: 18px; font-size: 11px; border-radius: 2px; }
+  #ai-lands-row .land-card .land-name { display: none; }
+
+  /* ── PL土地: コンパクト行 ── */
+  #player-lands-row {
+    flex: 0 0 26px !important;
+    height: 26px; min-height: 26px;
+    padding: 2px 8px;
+    background: rgba(6,14,6,0.5) !important;
+    border-top: 1px solid rgba(40,80,40,0.3) !important;
+    overflow: hidden;
+  }
+  #player-lands-row .land-zone { min-height: 0; gap: 3px; padding: 0; flex-wrap: nowrap; }
+  #player-lands-row .land-card { width: 26px; height: 20px; font-size: 11px; border-radius: 2px; }
+  #player-lands-row .land-card .land-name { display: none; }
 
   /* ── 固定バー ── */
   #ai-info-strip {
@@ -1021,6 +1043,7 @@ button.danger:hover { background: #6a2a2a; }
 /* ── 縦向き警告オーバーレイ (スマホ・タブレットのみ) ── */
 @media (max-width: 1024px) and (orientation: portrait) {
   #rotate-overlay { display: flex !important; }
+  #game { visibility: hidden; }
 }
 #rotate-overlay {
   display: none;
