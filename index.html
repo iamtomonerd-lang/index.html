@@ -329,7 +329,7 @@ body {
 .land-card {
   width: 68px; height: 50px;
   border-radius: 5px;
-  border: 1.5px solid var(--border);
+  border: 2px solid var(--border);
   cursor: pointer;
   position: relative;
   transition: transform 0.15s, box-shadow 0.15s;
@@ -345,6 +345,12 @@ body {
 .land-card.tapped { transform: rotate(15deg); margin-right: 8px; }
 .land-card.tapped:hover { transform: rotate(15deg) scale(1.1); }
 .land-card.selected { box-shadow: 0 0 0 2px #ffff44; }
+.land-card.color-W { border-color: #aaa844 !important; box-shadow: 0 0 6px rgba(220,210,100,0.4); }
+.land-card.color-U { border-color: #4466cc !important; box-shadow: 0 0 6px rgba(60,100,220,0.4); }
+.land-card.color-B { border-color: #8844aa !important; box-shadow: 0 0 6px rgba(140,60,180,0.4); }
+.land-card.color-R { border-color: #cc4422 !important; box-shadow: 0 0 6px rgba(220,80,40,0.4); }
+.land-card.color-G { border-color: #44aa44 !important; box-shadow: 0 0 6px rgba(60,180,60,0.4); }
+.land-card.color-C { border-color: #888888 !important; box-shadow: 0 0 4px rgba(150,150,150,0.3); }
 .land-card .land-name { position: absolute; bottom: 2px; left: 0; right: 0; text-align: center; font-size: 7px; color: rgba(255,255,255,0.75); }
 .land-card .charge-pip { position: absolute; top: 2px; right: 2px; background: #ffaa00; border-radius: 50%; width: 10px; height: 10px; font-size: 7px; display: flex; align-items: center; justify-content: center; color: #000; font-weight: bold; }
 
@@ -1036,8 +1042,8 @@ button.danger:hover { background: #6a2a2a; }
   .card-pt    { font-size: 10px; padding: 1px 3px; }
   .card-cost  { font-size: 9px; }
 
-  /* ── ログ非表示・詳細パネルはJSで制御 ── */
-  #log-overlay { display: none !important; }
+  /* ── ログ: 折りたたみ状態で表示（トグルボタンで開閉可能） ── */
+  #log-overlay { display: flex !important; transform: translateX(216px); }
 
   /* マリガン */
   #mulligan-controls { flex-wrap: nowrap; }
