@@ -770,6 +770,38 @@ button.danger:hover { background: #6a2a2a; }
   .card-art { font-size: 18px; }
   #net-lobby-box { padding: 20px 16px; }
 }
+
+/* ── 縦向き警告オーバーレイ (スマホ・タブレットのみ) ── */
+@media (max-width: 1024px) and (orientation: portrait) {
+  #rotate-overlay { display: flex !important; }
+}
+#rotate-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: #080c18;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  color: #c8cce8;
+  font-family: 'Noto Sans JP', sans-serif;
+  text-align: center;
+  padding: 20px;
+}
+#rotate-overlay .rotate-icon {
+  font-size: 72px;
+  animation: rotateHint 2s ease-in-out infinite;
+}
+@keyframes rotateHint {
+  0%   { transform: rotate(0deg); }
+  40%  { transform: rotate(-90deg); }
+  60%  { transform: rotate(-90deg); }
+  100% { transform: rotate(-90deg) translateX(6px); }
+}
+#rotate-overlay p { font-size: 18px; font-weight: 700; color: #aaaaff; }
+#rotate-overlay small { font-size: 13px; color: #666; }
 </style>
 </head>
 <body>
@@ -891,6 +923,13 @@ button.danger:hover { background: #6a2a2a; }
     <div id="log-recent"></div>
     <div id="log"></div>
   </div>
+</div>
+
+<!-- 縦向き回転要求オーバーレイ -->
+<div id="rotate-overlay">
+  <div class="rotate-icon">📱</div>
+  <p>横向きにしてください</p>
+  <small>このゲームは横向き表示に最適化されています</small>
 </div>
 
 <!-- Online Lobby -->
@@ -4966,6 +5005,26 @@ function toggleLog() {
   const el = document.getElementById('log-overlay');
   el.classList.toggle('open');
 }
+
+// ── 画面向きロック (スマホ・タブレットのみ) ──
+(function() {
+  const isMobile = () => /Mobi|Android|iPhone|iPad|Tablet/i.test(navigator.userAgent) || window.innerWidth <= 1024;
+  function tryLockLandscape() {
+    if (!isMobile()) return;
+    const so = screen.orientation || screen.mozOrientation || screen.msOrientation;
+    if (so && so.lock) {
+      so.lock('landscape').catch(() => {}); // iOS/一部端末は失敗するため無視
+    }
+  }
+  // ページロード時
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', tryLockLandscape);
+  } else {
+    tryLockLandscape();
+  }
+  // orientation変化時にも再試行
+  window.addEventListener('orientationchange', tryLockLandscape);
+})();
 
 </script>
 </body>
