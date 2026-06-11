@@ -771,12 +771,27 @@ button.danger:hover { background: #6a2a2a; }
 </head>
 <body>
 <div id="game">
-  <!-- 左：ボードエリア -->
+  <!-- ボードエリア -->
   <div id="board">
+
+    <!-- AI 情報ストリップ -->
+    <div id="ai-info-strip">
+      <div class="life-display" id="ai-life">❤️ 20</div>
+      <span class="info-count">山札 <span id="ai-deck-count">40</span></span>
+      <span class="info-count">土地 <span id="ai-land-deck-count">10</span></span>
+      <button onclick="showGraveyard(1)" style="font-size:9px;padding:2px 6px;background:#2a0a0a;border-color:#663333;">墓地: <span id="ai-grave-count">0</span>枚</button>
+    </div>
+
     <!-- AI 手札 -->
     <div class="board-row ai-row">
       <div class="zone-label" style="writing-mode:initial; min-width:52px;">相手の手札</div>
       <div id="ai-hand" class="hand-zone" style="flex:1;"></div>
+    </div>
+
+    <!-- AI 土地 -->
+    <div class="board-row ai-row">
+      <div class="zone-label" style="min-width:52px;">相手の土地</div>
+      <div id="ai-lands" class="land-zone" style="flex:1;"></div>
     </div>
 
     <!-- AI フィールド -->
@@ -784,12 +799,6 @@ button.danger:hover { background: #6a2a2a; }
       <div class="zone-label" style="min-width:52px;">相手フィールド</div>
       <div id="ai-field" class="field-zone" style="flex:1;"></div>
       <div id="ai-balloon"></div>
-    </div>
-
-    <!-- AI 土地 -->
-    <div class="board-row ai-row">
-      <div class="zone-label" style="min-width:52px;">相手の土地</div>
-      <div id="ai-lands" class="land-zone" style="flex:1;"></div>
     </div>
 
     <!-- 中央情報バー -->
@@ -817,16 +826,42 @@ button.danger:hover { background: #6a2a2a; }
       </div>
     </div>
 
+    <!-- 自分 フィールド -->
+    <div class="board-row player-row" style="flex:1;">
+      <div class="zone-label" style="min-width:52px;">自分フィールド</div>
+      <div id="player-field" class="field-zone" style="flex:1;"></div>
+    </div>
+
     <!-- 自分 土地 -->
     <div class="board-row player-row">
       <div class="zone-label" style="min-width:52px;">自分の土地</div>
       <div id="player-lands" class="land-zone" style="flex:1;"></div>
     </div>
 
-    <!-- 自分 フィールド -->
-    <div class="board-row player-row" style="flex:1;">
-      <div class="zone-label" style="min-width:52px;">自分フィールド</div>
-      <div id="player-field" class="field-zone" style="flex:1;"></div>
+    <!-- プレイヤーアクションバー -->
+    <div id="player-action-bar">
+      <div class="life-display" id="player-life">❤️ 20</div>
+      <span class="info-count">山札 <span id="player-deck-count">40</span></span>
+      <span class="info-count">土地 <span id="player-land-deck-count">10</span></span>
+      <button onclick="showGraveyard(0)" style="font-size:9px;padding:2px 6px;background:#0a1a0a;border-color:#336633;">墓地: <span id="player-grave-count">0</span>枚</button>
+      <div class="sep"></div>
+      <!-- コントロール -->
+      <div id="controls">
+        <div id="controls-btns">
+          <button id="btn-end-phase" class="primary" onclick="endPhase()">フェイズ終了</button>
+          <button id="btn-pass" onclick="passPriority()">優先権パス</button>
+          <button id="btn-mulligan" onclick="doMulligan()" disabled>マリガン</button>
+          <button id="btn-charge" onclick="startCharge()">チャージ</button>
+          <button onclick="showTrainingPanel()" style="background:#1a2a1a;border-color:#446644;font-size:10px;">🧠 学習</button>
+          <button onclick="showDebugPanel()" style="background:#1a1a2a;border-color:#444466;font-size:10px;" title="フリーズ・バグ報告用デバッグ情報">🐛 debug</button>
+        </div>
+        <div id="mulligan-controls" style="display:none; gap:6px; margin-top:4px;">
+          <button onclick="confirmStartMulligan()" style="flex:1; padding:6px 10px; background:#2a2a8a; border:1px solid #6060ff; color:#fff; border-radius:5px; font-size:11px; cursor:pointer;">確認（<span id="mulligan-count">0</span>枚入替）</button>
+          <button onclick="skipStartMulligan()" style="flex:1; padding:6px 10px; background:#2a2a2a; border:1px solid #555; color:#ccc; border-radius:5px; font-size:11px; cursor:pointer;">しない</button>
+        </div>
+        <div id="action-hint"></div>
+        <div id="debug-freeze-warn" style="display:none;font-size:10px;color:#ffaa44;margin-top:4px;padding:4px 6px;background:#1a1400;border:1px solid #554400;border-radius:4px;cursor:pointer;" onclick="showDebugPanel()"></div>
+      </div>
     </div>
 
     <!-- 自分 手札 -->
@@ -836,56 +871,21 @@ button.danger:hover { background: #6a2a2a; }
     </div>
   </div>
 
-  <!-- 右：サイドパネル -->
-  <div id="side-panel">
-    <!-- AI 情報 -->
-    <div class="player-stat-card" style="border-color:#3a2a2a;">
-      <h3>対戦相手</h3>
-      <div style="display:flex; align-items:center; gap:8px;">
-        <div class="life-display" id="ai-life">❤️ 20</div>
-        <div style="font-size:10px; color:#666; margin-left:auto; display:flex; gap:6px; align-items:center;">
-          山札 <span id="ai-deck-count">40</span> / 土地 <span id="ai-land-deck-count">10</span>
-          <button onclick="showGraveyard(1)" style="font-size:9px;padding:2px 5px;background:#1a1a2a;border-color:#443344;">墓地: <span id="ai-grave-count">0</span>枚</button>
-        </div>
-      </div>
-    </div>
+  <!-- 右：サイドパネル（非表示、ID互換のため残す） -->
+  <div id="side-panel"></div>
+</div>
 
-    <!-- 自分 情報 -->
-    <div class="player-stat-card" style="border-color:#2a3a2a;">
-      <h3>自分</h3>
-      <div style="display:flex; align-items:center; gap:8px;">
-        <div class="life-display" id="player-life">❤️ 20</div>
-        <div style="font-size:10px; color:#666; margin-left:auto; display:flex; gap:6px; align-items:center;">
-          山札 <span id="player-deck-count">40</span> / 土地 <span id="player-land-deck-count">10</span>
-          <button onclick="showGraveyard(0)" style="font-size:9px;padding:2px 5px;background:#1a1a2a;border-color:#336633;">墓地: <span id="player-grave-count">0</span>枚</button>
-        </div>
-      </div>
-    </div>
+<!-- カード詳細パネル (固定オーバーレイ) -->
+<div id="card-detail-panel">
+  <div class="cdp-placeholder">カードを右クリックで詳細表示</div>
+</div>
 
-    <!-- カード詳細パネル -->
-    <div id="card-detail-panel">
-      <div class="cdp-placeholder">カードを右クリックで詳細表示</div>
-    </div>
-
-    <!-- コントロール -->
-    <div id="controls">
-      <div id="controls-btns">
-        <button id="btn-end-phase" class="primary" onclick="endPhase()">フェイズ終了</button>
-        <button id="btn-pass" onclick="passPriority()">優先権パス</button>
-        <button id="btn-mulligan" onclick="doMulligan()" disabled>マリガン</button>
-        <button id="btn-charge" onclick="startCharge()">チャージ</button>
-        <button onclick="showTrainingPanel()" style="background:#1a2a1a;border-color:#446644;font-size:10px;">🧠 学習</button>
-        <button onclick="showDebugPanel()" style="background:#1a1a2a;border-color:#444466;font-size:10px;" title="フリーズ・バグ報告用デバッグ情報">🐛 debug</button>
-      </div>
-      <div id="mulligan-controls" style="display:none; gap:6px; margin-top:4px;">
-        <button onclick="confirmStartMulligan()" style="flex:1; padding:6px 10px; background:#2a2a8a; border:1px solid #6060ff; color:#fff; border-radius:5px; font-size:11px; cursor:pointer;">確認（<span id="mulligan-count">0</span>枚入替）</button>
-        <button onclick="skipStartMulligan()" style="flex:1; padding:6px 10px; background:#2a2a2a; border:1px solid #555; color:#ccc; border-radius:5px; font-size:11px; cursor:pointer;">しない</button>
-      </div>
-      <div id="action-hint"></div>
-      <div id="debug-freeze-warn" style="display:none;font-size:10px;color:#ffaa44;margin-top:4px;padding:4px 6px;background:#1a1400;border:1px solid #554400;border-radius:4px;cursor:pointer;" onclick="showDebugPanel()"></div>
-    </div>
-
-    <!-- ログ -->
+<!-- ログオーバーレイ -->
+<div id="log-overlay">
+  <button id="log-toggle-btn" onclick="toggleLog()">ログ</button>
+  <div id="log-inner">
+    <div style="font-size:10px;color:#555;padding:4px 8px;border-bottom:1px solid #1a1a3a;">ゲームログ</div>
+    <div id="log-recent"></div>
     <div id="log"></div>
   </div>
 </div>
@@ -4958,6 +4958,11 @@ function netPostTurnEnd() {
 // Show lobby on page load instead of immediately initing the game
 netShowLobby();
 _startFreezeDetector();
+
+function toggleLog() {
+  const el = document.getElementById('log-overlay');
+  el.classList.toggle('open');
+}
 
 </script>
 </body>
