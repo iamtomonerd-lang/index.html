@@ -860,13 +860,14 @@ button.danger:hover { background: #6a2a2a; }
    ══════════════════════════════════════════════════════ */
 @media (max-width: 1280px) and (orientation: landscape) {
 
-  #game  { height: 100svh; overflow: hidden; }
+  #game  { height: 100svh !important; max-height: 100svh !important; overflow: hidden; }
   #board {
-    display: flex;
-    flex-direction: column;
-    height: 100svh;
-    overflow: hidden;
-    gap: 0;
+    display: flex !important;
+    flex-direction: column !important;
+    height: 100svh !important;
+    max-height: 100svh !important;
+    overflow: hidden !important;
+    gap: 0 !important;
   }
 
   /* AI手札のみ非表示 */
@@ -886,13 +887,17 @@ button.danger:hover { background: #6a2a2a; }
   /* ── AI土地: 36px ── */
   #ai-lands-row {
     flex: 0 0 36px !important;
-    height: 36px; min-height: 36px;
+    height: 36px !important; min-height: 36px !important;
     padding: 3px 10px;
-    background: rgba(40,8,8,0.3) !important;
-    border-bottom: 1px solid rgba(140,40,40,0.25) !important;
+    background: rgba(100,20,20,0.45) !important;
+    border-top: 1px solid rgba(200,60,60,0.35) !important;
+    border-bottom: 1px solid rgba(200,60,60,0.35) !important;
     overflow: hidden;
+    display: flex !important;
+    align-items: center;
   }
-  #ai-lands-row .land-zone   { min-height: 0; gap: 4px; padding: 0; flex-wrap: nowrap; align-items: center; }
+  #ai-lands-row .zone-label  { display: flex !important; font-size: 8px; color: rgba(255,150,150,0.7); min-width: 20px; flex-shrink: 0; }
+  #ai-lands-row .land-zone   { min-height: 0; gap: 4px; padding: 0; flex-wrap: nowrap; align-items: center; flex: 1; }
   #ai-lands-row .land-card   { width: 36px; height: 28px; font-size: 16px; border-radius: 3px; }
   #ai-lands-row .land-card .land-name { display: none; }
 
@@ -944,13 +949,17 @@ button.danger:hover { background: #6a2a2a; }
   /* ── PL土地: 36px ── */
   #player-lands-row {
     flex: 0 0 36px !important;
-    height: 36px; min-height: 36px;
+    height: 36px !important; min-height: 36px !important;
     padding: 3px 10px;
-    background: rgba(8,30,8,0.35) !important;
-    border-top: 1px solid rgba(40,100,40,0.3) !important;
+    background: rgba(20,80,20,0.45) !important;
+    border-top: 1px solid rgba(60,200,60,0.35) !important;
+    border-bottom: 1px solid rgba(60,200,60,0.35) !important;
     overflow: hidden;
+    display: flex !important;
+    align-items: center;
   }
-  #player-lands-row .land-zone  { min-height: 0; gap: 4px; padding: 0; flex-wrap: nowrap; align-items: center; }
+  #player-lands-row .zone-label { display: flex !important; font-size: 8px; color: rgba(150,255,150,0.7); min-width: 20px; flex-shrink: 0; }
+  #player-lands-row .land-zone  { min-height: 0; gap: 4px; padding: 0; flex-wrap: nowrap; align-items: center; flex: 1; }
   #player-lands-row .land-card  { width: 36px; height: 28px; font-size: 16px; border-radius: 3px; }
   #player-lands-row .land-card .land-name { display: none; }
 
