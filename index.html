@@ -732,43 +732,91 @@ button.danger:hover { background: #6a2a2a; }
 }
 
 /* ── レスポンシブレイアウト ── */
-/* タブレット (601–1024px) */
-@media (max-width: 1024px) and (min-width: 601px) {
-  #game { grid-template-columns: 1fr 220px; gap: 4px; padding: 4px; }
-  .card { width: 58px; height: 84px; }
-  .field-slot { width: 58px; height: 84px; }
-  .land-card { width: 58px; height: 44px; }
-  .hand-zone { min-height: 96px; }
-  .field-zone { min-height: 96px; }
-  #card-detail-panel { max-height: 140px; }
-}
-/* モバイル (≤600px) */
-@media (max-width: 600px) {
-  html, body { overflow: auto; }
-  #game {
-    display: flex;
-    flex-direction: column;
-    height: auto;
-    min-height: 100vh;
-    gap: 3px;
-    padding: 3px;
+
+/* ── スマホ・タブレット 横向き (≤1024px landscape) ── */
+@media (max-width: 1024px) and (orientation: landscape) {
+
+  /* カードサイズを縮小 */
+  .card { width: 52px; height: 74px; font-size: 8px; }
+  .field-slot { width: 52px; height: 74px; }
+  .card-art { font-size: 20px; }
+  .card-pt { font-size: 9px; }
+
+  /* 土地カード小型化 */
+  .land-card { width: 36px; height: 30px; font-size: 14px; }
+  .land-card .land-name { font-size: 6px; }
+
+  /* AI情報バー: 極コンパクト */
+  #ai-info-strip {
+    height: 26px; min-height: 26px;
+    padding: 2px 8px; gap: 6px;
   }
-  #side-panel {
-    flex-direction: row;
-    flex-wrap: wrap;
-    order: -1;
+  #ai-info-strip .life-display { font-size: 16px; min-width: 44px; }
+  #ai-info-strip .info-count { font-size: 9px; }
+
+  /* AI手札: 極細 (顔伏せカードの背面だけ見えれば良い) */
+  #ai-hand-row { flex-shrink: 0; }
+  #ai-hand.hand-zone { min-height: 40px; padding: 2px 6px; gap: 2px; }
+
+  /* AI土地: 非表示 (スペース節約) */
+  #ai-lands-row { display: none; }
+
+  /* フィールドゾーン: スペース確保 */
+  .field-zone { padding: 2px 8px; gap: 5px; }
+  .board-row.ai-row { background: rgba(40,8,8,0.25); }
+  .board-row.player-row { background: rgba(8,35,8,0.25); }
+
+  /* 中央情報バー: コンパクト化 */
+  #info-bar {
+    height: 30px; min-height: 30px;
+    padding: 2px 8px; gap: 4px;
+    flex-wrap: nowrap; overflow: hidden;
   }
-  .player-stat-card { flex: 1 1 calc(50% - 4px); min-width: 0; }
+  #info-bar #turn-indicator { font-size: 10px; }
+  #info-bar .phase-display { font-size: 10px; padding: 2px 7px; }
+  /* モバイルではCXゲージ・マナ表示を非表示 */
+  #threshold-gauge-wrap { display: none; }
+  #mana-display-wrap { display: none; }
+  #info-bar > span { display: none; } /* "マナ:" ラベル */
+  #info-bar .sep { display: none; }
+  #stack-area { min-height: 22px; padding: 1px 5px; font-size: 9px; }
+
+  /* 自分土地行: 極コンパクト */
+  #player-lands-row { flex-shrink: 0; }
+  #player-lands.land-zone { min-height: 34px; padding: 2px 6px; gap: 3px; }
+
+  /* プレイヤーアクションバー */
+  #player-action-bar {
+    height: 34px; min-height: 34px;
+    padding: 2px 8px; gap: 5px;
+    flex-wrap: nowrap; overflow: visible;
+  }
+  #player-action-bar .life-display { font-size: 16px; min-width: 44px; }
+  #player-action-bar .info-count { font-size: 9px; }
+  #player-action-bar .sep { display: none; }
+
+  /* ボタン小型化 */
+  #controls { gap: 3px; flex-wrap: nowrap; }
+  #controls-btns { gap: 3px; flex-wrap: nowrap; }
+  #controls-btns button { padding: 3px 7px; font-size: 10px; }
+  #btn-end-phase { padding: 4px 10px; font-size: 11px; }
+  #action-hint { font-size: 9px; max-width: 120px; }
+
+  /* 自分手札 */
+  #player-hand.hand-zone { min-height: 84px; padding: 3px 8px; gap: 3px; }
+
+  /* ログ・カード詳細 非表示 */
+  #log-overlay { display: none; }
   #card-detail-panel { display: none; }
-  #controls { flex: 1 1 100%; }
-  #log { flex: 1 1 100%; max-height: 120px; }
-  .card { width: 54px; height: 78px; font-size: 8px; }
-  .field-slot { width: 54px; height: 78px; }
-  .land-card { width: 52px; height: 40px; }
-  .hand-zone { min-height: 88px; }
-  .field-zone { min-height: 88px; }
-  .card-art { font-size: 18px; }
-  #net-lobby-box { padding: 20px 16px; }
+
+  /* マリガンボタン */
+  #mulligan-controls button { padding: 4px 8px; font-size: 10px; }
+}
+
+/* ── スマホ 縦向き / 極小画面 ── */
+@media (max-width: 600px) and (orientation: portrait) {
+  /* 縦向きオーバーレイが表示されるため、背後のゲームは非表示でOK */
+  #game { visibility: hidden; }
 }
 
 /* ── 縦向き警告オーバーレイ (スマホ・タブレットのみ) ── */
@@ -818,13 +866,13 @@ button.danger:hover { background: #6a2a2a; }
     </div>
 
     <!-- AI 手札 -->
-    <div class="board-row ai-row" style="flex-shrink:0;">
+    <div id="ai-hand-row" class="board-row ai-row" style="flex-shrink:0;">
       <div class="zone-label" style="writing-mode:initial; min-width:52px;">相手の手札</div>
       <div id="ai-hand" class="hand-zone" style="flex:1; min-height:72px;"></div>
     </div>
 
     <!-- AI 土地 -->
-    <div class="board-row ai-row">
+    <div id="ai-lands-row" class="board-row ai-row">
       <div class="zone-label" style="min-width:52px;">相手の土地</div>
       <div id="ai-lands" class="land-zone" style="flex:1;"></div>
     </div>
@@ -868,7 +916,7 @@ button.danger:hover { background: #6a2a2a; }
     </div>
 
     <!-- 自分 土地 -->
-    <div class="board-row player-row">
+    <div id="player-lands-row" class="board-row player-row">
       <div class="zone-label" style="min-width:52px;">自分の土地</div>
       <div id="player-lands" class="land-zone" style="flex:1;"></div>
     </div>
