@@ -984,18 +984,18 @@ button.danger:hover { background: #6a2a2a; }
   #controls-btns button[onclick="showTrainingPanel()"],
   #controls-btns button[onclick="showDebugPanel()"] { display: none; }
 
-  /* ── 手札: 82px ── */
+  /* ── 手札: 画面の1/3 ── */
   #player-hand-row {
-    flex: 0 0 82px !important;
-    height: 82px !important; min-height: 82px !important; max-height: 82px !important;
+    flex: 0 0 33% !important;
+    height: auto !important; min-height: 0 !important; max-height: none !important;
     overflow: visible !important;
     display: flex !important;
     background: rgba(6,20,6,0.6) !important;
     border-top: 1px solid rgba(60,200,60,0.3) !important;
   }
   #player-hand.hand-zone {
-    height: 82px !important; min-height: 0 !important;
-    padding: 3px 12px;
+    height: 100% !important; min-height: 0 !important;
+    padding: 6px 16px 4px;
     gap: 0; overflow: visible;
     align-items: flex-end;
     justify-content: center;
@@ -1003,16 +1003,22 @@ button.danger:hover { background: #6a2a2a; }
     flex: 1;
   }
   #player-hand .card {
-    margin-right: -16px;
+    width: 62px !important; height: 88px !important;
+    margin-right: -20px;
     transition: transform 0.15s, margin 0.15s;
     flex-shrink: 0;
+    font-size: 8px !important;
   }
   #player-hand .card:hover,
   #player-hand .card:last-child {
-    margin-right: 2px;
+    margin-right: 4px;
     z-index: 30;
-    transform: translateY(-6px);
+    transform: translateY(-10px);
   }
+  #player-hand .card .card-art  { font-size: 22px; }
+  #player-hand .card .card-name { font-size: 7px; }
+  #player-hand .card .card-pt   { font-size: 8px; }
+  #player-hand .card .card-cost { font-size: 7px; }
 
   /* hand-zoneのベースmin-height上書き */
   .hand-zone { min-height: 0 !important; }
