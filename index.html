@@ -860,11 +860,12 @@ button.danger:hover { background: #6a2a2a; }
    ══════════════════════════════════════════════════════ */
 @media (max-width: 1280px) and (orientation: landscape) {
 
+  /* 固定バー合計210px: 22+28+16+28+34+82 */
   #game  { height: 100svh !important; max-height: 100svh !important; overflow: hidden; }
   #board {
     display: flex !important;
     flex-direction: column !important;
-    height: 100svh !important;
+    height: 100% !important;
     max-height: 100svh !important;
     overflow: hidden !important;
     gap: 0 !important;
@@ -873,32 +874,31 @@ button.danger:hover { background: #6a2a2a; }
   /* AI手札のみ非表示 */
   #ai-hand-row { display: none !important; }
 
-  /* ── AI情報バー: 26px ── */
+  /* ── AI情報バー: 22px ── */
   #ai-info-strip {
-    flex: 0 0 26px !important;
-    height: 26px; min-height: 26px;
-    padding: 0 10px; gap: 8px;
+    flex: 0 0 22px !important;
+    height: 22px !important; min-height: 22px !important;
+    padding: 0 8px; gap: 6px;
     background: rgba(50,8,8,0.88);
     border-bottom: 1px solid rgba(180,60,60,0.3);
   }
-  #ai-info-strip .life-display { font-size: 16px; min-width: 40px; }
-  #ai-info-strip .info-count { font-size: 9px; }
+  #ai-info-strip .life-display { font-size: 14px; min-width: 36px; }
+  #ai-info-strip .info-count { font-size: 8px; }
 
-  /* ── AI土地: 36px ── */
+  /* ── AI土地: 28px ── */
   #ai-lands-row {
-    flex: 0 0 36px !important;
-    height: 36px !important; min-height: 36px !important;
-    padding: 3px 10px;
+    flex: 0 0 28px !important;
+    height: 28px !important; min-height: 28px !important;
+    padding: 2px 8px;
     background: rgba(100,20,20,0.45) !important;
-    border-top: 1px solid rgba(200,60,60,0.35) !important;
-    border-bottom: 1px solid rgba(200,60,60,0.35) !important;
+    border-bottom: 1px solid rgba(200,60,60,0.4) !important;
     overflow: hidden;
     display: flex !important;
     align-items: center;
   }
-  #ai-lands-row .zone-label  { display: flex !important; font-size: 8px; color: rgba(255,150,150,0.7); min-width: 20px; flex-shrink: 0; }
-  #ai-lands-row .land-zone   { min-height: 0; gap: 4px; padding: 0; flex-wrap: nowrap; align-items: center; flex: 1; }
-  #ai-lands-row .land-card   { width: 36px; height: 28px; font-size: 16px; border-radius: 3px; }
+  #ai-lands-row .zone-label  { display: flex !important; font-size: 7px; color: rgba(255,150,150,0.7); min-width: 16px; flex-shrink: 0; }
+  #ai-lands-row .land-zone   { min-height: 0; gap: 3px; padding: 0; flex-wrap: nowrap; align-items: center; flex: 1; }
+  #ai-lands-row .land-card   { width: 32px; height: 22px; font-size: 14px; border-radius: 3px; }
   #ai-lands-row .land-card .land-name { display: none; }
 
   /* ── AIフィールド: 残りの3/5 ── */
@@ -910,28 +910,28 @@ button.danger:hover { background: #6a2a2a; }
   }
   #ai-field-row .field-zone {
     height: 100%; flex: unset;
-    padding: 4px 8px; gap: 6px;
+    padding: 3px 6px; gap: 5px;
     align-content: center; flex-wrap: wrap;
   }
 
-  /* ── 中央バー: 20px ── */
+  /* ── 中央バー: 16px ── */
   #info-bar {
-    flex: 0 0 20px !important;
-    height: 20px; min-height: 20px;
-    padding: 0 8px; gap: 5px;
+    flex: 0 0 16px !important;
+    height: 16px !important; min-height: 16px !important;
+    padding: 0 6px; gap: 4px;
     flex-wrap: nowrap; overflow: hidden;
     border-top: 1px solid rgba(80,80,180,0.35);
     border-bottom: 1px solid rgba(80,80,180,0.35);
     background: rgba(6,6,18,0.95);
     align-items: center;
   }
-  #info-bar #turn-indicator { font-size: 9px; white-space: nowrap; }
-  #info-bar .phase-display  { font-size: 9px; padding: 1px 6px; }
+  #info-bar #turn-indicator { font-size: 8px; white-space: nowrap; }
+  #info-bar .phase-display  { font-size: 8px; padding: 0 5px; }
   #info-bar .sep            { display: none; }
   #threshold-gauge-wrap     { display: none; }
   #mana-display-wrap        { display: none; }
   #info-bar > span          { display: none; }
-  #stack-area { flex: 1; padding: 1px 4px; font-size: 8px; min-height: 0; margin-left: 3px; }
+  #stack-area { flex: 1; padding: 0 3px; font-size: 8px; min-height: 0; }
 
   /* ── PLフィールド: 残りの2/5 ── */
   #player-field-row {
@@ -942,63 +942,62 @@ button.danger:hover { background: #6a2a2a; }
   }
   #player-field-row .field-zone {
     height: 100%; flex: unset;
-    padding: 4px 8px; gap: 6px;
+    padding: 3px 6px; gap: 5px;
     align-content: center; flex-wrap: wrap;
   }
 
-  /* ── PL土地: 36px ── */
+  /* ── PL土地: 28px ── */
   #player-lands-row {
-    flex: 0 0 36px !important;
-    height: 36px !important; min-height: 36px !important;
-    padding: 3px 10px;
+    flex: 0 0 28px !important;
+    height: 28px !important; min-height: 28px !important;
+    padding: 2px 8px;
     background: rgba(20,80,20,0.45) !important;
-    border-top: 1px solid rgba(60,200,60,0.35) !important;
-    border-bottom: 1px solid rgba(60,200,60,0.35) !important;
+    border-top: 1px solid rgba(60,200,60,0.4) !important;
     overflow: hidden;
     display: flex !important;
     align-items: center;
   }
-  #player-lands-row .zone-label { display: flex !important; font-size: 8px; color: rgba(150,255,150,0.7); min-width: 20px; flex-shrink: 0; }
-  #player-lands-row .land-zone  { min-height: 0; gap: 4px; padding: 0; flex-wrap: nowrap; align-items: center; flex: 1; }
-  #player-lands-row .land-card  { width: 36px; height: 28px; font-size: 16px; border-radius: 3px; }
+  #player-lands-row .zone-label { display: flex !important; font-size: 7px; color: rgba(150,255,150,0.7); min-width: 16px; flex-shrink: 0; }
+  #player-lands-row .land-zone  { min-height: 0; gap: 3px; padding: 0; flex-wrap: nowrap; align-items: center; flex: 1; }
+  #player-lands-row .land-card  { width: 32px; height: 22px; font-size: 14px; border-radius: 3px; }
   #player-lands-row .land-card .land-name { display: none; }
 
-  /* ── PLアクションバー: 38px ── */
+  /* ── PLアクションバー: 34px ── */
   #player-action-bar {
-    flex: 0 0 38px !important;
-    height: 38px; min-height: 38px;
+    flex: 0 0 34px !important;
+    height: 34px !important; min-height: 34px !important;
     padding: 0 10px; gap: 6px;
     flex-wrap: nowrap; overflow: visible;
     background: rgba(8,40,14,0.92);
     border-top: 1px solid rgba(40,160,60,0.3);
     align-items: center;
   }
-  #player-action-bar .life-display { font-size: 16px; min-width: 40px; }
+  #player-action-bar .life-display { font-size: 13px; min-width: 34px; }
   #player-action-bar .info-count   { display: none; }
   #player-action-bar .sep          { display: none; }
   #player-action-bar > button      { display: none; }
 
   /* コントロールボタン */
-  #controls      { gap: 4px; flex-wrap: nowrap; overflow: visible; align-items: center; }
-  #controls-btns { gap: 3px; flex-wrap: nowrap; }
-  #controls-btns button { padding: 3px 8px; font-size: 10px; }
-  #btn-end-phase { padding: 4px 12px; font-size: 11px; font-weight: 700; }
-  #action-hint   { font-size: 8px; max-width: 110px; white-space: normal; line-height: 1.2; }
+  #controls      { gap: 3px; flex-wrap: nowrap; overflow: visible; align-items: center; }
+  #controls-btns { gap: 2px; flex-wrap: nowrap; }
+  #controls-btns button { padding: 2px 6px; font-size: 9px; }
+  #btn-end-phase { padding: 2px 8px; font-size: 10px; font-weight: 700; }
+  #action-hint   { font-size: 7px; max-width: 90px; white-space: normal; line-height: 1.2; }
   #controls-btns button[onclick="showTrainingPanel()"],
   #controls-btns button[onclick="showDebugPanel()"] { display: none; }
 
-  /* ── 手札: 80px ── */
+  /* ── 手札: 82px ── */
   #player-hand-row {
-    flex: 0 0 86px !important;
-    height: 86px !important; min-height: 86px !important; max-height: 86px !important;
+    flex: 0 0 82px !important;
+    height: 82px !important; min-height: 82px !important; max-height: 82px !important;
     overflow: visible !important;
     display: flex !important;
     background: rgba(6,20,6,0.6) !important;
     border-top: 1px solid rgba(60,200,60,0.3) !important;
   }
   #player-hand.hand-zone {
-    height: 86px !important; min-height: 0 !important;
-    padding: 4px 14px 4px;
+    height: 82px !important; min-height: 0 !important;
+    padding: 3px 12px;
     gap: 0; overflow: visible;
     align-items: flex-end;
     justify-content: center;
@@ -1006,7 +1005,7 @@ button.danger:hover { background: #6a2a2a; }
     flex: 1;
   }
   #player-hand .card {
-    margin-right: -18px;
+    margin-right: -16px;
     transition: transform 0.15s, margin 0.15s;
     flex-shrink: 0;
   }
@@ -1014,19 +1013,19 @@ button.danger:hover { background: #6a2a2a; }
   #player-hand .card:last-child {
     margin-right: 2px;
     z-index: 30;
-    transform: translateY(-8px);
+    transform: translateY(-6px);
   }
 
   /* hand-zoneのベースmin-height上書き */
   .hand-zone { min-height: 0 !important; }
 
   /* ── カードサイズ ── */
-  .card       { width: 44px; height: 62px; font-size: 8px; border-radius: 4px; }
-  .field-slot { width: 44px; height: 62px; }
-  .card-art   { font-size: 14px; }
-  .card-name  { font-size: 7px; line-height: 1.1; }
-  .card-pt    { font-size: 8px; padding: 1px 2px; }
-  .card-cost  { font-size: 7px; }
+  .card       { width: 40px; height: 56px; font-size: 7px; border-radius: 3px; }
+  .field-slot { width: 40px; height: 56px; }
+  .card-art   { font-size: 13px; }
+  .card-name  { font-size: 6px; line-height: 1.1; }
+  .card-pt    { font-size: 7px; padding: 1px 2px; }
+  .card-cost  { font-size: 6px; }
 
   /* ── ログ非表示・詳細パネルはJSで制御 ── */
   #log-overlay { display: none !important; }
