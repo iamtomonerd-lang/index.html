@@ -905,7 +905,7 @@ const CARD_DB = {
   'hito_heichi': {
     id:'hito_heichi', name:'人住まう平地', type:'land', color:'W',
     produces:'W', icon:'🌾',
-    text:'■起動(タップ)：白1マナ生成する\n■起動(タップ&白3)：3ルック1(白)。これはこの土地がチャージされている時のみ起動できる',
+    text:'■起動(タップ)：白1マナ生成する\n■起動(タップ&白3マナ)：3ルック1(白)。これはこの土地がチャージされている時のみ起動できる',
     chargedAbility:'look3keep1white'
   },
   'wasure_heichi': {
@@ -2091,9 +2091,9 @@ function activateChargedLand(player, instId) {
   if (landCard.chargedAbility === 'look3keep1white') {
     // Cost: タップ(この土地) + W3
     if (land.tapped) { log(`${landCard.name}: タップ済みのため起動できません`); return; }
-    if (!canAfford(player, {W:1,C:3})) { log('マナ不足 (白＋無色3)'); return; }
+    if (!canAfford(player, {W:3})) { log('マナ不足 (白3)'); return; }
     land.tapped = true;
-    payMana(player, {W:1,C:3});
+    payMana(player, {W:3});
     doLook3Keep1White(player);
     log(`${landCard.name}: 3ルック1(白)`);
     render(); updateHints();
@@ -3259,7 +3259,7 @@ function handleLandClick(player, instId) {
     if (!land.tapped) {
       // Show choice: mana or special ability
       // look3keep1white costs tap+W3, so show ability as available
-      const canActivate = landCard.chargedAbility !== 'look3keep1white' || canAfford(0, {W:1,C:3});
+      const canActivate = landCard.chargedAbility !== 'look3keep1white' || canAfford(0, {W:3});
       const abilityLabel = landCard.text.split('\n').find(l => l.includes('起動') && l.includes('チャージ')) || landCard.text.split('\n')[1] || '特殊能力';
       const html = `
         <p style="margin-bottom:10px;">${landCard.name} の使用方法を選択:</p>
@@ -3900,7 +3900,7 @@ class SimGame {
       const lc = CARD_DB[land.cardId];
       if (!lc.chargedAbility) continue;
       if (lc.chargedAbility === 'look3keep1white') {
-        if (land.tapped || !this.canAfford(p,{W:1,C:3})) continue;
+        if (land.tapped || !this.canAfford(p,{W:3})) continue;
         land.tapped = true;
         this.payMana(p,{W:1,C:3});
         if (p.deck.length) p.hand.push(p.deck.shift());
