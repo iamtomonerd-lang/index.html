@@ -883,20 +883,20 @@ button.danger:hover { background: #6a2a2a; }
   #ai-info-strip .life-display { font-size: 14px; min-width: 36px; }
   #ai-info-strip .info-count { font-size: 8px; }
 
-  /* ── AI土地: 28px ── */
+  /* ── AI土地: 44px ── */
   #ai-lands-row {
-    flex: 0 0 28px !important;
-    height: 28px !important; min-height: 28px !important;
-    padding: 2px 8px;
+    flex: 0 0 44px !important;
+    height: 44px !important; min-height: 44px !important;
+    padding: 4px 10px;
     background: rgba(100,20,20,0.45) !important;
     border-bottom: 1px solid rgba(200,60,60,0.4) !important;
     overflow: hidden;
     display: flex !important;
     align-items: center;
   }
-  #ai-lands-row .zone-label  { display: flex !important; font-size: 7px; color: rgba(255,150,150,0.7); min-width: 16px; flex-shrink: 0; }
-  #ai-lands-row .land-zone   { min-height: 0; gap: 3px; padding: 0; flex-wrap: nowrap; align-items: center; flex: 1; }
-  #ai-lands-row .land-card   { width: 32px; height: 22px; font-size: 14px; border-radius: 3px; }
+  #ai-lands-row .zone-label  { display: flex !important; font-size: 8px; color: rgba(255,150,150,0.7); min-width: 18px; flex-shrink: 0; }
+  #ai-lands-row .land-zone   { min-height: 0; gap: 5px; padding: 0; flex-wrap: nowrap; align-items: center; flex: 1; }
+  #ai-lands-row .land-card   { width: 44px; height: 34px; font-size: 20px; border-radius: 4px; }
   #ai-lands-row .land-card .land-name { display: none; }
 
   /* ── AIフィールド: 残りの3/5 ── */
@@ -908,8 +908,8 @@ button.danger:hover { background: #6a2a2a; }
   }
   #ai-field-row .field-zone {
     height: 100%; flex: unset;
-    padding: 3px 6px; gap: 5px;
-    align-content: center; flex-wrap: wrap;
+    padding: 4px 8px; gap: 8px;
+    align-content: center; align-items: center; flex-wrap: wrap;
   }
 
   /* ── 中央バー: 16px ── */
@@ -944,20 +944,20 @@ button.danger:hover { background: #6a2a2a; }
     align-content: center; flex-wrap: wrap;
   }
 
-  /* ── PL土地: 28px ── */
+  /* ── PL土地: 44px ── */
   #player-lands-row {
-    flex: 0 0 28px !important;
-    height: 28px !important; min-height: 28px !important;
-    padding: 2px 8px;
+    flex: 0 0 44px !important;
+    height: 44px !important; min-height: 44px !important;
+    padding: 4px 10px;
     background: rgba(20,80,20,0.45) !important;
     border-top: 1px solid rgba(60,200,60,0.4) !important;
     overflow: hidden;
     display: flex !important;
     align-items: center;
   }
-  #player-lands-row .zone-label { display: flex !important; font-size: 7px; color: rgba(150,255,150,0.7); min-width: 16px; flex-shrink: 0; }
-  #player-lands-row .land-zone  { min-height: 0; gap: 3px; padding: 0; flex-wrap: nowrap; align-items: center; flex: 1; }
-  #player-lands-row .land-card  { width: 32px; height: 22px; font-size: 14px; border-radius: 3px; }
+  #player-lands-row .zone-label { display: flex !important; font-size: 8px; color: rgba(150,255,150,0.7); min-width: 18px; flex-shrink: 0; }
+  #player-lands-row .land-zone  { min-height: 0; gap: 5px; padding: 0; flex-wrap: nowrap; align-items: center; flex: 1; }
+  #player-lands-row .land-card  { width: 44px; height: 34px; font-size: 20px; border-radius: 4px; }
   #player-lands-row .land-card .land-name { display: none; }
 
   /* ── PLアクションバー: 34px ── */
@@ -1024,13 +1024,13 @@ button.danger:hover { background: #6a2a2a; }
   /* hand-zoneのベースmin-height上書き */
   .hand-zone { min-height: 0 !important; }
 
-  /* ── カードサイズ ── */
-  .card       { width: 40px; height: 56px; font-size: 7px; border-radius: 3px; }
-  .field-slot { width: 40px; height: 56px; }
-  .card-art   { font-size: 13px; }
-  .card-name  { font-size: 6px; line-height: 1.1; }
-  .card-pt    { font-size: 7px; padding: 1px 2px; }
-  .card-cost  { font-size: 6px; }
+  /* ── フィールドカード: エリアに合わせた大きめサイズ ── */
+  .card       { width: 52px; height: 74px; font-size: 8px; border-radius: 4px; }
+  .field-slot { width: 52px; height: 74px; }
+  .card-art   { font-size: 20px; }
+  .card-name  { font-size: 7px; line-height: 1.1; }
+  .card-pt    { font-size: 8px; padding: 1px 2px; }
+  .card-cost  { font-size: 7px; }
 
   /* ── ログ非表示・詳細パネルはJSで制御 ── */
   #log-overlay { display: none !important; }
