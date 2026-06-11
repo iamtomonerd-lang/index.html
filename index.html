@@ -989,17 +989,21 @@ button.danger:hover { background: #6a2a2a; }
 
   /* ── 手札: 80px ── */
   #player-hand-row {
-    flex: 0 0 80px !important;
-    height: 80px; min-height: 80px;
-    overflow: visible;
+    flex: 0 0 86px !important;
+    height: 86px !important; min-height: 86px !important; max-height: 86px !important;
+    overflow: visible !important;
+    display: flex !important;
+    background: rgba(6,20,6,0.6) !important;
+    border-top: 1px solid rgba(60,200,60,0.3) !important;
   }
   #player-hand.hand-zone {
-    height: 100%; min-height: 0;
+    height: 86px !important; min-height: 0 !important;
     padding: 4px 14px 4px;
     gap: 0; overflow: visible;
     align-items: flex-end;
     justify-content: center;
-    flex-shrink: 0;
+    flex-shrink: 0 !important;
+    flex: 1;
   }
   #player-hand .card {
     margin-right: -18px;
@@ -1010,8 +1014,11 @@ button.danger:hover { background: #6a2a2a; }
   #player-hand .card:last-child {
     margin-right: 2px;
     z-index: 30;
-    transform: translateY(-5px);
+    transform: translateY(-8px);
   }
+
+  /* hand-zoneのベースmin-height上書き */
+  .hand-zone { min-height: 0 !important; }
 
   /* ── カードサイズ ── */
   .card       { width: 44px; height: 62px; font-size: 8px; border-radius: 4px; }
