@@ -1867,15 +1867,11 @@ function resolveSingleCombat(atkPlayer, atkInstId, kakutouTargetId, blockerInstI
       atkInst.damage += blkPow;
       log(`${atkCard.name} vs ${blkCard.name}: ${atkPow}/${blkPow}ダメージ交換`, 'damage');
       // onBlock triggers
+      let _damage2needsTarget = false;
       if (blkCard.onBlock === 'damage2attacker') {
         if (opp === 0) {
-          // プレイヤーのブロッカー: 対象を選んで2ダメージ
-          G.targetMode = { type:'opponentCreature', callback:(tgt) => {
-            applyDamageToCreature(atkPlayer, tgt.instId, 2, opp);
-            log(`${blkCard.name}: 相手クリーチャーに2ダメージ`, 'damage');
-            G.targetMode = null; checkDeath(); render(); updateHints();
-          }};
-          log(`${blkCard.name}: 2ダメージの対象を選択（紫枠のクリーチャー）`);
+          // プレイヤーのブロッカー: 対象を選んで2ダメージ（後でcheckCreatureDeath後に対象確認）
+          _damage2needsTarget = true;
         } else {
           atkInst.damage += 2;
           log(`${blkCard.name}: 攻撃クリーチャーに2ダメージ`, 'damage');
@@ -1905,6 +1901,21 @@ function resolveSingleCombat(atkPlayer, atkInstId, kakutouTargetId, blockerInstI
         showFloatDamage(2, atkPlayer === 0 ? 'player' : 'ai');
         log('アレスティア: ブロッカー生存 → 2ダメージ', 'damage');
       }
+      // damage2attacker: set targetMode only if valid targets remain after combat
+      if (_damage2needsTarget) {
+        const validTargets = G.players[atkPlayer].field;
+        if (validTargets.length > 0) {
+          G.targetMode = { type:'opponentCreature', callback:(tgt) => {
+            applyDamageToCreature(atkPlayer, tgt.instId, 2, opp);
+            log(`${blkCard.name}: 相手クリーチャーに2ダメージ`, 'damage');
+            G.targetMode = null; checkDeath(); render(); updateHints();
+            if (atkPlayer === 1) setTimeout(() => continueAIAttack(), 400);
+          }};
+          log(`${blkCard.name}: 2ダメージの対象を選択（紫枠のクリーチャー）`);
+        } else {
+          log(`${blkCard.name}: 相手クリーチャーなし、2ダメージ無効`);
+        }
+      }
     }
   } else {
     // Unblocked: deal damage to opponent player
@@ -1921,8 +1932,8 @@ function resolveSingleCombat(atkPlayer, atkInstId, kakutouTargetId, blockerInstI
   render();
   log('---');
 
-  // If AI is attacking: continue AI attack queue
-  if (atkPlayer === 1) {
+  // If AI is attacking: continue AI attack queue (skip if targetMode awaits player input)
+  if (atkPlayer === 1 && !G.targetMode) {
     setTimeout(() => continueAIAttack(), 400);
   }
 }
