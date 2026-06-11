@@ -4047,11 +4047,19 @@ const PHASE_NAMES_FLASH = {
 // GLOBAL RIGHT-CLICK HANDLER (card detail)
 // ============================================================
 document.addEventListener('contextmenu', function(e) {
+  const panel = document.getElementById('card-detail-panel');
   const card = e.target.closest('[data-card-id]');
   if (card) {
     e.preventDefault();
     e.stopPropagation();
-    showCardDetail(card.dataset.cardId, e.clientX, e.clientY);
+    const isSameCard = panel._shownCardId === card.dataset.cardId;
+    if (isSameCard) {
+      panel.innerHTML = '<div class="cdp-placeholder">カードを右クリックで詳細表示</div>';
+      panel._shownCardId = null;
+    } else {
+      showCardDetail(card.dataset.cardId, e.clientX, e.clientY);
+      panel._shownCardId = card.dataset.cardId;
+    }
   }
 }, true);
 
