@@ -1938,6 +1938,12 @@ function resolveSingleCombat(atkPlayer, atkInstId, kakutouTargetId, blockerInstI
   }
 }
 
+function endTurnAfterMainPhase() {
+  if (G.awaitingPriority) { endTurn(); return; }
+  const nonTurn = 1 - G.activePlayer;
+  openPriorityWindow(nonTurn, () => endTurn());
+}
+
 function endTurn() {
   // Clear temp buffs and any leftover modes
   G.tempBuffs = [];
@@ -2333,7 +2339,7 @@ function resolveCombat() {
   G.blockDrawTrigger = false;
   G.phase = 'main';
   render();
-  setTimeout(() => endTurn(), 400);
+  setTimeout(() => endTurnAfterMainPhase(), 400);
 }
 
 function getCXBonus(player, creature) {
@@ -2655,7 +2661,7 @@ function aiAttack() {
     attackerInsts.push(c);
   });
 
-  if (attackerInsts.length === 0) { setTimeout(() => endTurn(), 300); return; }
+  if (attackerInsts.length === 0) { setTimeout(() => endTurnAfterMainPhase(), 300); return; }
 
   // アレスティア passive
   const playerHasArestia = player.field.some(c=>CARD_DB[c.cardId].id==='arestia');
@@ -2672,7 +2678,7 @@ function aiAttack() {
 function continueAIAttack() {
   if (G.phase === 'ended') return;
   if (!G._aiAttackQueue || G._aiAttackQueue.length === 0) {
-    setTimeout(() => endTurn(), 300);
+    setTimeout(() => endTurnAfterMainPhase(), 300);
     return;
   }
   const atkInstId = G._aiAttackQueue.shift();
