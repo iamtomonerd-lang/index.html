@@ -3180,35 +3180,18 @@ function handleFieldClick(player, instId) {
     if (!inst) return;
     const card = CARD_DB[inst.cardId];
 
-    // アレスティア 還元: アンタップ土地1枚を土地デッキ底に置く → 味方クリーチャー1体をアンタップ
+    // アレスティア: 攻撃 or 還元 を選択
     if (card.id === 'arestia') {
-      const p = G.players[0];
-      const untappedLands = p.lands.filter(l => !l.tapped);
-      if (untappedLands.length === 0) { log('アレスティア 還元: アンタップ状態の土地がありません'); return; }
-      const hasTapped = p.field.some(c => c.instanceId !== instId && c.tapped);
-      if (!hasTapped) { log('アレスティア 還元: アンタップできるクリーチャーがいません'); return; }
-      // Step1: 土地を選ぶ
-      G.targetMode = { type:'ownLand', owner:0, callback:(landInstId) => {
-        const lIdx = p.lands.findIndex(l => l.instanceId === landInstId);
-        if (lIdx === -1 || p.lands[lIdx].tapped) { log('アンタップ状態の土地を選んでください'); return; }
-        const returnedLand = p.lands.splice(lIdx, 1)[0];
-        p.landDeck.push(returnedLand.cardId);
-        log(`還元コスト: ${CARD_DB[returnedLand.cardId].name} を土地デッキ底へ`);
-        G.targetMode = null;
-        // Step2: アンタップするクリーチャーを選ぶ
-        G.targetMode = { type:'ownCreature', owner:0, callback:(tgt) => {
-          const tc = p.field.find(x => x.instanceId === tgt.instId);
-          if (tc && tc.instanceId !== instId) {
-            tc.tapped = false;
-            log('アレスティア 還元: クリーチャーをアンタップ');
-          }
-          G.targetMode = null; render(); updateHints();
-        }};
-        log('アレスティア 還元: アンタップするクリーチャーを選択');
-        render(); updateHints();
-      }};
-      log('アレスティア 還元: 土地デッキ底に置くアンタップ土地を選択');
-      render(); updateHints();
+      const canAtk = canCreatureAttack(0, inst);
+      const untappedLands = G.players[0].lands.filter(l => !l.tapped);
+      const hasTapped = G.players[0].field.some(c => c.instanceId !== instId && c.tapped);
+      const canKaizou = untappedLands.length > 0 && hasTapped;
+      const html = `
+        <p style="margin-bottom:10px;">${card.name} の使用方法を選択:</p>
+        <button onclick="closeModal(); startSingleAttack(0,${instId});" style="width:100%;margin-bottom:8px;padding:8px;${canAtk?'':'opacity:0.4;cursor:not-allowed;'}" ${canAtk?'':'disabled'}>⚔️ 攻撃する</button>
+        <button onclick="closeModal(); arestiaKaizouStart(${instId});" style="width:100%;padding:8px;${canKaizou?'':'opacity:0.4;cursor:not-allowed;'}" ${canKaizou?'':'disabled'}>♻️ 還元: 味方クリーチャーをアンタップ</button>
+      `;
+      showModal(card.name, html);
       return;
     }
 
@@ -3321,6 +3304,34 @@ function clearTargetMode() {
   }
   G.chargingMode = false;
   G.selectedCard = null;
+}
+
+function arestiaKaizouStart(instId) {
+  const p = G.players[0];
+  const untappedLands = p.lands.filter(l => !l.tapped);
+  if (untappedLands.length === 0) { log('アレスティア 還元: アンタップ状態の土地がありません'); return; }
+  const hasTapped = p.field.some(c => c.instanceId !== instId && c.tapped);
+  if (!hasTapped) { log('アレスティア 還元: アンタップできるクリーチャーがいません'); return; }
+  G.targetMode = { type:'ownLand', owner:0, callback:(landInstId) => {
+    const lIdx = p.lands.findIndex(l => l.instanceId === landInstId);
+    if (lIdx === -1 || p.lands[lIdx].tapped) { log('アンタップ状態の土地を選んでください'); return; }
+    const returnedLand = p.lands.splice(lIdx, 1)[0];
+    p.landDeck.push(returnedLand.cardId);
+    log(`還元コスト: ${CARD_DB[returnedLand.cardId].name} を土地デッキ底へ`);
+    G.targetMode = null;
+    G.targetMode = { type:'ownCreature', owner:0, callback:(tgt) => {
+      const tc = p.field.find(x => x.instanceId === tgt.instId);
+      if (tc && tc.instanceId !== instId) {
+        tc.tapped = false;
+        log('アレスティア 還元: クリーチャーをアンタップ');
+      }
+      G.targetMode = null; render(); updateHints();
+    }};
+    log('アレスティア 還元: アンタップするクリーチャーを選択');
+    render(); updateHints();
+  }};
+  log('アレスティア 還元: 土地デッキ底に置くアンタップ土地を選択');
+  render(); updateHints();
 }
 
 function updateHints() {
