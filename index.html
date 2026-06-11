@@ -4052,14 +4052,19 @@ document.addEventListener('contextmenu', function(e) {
   if (card) {
     e.preventDefault();
     e.stopPropagation();
-    const isSameCard = panel._shownCardId === card.dataset.cardId;
-    if (isSameCard) {
+    if (panel._shownCardId) {
+      // 既に表示中 → 閉じる
       panel.innerHTML = '<div class="cdp-placeholder">カードを右クリックで詳細表示</div>';
       panel._shownCardId = null;
     } else {
       showCardDetail(card.dataset.cardId, e.clientX, e.clientY);
       panel._shownCardId = card.dataset.cardId;
     }
+  } else if (panel._shownCardId) {
+    // カード以外の場所で右クリック → 閉じる
+    e.preventDefault();
+    panel.innerHTML = '<div class="cdp-placeholder">カードを右クリックで詳細表示</div>';
+    panel._shownCardId = null;
   }
 }, true);
 
