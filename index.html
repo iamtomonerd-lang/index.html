@@ -872,31 +872,31 @@ button.danger:hover { background: #6a2a2a; }
   /* AI手札のみ非表示 */
   #ai-hand-row { display: none !important; }
 
-  /* ── AI情報バー: 22px ── */
+  /* ── AI情報バー: 32px ── */
   #ai-info-strip {
-    flex: 0 0 22px !important;
-    height: 22px !important; min-height: 22px !important;
-    padding: 0 8px; gap: 6px;
+    flex: 0 0 32px !important;
+    height: 32px !important; min-height: 32px !important;
+    padding: 0 8px; gap: 8px;
     background: rgba(50,8,8,0.88);
     border-bottom: 1px solid rgba(180,60,60,0.3);
   }
-  #ai-info-strip .life-display { font-size: 14px; min-width: 36px; }
-  #ai-info-strip .info-count { font-size: 8px; }
+  #ai-info-strip .life-display { font-size: 18px; min-width: 44px; }
+  #ai-info-strip .info-count { font-size: 13px; }
 
-  /* ── AI土地: 44px ── */
+  /* ── AI土地: 56px ── */
   #ai-lands-row {
-    flex: 0 0 44px !important;
-    height: 44px !important; min-height: 44px !important;
-    padding: 3px 10px;
+    flex: 0 0 56px !important;
+    height: 56px !important; min-height: 56px !important;
+    padding: 4px 10px;
     background: rgba(100,20,20,0.45) !important;
     border-bottom: 1px solid rgba(200,60,60,0.4) !important;
     overflow: hidden;
     display: flex !important;
     align-items: center;
   }
-  #ai-lands-row .zone-label  { display: flex !important; font-size: 8px; color: rgba(255,150,150,0.7); min-width: 18px; flex-shrink: 0; }
-  #ai-lands-row .land-zone   { min-height: 0; gap: 4px; padding: 0; flex-wrap: nowrap; align-items: center; flex: 1; }
-  #ai-lands-row .land-card   { width: 46px; height: 36px; font-size: 22px; border-radius: 3px; }
+  #ai-lands-row .zone-label  { display: flex !important; font-size: 11px; color: rgba(255,150,150,0.7); min-width: 22px; flex-shrink: 0; }
+  #ai-lands-row .land-zone   { min-height: 0; gap: 5px; padding: 0; flex-wrap: nowrap; align-items: center; flex: 1; }
+  #ai-lands-row .land-card   { width: 58px; height: 46px; font-size: 28px; border-radius: 4px; }
   #ai-lands-row .land-card .land-name { display: none; }
 
   /* ── AIフィールド: 残りの3/5 ── */
@@ -913,24 +913,24 @@ button.danger:hover { background: #6a2a2a; }
     overflow: visible;
   }
 
-  /* ── 中央バー: 16px ── */
+  /* ── 中央バー: 26px ── */
   #info-bar {
-    flex: 0 0 16px !important;
-    height: 16px !important; min-height: 16px !important;
-    padding: 0 6px; gap: 4px;
+    flex: 0 0 26px !important;
+    height: 26px !important; min-height: 26px !important;
+    padding: 0 6px; gap: 6px;
     flex-wrap: nowrap; overflow: hidden;
     border-top: 1px solid rgba(80,80,180,0.35);
     border-bottom: 1px solid rgba(80,80,180,0.35);
     background: rgba(6,6,18,0.95);
     align-items: center;
   }
-  #info-bar #turn-indicator { font-size: 8px; white-space: nowrap; }
-  #info-bar .phase-display  { font-size: 8px; padding: 0 5px; }
+  #info-bar #turn-indicator { font-size: 13px; white-space: nowrap; }
+  #info-bar .phase-display  { font-size: 13px; padding: 0 6px; }
   #info-bar .sep            { display: none; }
   #threshold-gauge-wrap     { display: none; }
   #mana-display-wrap        { display: none; }
   #info-bar > span          { display: none; }
-  #stack-area { flex: 1; padding: 0 3px; font-size: 8px; min-height: 0; }
+  #stack-area { flex: 1; padding: 0 4px; font-size: 12px; min-height: 0; }
 
   /* ── PLフィールド: 残りの2/5 ── */
   #player-field-row {
@@ -946,20 +946,20 @@ button.danger:hover { background: #6a2a2a; }
     overflow: visible;
   }
 
-  /* ── PL土地: 44px ── */
+  /* ── PL土地: 56px ── */
   #player-lands-row {
-    flex: 0 0 44px !important;
-    height: 44px !important; min-height: 44px !important;
-    padding: 3px 10px;
+    flex: 0 0 56px !important;
+    height: 56px !important; min-height: 56px !important;
+    padding: 4px 10px;
     background: rgba(20,80,20,0.45) !important;
     border-top: 1px solid rgba(60,200,60,0.4) !important;
     overflow: hidden;
     display: flex !important;
     align-items: center;
   }
-  #player-lands-row .zone-label { display: flex !important; font-size: 8px; color: rgba(150,255,150,0.7); min-width: 18px; flex-shrink: 0; }
-  #player-lands-row .land-zone  { min-height: 0; gap: 4px; padding: 0; flex-wrap: nowrap; align-items: center; flex: 1; }
-  #player-lands-row .land-card  { width: 46px; height: 36px; font-size: 22px; border-radius: 3px; }
+  #player-lands-row .zone-label { display: flex !important; font-size: 11px; color: rgba(150,255,150,0.7); min-width: 22px; flex-shrink: 0; }
+  #player-lands-row .land-zone  { min-height: 0; gap: 5px; padding: 0; flex-wrap: nowrap; align-items: center; flex: 1; }
+  #player-lands-row .land-card  { width: 58px; height: 46px; font-size: 28px; border-radius: 4px; }
   #player-lands-row .land-card .land-name { display: none; }
 
   /* ── PLアクションバー: 90px ── */
@@ -972,7 +972,7 @@ button.danger:hover { background: #6a2a2a; }
     border-top: 1px solid rgba(40,160,60,0.3);
     align-items: center;
   }
-  #player-action-bar .life-display { font-size: 15px; min-width: 38px; }
+  #player-action-bar .life-display { font-size: 22px; min-width: 50px; }
   #player-action-bar .info-count   { display: none; }
   #player-action-bar .sep          { display: none; }
   #player-action-bar > button      { display: none; }
@@ -1029,12 +1029,12 @@ button.danger:hover { background: #6a2a2a; }
   .hand-zone { min-height: 0 !important; }
 
   /* ── フィールドカード ── */
-  .card       { width: 46px; height: 65px; font-size: 8px; border-radius: 4px; overflow: visible; }
-  .field-slot { width: 46px; height: 65px; }
-  .card-art   { font-size: 18px; }
-  .card-name  { font-size: 7px; line-height: 1.1; }
-  .card-pt    { font-size: 8px; padding: 1px 2px; }
-  .card-cost  { font-size: 7px; }
+  .card       { width: 60px; height: 84px; font-size: 10px; border-radius: 5px; overflow: visible; }
+  .field-slot { width: 60px; height: 84px; }
+  .card-art   { font-size: 26px; }
+  .card-name  { font-size: 9px; line-height: 1.1; }
+  .card-pt    { font-size: 10px; padding: 1px 3px; }
+  .card-cost  { font-size: 9px; }
 
   /* ── ログ非表示・詳細パネルはJSで制御 ── */
   #log-overlay { display: none !important; }
