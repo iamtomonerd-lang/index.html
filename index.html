@@ -36,29 +36,28 @@ body {
 
 /* ── 全体レイアウト ── */
 #game {
-  display: grid;
-  grid-template-columns: 1fr 260px;
-  grid-template-rows: 1fr;
+  display: flex;
+  flex-direction: column;
   height: 100vh;
-  gap: 6px;
-  padding: 6px;
+  overflow: hidden;
+  background:
+    radial-gradient(ellipse 80% 40% at 50% 0%, rgba(120,20,20,0.55) 0%, transparent 70%),
+    radial-gradient(ellipse 80% 40% at 50% 100%, rgba(10,60,20,0.55) 0%, transparent 70%),
+    linear-gradient(180deg, #0a0814 0%, #080c0a 100%);
 }
 
 /* 左側：ボード */
 #board {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  flex: 1;
   overflow: hidden;
   min-width: 0;
 }
 
 /* 右側：サイドパネル */
 #side-panel {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  overflow: hidden;
+  display: none;
 }
 
 /* プレイヤー情報ヘッダー */
@@ -84,8 +83,8 @@ body {
 
 /* ── カード ── */
 .card {
-  width: 66px;
-  height: 95px;
+  width: 72px;
+  height: 104px;
   border-radius: 5px;
   border: 1.5px solid var(--border);
   cursor: pointer;
@@ -120,7 +119,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 22px;
+  font-size: 26px;
   border-bottom: 1px solid rgba(255,255,255,0.1);
 }
 .card-bottom {
@@ -201,7 +200,7 @@ body {
   display: flex;
   gap: 4px;
   padding: 4px 6px;
-  min-height: 108px;
+  min-height: 116px;
   align-items: center;
   flex-wrap: nowrap;
   overflow-x: auto;
@@ -212,7 +211,7 @@ body {
   display: flex;
   gap: 6px;
   padding: 4px 6px;
-  min-height: 108px;
+  min-height: 112px;
   align-items: center;
   flex: 1;
 }
@@ -225,7 +224,7 @@ body {
   flex-wrap: wrap;
 }
 .field-slot {
-  width: 66px; height: 95px;
+  width: 72px; height: 104px;
   border: 1px dashed #252540;
   border-radius: 7px;
   display: flex;
@@ -254,20 +253,23 @@ body {
 #info-bar {
   display: flex;
   gap: 6px;
-  padding: 5px 8px;
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 6px;
+  padding: 4px 10px;
+  background: rgba(8,8,20,0.88);
+  border-top: 1px solid #2a2a5a;
+  border-bottom: 1px solid #2a2a5a;
   align-items: center;
   flex-shrink: 0;
   flex-wrap: wrap;
+  height: 42px;
+  min-height: 42px;
 }
 .life-display {
   display: flex;
   align-items: center;
   gap: 4px;
-  font-size: 16px;
-  font-weight: 700;
+  font-size: 22px;
+  font-weight: 900;
+  text-shadow: 0 0 8px currentColor, 0 0 16px rgba(255,80,80,0.5);
 }
 .life-display.low { color: var(--danger); animation: pulse 1s infinite; }
 @keyframes pulse { 50% { opacity: 0.5; } }
@@ -332,50 +334,158 @@ body {
 /* コントロール */
 #controls {
   display: flex;
-  flex-direction: column;
-  gap: 5px;
-  padding: 8px;
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  flex-shrink: 0;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+  flex: 1;
 }
-#controls-btns { display: flex; flex-wrap: wrap; gap: 5px; }
+#controls-btns { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
 button {
-  background: var(--panel);
-  border: 1px solid var(--border);
+  background: rgba(20,20,40,0.85);
+  border: 1px solid #3a3a6a;
   color: var(--text);
-  padding: 6px 12px;
+  padding: 5px 10px;
   border-radius: 5px;
   cursor: pointer;
   font-family: inherit;
   font-size: 12px;
-  transition: background 0.1s;
+  transition: background 0.15s, box-shadow 0.15s;
+  white-space: nowrap;
 }
-button:hover { background: #2a2a4a; }
+button:hover { background: #2a2a4a; box-shadow: 0 0 6px rgba(96,96,255,0.3); }
 button:disabled { opacity: 0.35; cursor: default; }
-button.primary { background: #2a2a8a; border-color: var(--accent); }
-button.primary:hover { background: #3a3aaa; }
+button.primary {
+  background: linear-gradient(135deg, #3a3aaa, #2a2a8a);
+  border-color: var(--accent);
+  color: #eeeeff;
+  font-weight: 700;
+  font-size: 13px;
+  padding: 6px 16px;
+  box-shadow: 0 0 10px rgba(96,96,255,0.4);
+}
+button.primary:hover { background: linear-gradient(135deg, #5050cc, #3a3aaa); box-shadow: 0 0 16px rgba(96,96,255,0.7); }
+#btn-end-phase {
+  background: linear-gradient(135deg, #2a6a3a, #1a4a28);
+  border-color: #44cc66;
+  color: #88ffaa;
+  font-weight: 900;
+  font-size: 14px;
+  padding: 7px 20px;
+  box-shadow: 0 0 12px rgba(50,200,80,0.5);
+  letter-spacing: 0.5px;
+}
+#btn-end-phase:hover { background: linear-gradient(135deg, #3a8a4a, #2a6a38); box-shadow: 0 0 20px rgba(50,200,80,0.8); }
 button.danger { background: #4a1a1a; border-color: #cc3333; }
 button.danger:hover { background: #6a2a2a; }
 
-/* ログ */
+/* ログ (スタイルは #log-overlay ブロックで定義) */
+#log p { margin: 2px 0; line-height: 1.4; }
+#log p.important { color: #ffcc44; }
+#log p.damage { color: #ff6644; }
+#log p.heal { color: #44ff88; }
+
+/* ── AI Info Strip ── */
+#ai-info-strip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 12px;
+  height: 38px;
+  min-height: 38px;
+  background: rgba(60,10,10,0.75);
+  border-bottom: 1px solid #5a2020;
+  flex-shrink: 0;
+}
+#ai-info-strip .life-display { font-size: 20px; text-shadow: 0 0 8px #ff4444, 0 0 16px rgba(255,50,50,0.4); }
+#ai-info-strip .info-count { font-size: 10px; color: #cc8888; }
+
+/* ── Player Action Bar ── */
+#player-action-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px;
+  height: 44px;
+  min-height: 44px;
+  background: rgba(10,50,20,0.80);
+  border-top: 1px solid #1a5a2a;
+  flex-shrink: 0;
+  overflow: visible;
+}
+#player-action-bar .life-display { font-size: 20px; text-shadow: 0 0 8px #44ff88, 0 0 16px rgba(40,200,80,0.4); }
+#player-action-bar .info-count { font-size: 10px; color: #88cc88; }
+#player-action-bar .sep { width: 1px; background: #2a5a3a; align-self: stretch; margin: 0 2px; }
+#action-hint { font-size: 11px; color: #aaaaff; white-space: nowrap; }
+
+/* ── Log Overlay ── */
+#log-overlay {
+  position: fixed;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 240px;
+  z-index: 60;
+  display: flex;
+  flex-direction: row;
+  transform: translateX(216px);
+  transition: transform 0.25s ease;
+}
+#log-overlay.open { transform: translateX(0); }
+#log-toggle-btn {
+  width: 24px;
+  align-self: center;
+  height: 80px;
+  background: rgba(20,20,50,0.9);
+  border: 1px solid #3a3a6a;
+  border-right: none;
+  border-radius: 6px 0 0 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  color: #aaaaff;
+  writing-mode: vertical-rl;
+  letter-spacing: 2px;
+  padding: 8px 0;
+  flex-shrink: 0;
+}
+#log-toggle-btn:hover { background: rgba(40,40,80,0.95); }
+#log-inner {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: rgba(10,10,22,0.95);
+  border-left: 1px solid #2a2a5a;
+  overflow: hidden;
+}
 #log {
   flex: 1;
   overflow-y: auto;
   padding: 6px 8px;
   font-size: 11px;
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 8px;
   color: #7788aa;
   scrollbar-width: thin;
   scrollbar-color: #2a2a4a transparent;
 }
-#log p { margin: 2px 0; line-height: 1.4; }
-#log p.important { color: #ffcc44; }
-#log p.damage { color: #ff6644; }
-#log p.heal { color: #44ff88; }
+
+/* ── Card Detail Panel ── */
+#card-detail-panel {
+  position: fixed;
+  bottom: 150px;
+  left: 10px;
+  width: 200px;
+  background: rgba(12,12,24,0.90);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 11px;
+  max-height: 200px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  z-index: 55;
+}
 
 /* ── モーダル ── */
 #modal {
@@ -419,18 +529,7 @@ button.danger:hover { background: #6a2a2a; }
 .sep { width: 1px; background: var(--border); align-self: stretch; margin: 0 2px; }
 #action-hint { font-size: 11px; color: #aaaaff; }
 
-/* ── 1. カード詳細パネル ── */
-#card-detail-panel {
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 10px 12px;
-  flex-shrink: 0;
-  font-size: 11px;
-  max-height: 180px;
-  overflow-y: auto;
-  scrollbar-width: thin;
-}
+/* ── 1. カード詳細パネル (スタイルは #card-detail-panel ブロックで定義) ── */
 #card-detail-panel .cdp-title { font-size: 13px; font-weight: 700; color: #aaaaff; margin-bottom: 4px; }
 #card-detail-panel .cdp-type { font-size: 10px; color: #888; margin-bottom: 4px; }
 #card-detail-panel .cdp-pt { font-size: 12px; font-weight: 700; color: #ffcc44; margin-bottom: 4px; }
@@ -3292,6 +3391,11 @@ function showModal(title, content) {
 }
 function closeModal() {
   document.getElementById('modal').classList.remove('active');
+}
+
+function toggleLog() {
+  const el = document.getElementById('log-overlay');
+  if (el) el.classList.toggle('open');
 }
 
 // ============================================================
