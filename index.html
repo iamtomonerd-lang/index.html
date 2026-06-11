@@ -883,11 +883,11 @@ button.danger:hover { background: #6a2a2a; }
   #ai-info-strip .life-display { font-size: 14px; min-width: 36px; }
   #ai-info-strip .info-count { font-size: 8px; }
 
-  /* ── AI土地: 44px ── */
+  /* ── AI土地: 32px ── */
   #ai-lands-row {
-    flex: 0 0 44px !important;
-    height: 44px !important; min-height: 44px !important;
-    padding: 4px 10px;
+    flex: 0 0 32px !important;
+    height: 32px !important; min-height: 32px !important;
+    padding: 3px 10px;
     background: rgba(100,20,20,0.45) !important;
     border-bottom: 1px solid rgba(200,60,60,0.4) !important;
     overflow: hidden;
@@ -895,8 +895,8 @@ button.danger:hover { background: #6a2a2a; }
     align-items: center;
   }
   #ai-lands-row .zone-label  { display: flex !important; font-size: 8px; color: rgba(255,150,150,0.7); min-width: 18px; flex-shrink: 0; }
-  #ai-lands-row .land-zone   { min-height: 0; gap: 5px; padding: 0; flex-wrap: nowrap; align-items: center; flex: 1; }
-  #ai-lands-row .land-card   { width: 44px; height: 34px; font-size: 20px; border-radius: 4px; }
+  #ai-lands-row .land-zone   { min-height: 0; gap: 4px; padding: 0; flex-wrap: nowrap; align-items: center; flex: 1; }
+  #ai-lands-row .land-card   { width: 36px; height: 26px; font-size: 18px; border-radius: 3px; }
   #ai-lands-row .land-card .land-name { display: none; }
 
   /* ── AIフィールド: 残りの3/5 ── */
@@ -904,12 +904,13 @@ button.danger:hover { background: #6a2a2a; }
     flex: 3 3 0 !important;
     min-height: 0 !important;
     background: rgba(40,8,8,0.18);
-    overflow: hidden;
+    overflow: visible;
   }
   #ai-field-row .field-zone {
     height: 100%; flex: unset;
     padding: 4px 8px; gap: 8px;
     align-content: center; align-items: center; flex-wrap: wrap;
+    overflow: visible;
   }
 
   /* ── 中央バー: 16px ── */
@@ -936,19 +937,20 @@ button.danger:hover { background: #6a2a2a; }
     flex: 2 2 0 !important;
     min-height: 0 !important;
     background: rgba(8,30,8,0.18);
-    overflow: hidden;
+    overflow: visible;
   }
   #player-field-row .field-zone {
     height: 100%; flex: unset;
-    padding: 3px 6px; gap: 5px;
-    align-content: center; flex-wrap: wrap;
+    padding: 4px 8px; gap: 8px;
+    align-content: center; align-items: center; flex-wrap: wrap;
+    overflow: visible;
   }
 
-  /* ── PL土地: 44px ── */
+  /* ── PL土地: 32px ── */
   #player-lands-row {
-    flex: 0 0 44px !important;
-    height: 44px !important; min-height: 44px !important;
-    padding: 4px 10px;
+    flex: 0 0 32px !important;
+    height: 32px !important; min-height: 32px !important;
+    padding: 3px 10px;
     background: rgba(20,80,20,0.45) !important;
     border-top: 1px solid rgba(60,200,60,0.4) !important;
     overflow: hidden;
@@ -956,14 +958,14 @@ button.danger:hover { background: #6a2a2a; }
     align-items: center;
   }
   #player-lands-row .zone-label { display: flex !important; font-size: 8px; color: rgba(150,255,150,0.7); min-width: 18px; flex-shrink: 0; }
-  #player-lands-row .land-zone  { min-height: 0; gap: 5px; padding: 0; flex-wrap: nowrap; align-items: center; flex: 1; }
-  #player-lands-row .land-card  { width: 44px; height: 34px; font-size: 20px; border-radius: 4px; }
+  #player-lands-row .land-zone  { min-height: 0; gap: 4px; padding: 0; flex-wrap: nowrap; align-items: center; flex: 1; }
+  #player-lands-row .land-card  { width: 36px; height: 26px; font-size: 18px; border-radius: 3px; }
   #player-lands-row .land-card .land-name { display: none; }
 
-  /* ── PLアクションバー: 34px ── */
+  /* ── PLアクションバー: 28px ── */
   #player-action-bar {
-    flex: 0 0 34px !important;
-    height: 34px !important; min-height: 34px !important;
+    flex: 0 0 28px !important;
+    height: 28px !important; min-height: 28px !important;
     padding: 0 10px; gap: 6px;
     flex-wrap: nowrap; overflow: visible;
     background: rgba(8,40,14,0.92);
@@ -1024,10 +1026,10 @@ button.danger:hover { background: #6a2a2a; }
   /* hand-zoneのベースmin-height上書き */
   .hand-zone { min-height: 0 !important; }
 
-  /* ── フィールドカード: エリアに合わせた大きめサイズ ── */
-  .card       { width: 52px; height: 74px; font-size: 8px; border-radius: 4px; }
-  .field-slot { width: 52px; height: 74px; }
-  .card-art   { font-size: 20px; }
+  /* ── フィールドカード ── */
+  .card       { width: 46px; height: 65px; font-size: 8px; border-radius: 4px; overflow: visible; }
+  .field-slot { width: 46px; height: 65px; }
+  .card-art   { font-size: 18px; }
   .card-name  { font-size: 7px; line-height: 1.1; }
   .card-pt    { font-size: 8px; padding: 1px 2px; }
   .card-cost  { font-size: 7px; }
