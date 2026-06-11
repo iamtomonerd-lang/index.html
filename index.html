@@ -864,7 +864,7 @@ button.danger:hover { background: #6a2a2a; }
    スマホ・タブレット 横向き — Shadowverse方式
    フィールドを全画面に。UI要素はすべてoverlay。
    ══════════════════════════════════════════════════════ */
-@media (max-width: 1280px) and (orientation: landscape) {
+@media (max-width: 1400px) and (orientation: landscape) {
 
   /* 高さはJS(applyMobileHeight)でwindow.innerHeightを直接セット */
   #game  { overflow: hidden !important; }
@@ -1052,7 +1052,7 @@ button.danger:hover { background: #6a2a2a; }
 
 /* ── スマホ 縦向き / 極小画面 ── */
 /* ── 縦向き: スマホ・タブレット全般 ── */
-@media (max-width: 1280px) and (orientation: portrait) {
+@media (max-width: 1400px) and (orientation: portrait) {
   #rotate-overlay { display: flex !important; }
   #game { visibility: hidden; }
 }
@@ -1208,7 +1208,6 @@ button.danger:hover { background: #6a2a2a; }
 </div>
 
 <!-- 縦向き回転要求オーバーレイ -->
-<div id="rotate-overlay">
   <div class="rotate-icon">📱</div>
   <p>横向きにしてください</p>
   <small>このゲームは横向き表示に最適化されています</small>
@@ -5354,7 +5353,7 @@ function toggleLog() {
 
 // ── 画面向きロック (スマホ・タブレットのみ) ──
 (function() {
-  const isMobile = () => /Mobi|Android|iPhone|iPad|Tablet/i.test(navigator.userAgent) || window.innerWidth <= 1280;
+  const isMobile = () => /Mobi|Android|iPhone|iPad|Tablet/i.test(navigator.userAgent) || window.innerWidth <= 1400;
   function tryLockLandscape() {
     if (!isMobile()) return;
     const so = screen.orientation || screen.mozOrientation || screen.msOrientation;
@@ -5374,7 +5373,7 @@ function toggleLog() {
 (function() {
   function applyMobileHeight() {
     const isLandscape = window.innerWidth > window.innerHeight;
-    const isMobile = window.innerWidth <= 1280 || /Mobi|Android|iPhone|iPad|Tablet/i.test(navigator.userAgent);
+    const isMobile = window.innerWidth <= 1400 || /Mobi|Android|iPhone|iPad|Tablet/i.test(navigator.userAgent);
     if (!isLandscape || !isMobile) return;
     const h = window.innerHeight;
     const game  = document.getElementById('game');
