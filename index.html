@@ -3217,8 +3217,6 @@ function render() {
   const agc = document.getElementById('ai-grave-count');
   if (pgc) pgc.textContent = G.players[NET_MY_IDX].graveyard.length;
   if (agc) agc.textContent = G.players[1-NET_MY_IDX].graveyard.length;
-  const ahc = document.getElementById('ai-hand-count');
-  if (ahc) ahc.textContent = G.players[1-NET_MY_IDX].hand.length;
   netPostAction();
   _resetFreezeTimer();
   const fw = document.getElementById('debug-freeze-warn');
@@ -3458,6 +3456,8 @@ function updateCounts() {
   document.getElementById('player-land-deck-count').textContent = G.players[me].landDeck.length;
   document.getElementById('ai-deck-count').textContent = G.players[opp].deck.length;
   document.getElementById('ai-land-deck-count').textContent = G.players[opp].landDeck.length;
+  const ahc = document.getElementById('ai-hand-count');
+  if (ahc) ahc.textContent = G.players[opp].hand.length;
 }
 
 // ============================================================
