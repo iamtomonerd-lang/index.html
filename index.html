@@ -1621,7 +1621,7 @@ function playCardFromHand(player, handIndex) {
             render();
           }});
           renderStack(); render(); updateHints();
-          openPriorityWindow(1 - player, null);
+          openPriorityWindow(1 - player, G.priorityContinuation);
         }};
         log('自クリーチャーを選択（+0/+1）');
         render(); updateHints();
@@ -1644,7 +1644,7 @@ function playCardFromHand(player, handIndex) {
       render();
     }});
     renderStack(); render(); updateHints();
-    openPriorityWindow(1 - player, null);
+    openPriorityWindow(1 - player, G.priorityContinuation);
     return;
   }
 
@@ -1664,7 +1664,7 @@ function playCardFromHand(player, handIndex) {
     render();
   }});
   renderStack(); render(); updateHints();
-  openPriorityWindow(1 - player, null);
+  openPriorityWindow(1 - player, G.priorityContinuation);
 }
 
 // ============================================================
@@ -1713,7 +1713,7 @@ function kaizenChoice(player, handIndex, choice) {
         render();
       }});
       renderStack(); render(); updateHints();
-      openPriorityWindow(1 - player, null);
+      openPriorityWindow(1 - player, G.priorityContinuation);
     }};
     log('対象クリーチャーを選択（2ダメージ）');
   } else {
@@ -1731,7 +1731,7 @@ function kaizenChoice(player, handIndex, choice) {
         render();
       }});
       renderStack(); render(); updateHints();
-      openPriorityWindow(1 - player, null);
+      openPriorityWindow(1 - player, G.priorityContinuation);
     }};
     log('対象クリーチャーを選択（攻撃強制）');
   }
