@@ -595,11 +595,12 @@ button.danger:hover { background: #6a2a2a; }
 
 /* ── Card Detail Panel ── */
 #card-detail-panel {
+  display: none;
   position: fixed;
   top: 40%;
   left: 10px;
   width: 200px;
-  background: rgba(12,12,24,0.90);
+  background: rgba(12,12,24,0.95);
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 10px 12px;
@@ -857,7 +858,7 @@ button.danger:hover { background: #6a2a2a; }
    スマホ・タブレット 横向き — Shadowverse方式
    フィールドを全画面に。UI要素はすべてoverlay。
    ══════════════════════════════════════════════════════ */
-@media (max-width: 1024px) and (orientation: landscape) {
+@media (max-width: 1280px) and (orientation: landscape) {
 
   /* ── MTGアリーナ風レイアウト: flex縦積み ── */
   #game {
@@ -1025,9 +1026,8 @@ button.danger:hover { background: #6a2a2a; }
   .land-card { width: 32px; height: 26px; font-size: 12px; }
   .land-card .land-name { display: none; }
 
-  /* ── ログ・詳細パネルは非表示 ── */
-  #log-overlay       { display: none !important; }
-  #card-detail-panel { display: none !important; }
+  /* ── ログは非表示・詳細パネルはJSで制御 ── */
+  #log-overlay { display: none !important; }
 
   /* マリガン */
   #mulligan-controls { flex-wrap: nowrap; }
@@ -1035,13 +1035,8 @@ button.danger:hover { background: #6a2a2a; }
 }
 
 /* ── スマホ 縦向き / 極小画面 ── */
-@media (max-width: 600px) and (orientation: portrait) {
-  /* 縦向きオーバーレイが表示されるため、背後のゲームは非表示でOK */
-  #game { visibility: hidden; }
-}
-
-/* ── 縦向き警告オーバーレイ (スマホ・タブレットのみ) ── */
-@media (max-width: 1024px) and (orientation: portrait) {
+/* ── 縦向き: スマホ・タブレット全般 ── */
+@media (max-width: 1280px) and (orientation: portrait) {
   #rotate-overlay { display: flex !important; }
   #game { visibility: hidden; }
 }
@@ -3865,7 +3860,7 @@ function kwTipHtml(kw) {
   return `<span class="kw-tip" data-def="${def}">${kw}</span>`;
 }
 
-function showCardDetail(cardId, mouseX, mouseY) {
+function showCardDetail(cardId, x, y) {
   const card = CARD_DB[cardId];
   if (!card) return;
   const panel = document.getElementById('card-detail-panel');
@@ -3882,18 +3877,24 @@ function showCardDetail(cardId, mouseX, mouseY) {
     ${kwHtml}
     <div class="cdp-text">${(card.text || '(テキストなし)').replace(/\\n/g, '\n')}</div>
   `;
-  if (mouseX !== undefined && mouseY !== undefined) {
-    // マウス付近に表示（画面端からはみ出さないよう調整）
+  panel.style.display = 'block';
+  if (x !== undefined && y !== undefined) {
     const pw = 200, ph = 200, margin = 12;
-    let x = mouseX + margin;
-    let y = mouseY - ph / 2;
-    if (x + pw > window.innerWidth)  x = mouseX - pw - margin;
-    if (y < 4) y = 4;
-    if (y + ph > window.innerHeight) y = window.innerHeight - ph - 4;
-    panel.style.left   = x + 'px';
-    panel.style.top    = y + 'px';
+    let px = x + margin;
+    let py = y - ph / 2;
+    if (px + pw > window.innerWidth)  px = x - pw - margin;
+    if (py < 4) py = 4;
+    if (py + ph > window.innerHeight) py = window.innerHeight - ph - 4;
+    panel.style.left   = px + 'px';
+    panel.style.top    = py + 'px';
     panel.style.bottom = 'auto';
   }
+}
+
+function hideCardDetail() {
+  const panel = document.getElementById('card-detail-panel');
+  panel.style.display = 'none';
+  panel._shownCardId = null;
 }
 
 // ============================================================
@@ -4085,6 +4086,7 @@ const PHASE_NAMES_FLASH = {
 // ============================================================
 // GLOBAL RIGHT-CLICK HANDLER (card detail)
 // ============================================================
+// ── 右クリック: カード詳細表示 ──
 document.addEventListener('contextmenu', function(e) {
   const panel = document.getElementById('card-detail-panel');
   const card = e.target.closest('[data-card-id]');
@@ -4092,20 +4094,50 @@ document.addEventListener('contextmenu', function(e) {
     e.preventDefault();
     e.stopPropagation();
     if (panel._shownCardId) {
-      // 既に表示中 → 閉じる
-      panel.innerHTML = '<div class="cdp-placeholder">カードを右クリックで詳細表示</div>';
-      panel._shownCardId = null;
+      hideCardDetail();
     } else {
       showCardDetail(card.dataset.cardId, e.clientX, e.clientY);
       panel._shownCardId = card.dataset.cardId;
     }
   } else if (panel._shownCardId) {
-    // カード以外の場所で右クリック → 閉じる
     e.preventDefault();
-    panel.innerHTML = '<div class="cdp-placeholder">カードを右クリックで詳細表示</div>';
-    panel._shownCardId = null;
+    hideCardDetail();
   }
 }, true);
+
+// ── 長押し: タッチデバイス用カード詳細表示 ──
+(function() {
+  let timer = null;
+  let moved = false;
+  document.addEventListener('touchstart', function(e) {
+    moved = false;
+    const card = e.target.closest('[data-card-id]');
+    if (!card) return;
+    const touch = e.touches[0];
+    timer = setTimeout(() => {
+      if (moved) return;
+      const panel = document.getElementById('card-detail-panel');
+      if (panel._shownCardId === card.dataset.cardId) {
+        hideCardDetail();
+      } else {
+        showCardDetail(card.dataset.cardId, touch.clientX, touch.clientY);
+        panel._shownCardId = card.dataset.cardId;
+      }
+      e.preventDefault();
+    }, 500);
+  }, { passive: true });
+  document.addEventListener('touchmove',  () => { moved = true; clearTimeout(timer); }, { passive: true });
+  document.addEventListener('touchend',   () => { clearTimeout(timer); }, { passive: true });
+  document.addEventListener('touchcancel',() => { clearTimeout(timer); }, { passive: true });
+  // パネル表示中に他の場所をタップしたら閉じる
+  document.addEventListener('touchstart', function(e) {
+    const panel = document.getElementById('card-detail-panel');
+    if (!panel._shownCardId) return;
+    if (!e.target.closest('[data-card-id]') && !e.target.closest('#card-detail-panel')) {
+      hideCardDetail();
+    }
+  }, { passive: true });
+})();
 
 // ============================================================
 // KEYWORD TOOLTIP (fixed overlay, avoids overflow:hidden clipping)
