@@ -1185,6 +1185,7 @@ button.danger:hover { background: #6a2a2a; }
           <button id="btn-mulligan" onclick="doMulligan()" disabled>マリガン</button>
           <button id="btn-charge" onclick="startCharge()">チャージ</button>
           <button onclick="showTrainingPanel()" style="background:#1a2a1a;border-color:#446644;font-size:10px;">🧠 学習</button>
+          <button onclick="showTestPanel()" style="background:#1a1a2a;border-color:#444488;font-size:10px;">🧪 テスト</button>
           <button onclick="showDebugPanel()" style="background:#1a1a2a;border-color:#444466;font-size:10px;" title="フリーズ・バグ報告用デバッグ情報">🐛 debug</button>
         </div>
         <div id="mulligan-controls" style="display:none; gap:10px;">
@@ -5375,6 +5376,239 @@ function showDebugPanel() {
     </div>
   `;
   showModal('🐛 デバッグ情報', html);
+}
+
+// ============================================================
+// CARD EFFECT TEST FRAMEWORK
+// ============================================================
+function _testMakeState() {
+  // Gをテスト用の最小状態に差し替えるヘルパー
+  const mkP = () => ({
+    life:20, deck:['shinmai_heishi','shinmai_heishi','shinmai_heishi'],
+    landDeck:[], hand:[], field:[], lands:[], graveyard:[], exile:[],
+    mana:{R:0,U:0,G:0,W:10,B:0,C:10},
+    mulliganUsed:false, attackers:[], blockers:{}
+  });
+  return {
+    turn:1, activePlayer:0, phase:'main', combatStep:null, priority:0,
+    stack:[], players:[mkP(), mkP()],
+    nextInstanceId:100,
+    firstTurn:false, awaitingPriority:false, priorityFor:null, priorityContinuation:null,
+    chargingMode:false, chargeUsedThisTurn:false, targetMode:null,
+    attackMode:false, blockMode:false, selectedAttacker:null, selectedCard:null,
+    tempBuffs:[], permanentBuffs:[],
+    landPlacedThisTurn:0, mustAttackCreatures:new Set(),
+    blockDrawTrigger:false, arestiaBuffActive:false, combatBlockersAlive:{},
+    cantAttackPermanent:new Set(), kaizen_used_names:new Set(),
+    playerBlockMode:false, aiCurrentAttackers:[], playerBlockAssignments:{},
+    selectedBlockerToAssign:null, directlyAttackedCreatures:new Set(), kakutouTargets:{}
+  };
+}
+
+function _testAddCreature(player, cardId, opts={}) {
+  const inst = {
+    instanceId: G.nextInstanceId++, cardId,
+    tapped:false, damage:opts.damage||0, sick:false,
+    chargeCard:null, tempPower:0, tempToughness:0,
+    entryTurn:1, mustAttack:false
+  };
+  G.players[player].field.push(inst);
+  return inst;
+}
+
+function _testSaveG() {
+  // Setを配列として直列化してバックアップ
+  const s = JSON.parse(JSON.stringify(G, (_,v)=> v instanceof Set?[...v]:v));
+  return s;
+}
+
+function _testRestoreG(saved) {
+  G = JSON.parse(JSON.stringify(saved));
+  // Setを復元
+  G.mustAttackCreatures = new Set(G.mustAttackCreatures||[]);
+  G.cantAttackPermanent = new Set(G.cantAttackPermanent||[]);
+  G.kaizen_used_names   = new Set(G.kaizen_used_names||[]);
+  G.directlyAttackedCreatures = new Set(G.directlyAttackedCreatures||[]);
+}
+
+function runCardTests() {
+  const originalG = G ? _testSaveG() : null;
+  const results = [];
+
+  function assert(name, cond, detail) {
+    results.push({ name, pass: !!cond, detail: detail||'' });
+  }
+
+  function withState(fn) {
+    G = _testMakeState();
+    try { fn(); }
+    catch(e) { results.push({name:'[exception]', pass:false, detail:e.message}); }
+  }
+
+  // ─────────────────────────────────────────────
+  // 1. checkCreatureDeath: ダメージ >= タフネスで破壊
+  withState(()=>{
+    const inst = _testAddCreature(1,'shinmai_heishi'); // 1/2
+    inst.damage = 1;
+    const dead1 = checkCreatureDeath(1, inst.instanceId, 0);
+    assert('破壊: ダメージ1 < タフネス2 → 生存', !dead1 && G.players[1].field.length===1);
+    inst.damage = 2;
+    const dead2 = checkCreatureDeath(1, inst.instanceId, 0);
+    assert('破壊: ダメージ2 >= タフネス2 → 破壊', dead2 && G.players[1].field.length===0 && G.players[1].graveyard.length===1);
+  });
+
+  // 2. applyDamageToCreature: 正しくダメージが入り墓地に行く
+  withState(()=>{
+    const inst = _testAddCreature(1,'serashia_junhei'); // 1/2
+    applyDamageToCreature(1, inst.instanceId, 1, 0);
+    assert('ダメージ適用: 1ダメージ後生存', G.players[1].field.length===1 && G.players[1].field[0].damage===1);
+    applyDamageToCreature(1, inst.instanceId, 1, 0);
+    assert('ダメージ適用: 2ダメージ後破壊', G.players[1].field.length===0 && G.players[1].graveyard[0]==='serashia_junhei');
+  });
+
+  // 3. ETB damage3opponent: セラシアの僧侶が相手クリーチャーに3ダメージ
+  withState(()=>{
+    const target = _testAddCreature(0,'arestia'); // 5/5 相手フィールド
+    const souryo = _testAddCreature(1,'serashia_souryo'); // 3/5 AIフィールド
+    // AI(player=1)のETBはターゲットを自動選択
+    fireETB(1, souryo.instanceId);
+    const t = G.players[0].field.find(x=>x.instanceId===target.instanceId);
+    assert('ETB 僧侶(AI): 相手クリーチャーに3ダメージ', t && t.damage===3);
+  });
+
+  // 4. ETB damage1opponent: 天からの使者が相手クリーチャーに1ダメージ
+  withState(()=>{
+    const target = _testAddCreature(0,'shinmai_heishi'); // 1/2
+    const tenshi = _testAddCreature(1,'ten_kara_shisha');
+    fireETB(1, tenshi.instanceId);
+    const t = G.players[0].field.find(x=>x.instanceId===target.instanceId);
+    // 1/2に1ダメージ→生存（damage=1）
+    assert('ETB 使者(AI): 相手クリーチャーに1ダメージ', t && t.damage===1);
+  });
+
+  // 5. ETB mustAttackTarget: セラシアの盾兵が攻撃強制
+  withState(()=>{
+    const target = _testAddCreature(0,'shinmai_heishi');
+    const junhei = _testAddCreature(1,'serashia_junhei');
+    fireETB(1, junhei.instanceId);
+    const t = G.players[0].field.find(x=>x.instanceId===target.instanceId);
+    assert('ETB 盾兵(AI): 攻撃強制フラグ', t && t.mustAttack===true && G.mustAttackCreatures.has(target.instanceId));
+  });
+
+  // 6. ETB damage3 (player=0, targetMode): プレイヤー操作でtargetMode設定
+  withState(()=>{
+    const target = _testAddCreature(1,'arestia'); // 相手(AI)フィールド
+    const souryo = _testAddCreature(0,'serashia_souryo');
+    fireETB(0, souryo.instanceId);
+    assert('ETB 僧侶(PL): targetModeがセット', G.targetMode !== null && G.targetMode.type==='opponentCreature');
+    // コールバックを手動発火
+    G.targetMode.callback({instId: target.instanceId});
+    const t = G.players[1].field.find(x=>x.instanceId===target.instanceId);
+    assert('ETB 僧侶(PL): コールバック後3ダメージ', t && t.damage===3);
+  });
+
+  // 7. onBlock draw1: セラシアの兵士がブロック時にドロー
+  withState(()=>{
+    G.players[0].deck = ['shinmai_heishi','shinmai_heishi','shinmai_heishi'];
+    const atk = _testAddCreature(1,'shinmai_heishi');  // AI攻撃
+    const blk = _testAddCreature(0,'serashia_heishi'); // PL防御 onBlock:draw1
+    const handBefore = G.players[0].hand.length;
+    resolveSingleCombat(1, atk.instanceId, null, blk.instanceId);
+    assert('onBlock draw1: 兵士ブロック時1ドロー', G.players[0].hand.length === handBefore+1);
+  });
+
+  // 8. onBlock gain3life: セラシアの僧侶がブロック時にライフ+3
+  withState(()=>{
+    G.players[0].life = 20;
+    const atk = _testAddCreature(1,'shinmai_heishi');     // 1/2
+    const blk = _testAddCreature(0,'serashia_souryo');    // 3/5 onBlock:gain3life
+    resolveSingleCombat(1, atk.instanceId, null, blk.instanceId);
+    assert('onBlock gain3life: 僧侶ブロック時ライフ+3', G.players[0].life===23);
+  });
+
+  // 9. onBlock damage2attacker: 盾兵がブロック時に攻撃者に2ダメージ (AI blocker)
+  withState(()=>{
+    const atk = _testAddCreature(0,'shinmai_heishi');     // PL攻撃 1/2
+    const blk = _testAddCreature(1,'serashia_junhei');    // AI防御 1/2 onBlock:damage2attacker
+    // atkPlayer=0がAIのblkにブロックされる場合: opp=1, AIのonBlockはatkInst.damage+=2
+    resolveSingleCombat(0, atk.instanceId, null, blk.instanceId);
+    const a = G.players[0].field.find(x=>x.instanceId===atk.instanceId);
+    // 盾兵(1パワー)のダメージ=1 + onBlock2ダメージ = 合計3ダメージで破壊
+    assert('onBlock damage2attacker: 攻撃者にダメージ追加→破壊', G.players[0].field.length===0 || (a&&a.damage>=3));
+  });
+
+  // 10. addPermanentBuff: パーマネントバフが正しく加算
+  withState(()=>{
+    const inst = _testAddCreature(0,'shinmai_heishi'); // 1/2
+    addPermanentBuff(0, inst.instanceId, 2, 3);
+    const pb = getPermanentBuff(inst.instanceId);
+    assert('permanentBuff: +2/+3が正しく記録', pb.power===2 && pb.toughness===3);
+    const effPow = getEffectivePower(0, inst);
+    assert('effectivePower: バフ込みで1+2=3', effPow===3);
+  });
+
+  // 11. 盾撃スタック解決: 2ダメージ + +0/+1
+  withState(()=>{
+    const ownCreature = _testAddCreature(0,'shinmai_heishi');  // 1/2
+    const oppCreature = _testAddCreature(1,'arestia');          // 5/5
+    const tBefore = ownCreature.tempToughness;
+    const dBefore = oppCreature.damage;
+    // スタックに盾撃を直接積んで解決
+    G.stack.push({ name:'盾撃', icon:'🛡️', owner:0, resolve:()=>{
+      applyDamageToCreature(1, oppCreature.instanceId, 2, 0);
+      ownCreature.tempToughness = (ownCreature.tempToughness||0)+1;
+      G.tempBuffs.push({instanceId:ownCreature.instanceId,power:0,toughness:1});
+    }});
+    // スタック解決
+    const fn = G.stack.pop().resolve;
+    fn();
+    const oC = G.players[1].field.find(x=>x.instanceId===oppCreature.instanceId);
+    assert('盾撃: 相手クリーチャーに2ダメージ', oC && oC.damage===dBefore+2);
+    assert('盾撃: 自クリーチャーに+0/+1', ownCreature.tempToughness===tBefore+1);
+  });
+
+  // 12. 格闘ダメージ交換: 互いにパワー分のダメージ
+  withState(()=>{
+    const pl  = _testAddCreature(0,'arestia');      // 5/5
+    const ai  = _testAddCreature(1,'shinmai_heishi'); // 1/2
+    resolveSingleCombat(0, pl.instanceId, ai.instanceId, null); // kakutou
+    const pInst = G.players[0].field.find(x=>x.instanceId===pl.instanceId);
+    // arestia(5/5) vs 新米兵士(1/2): 新米は5ダメで破壊、arestiaは1ダメ残存
+    assert('格闘: 弱いクリーチャーが破壊', G.players[1].field.length===0);
+    assert('格闘: 強いクリーチャーがダメージを受ける', pInst && pInst.damage===1);
+  });
+
+  // ─────────────────────────────────────────────
+  // 結果集計
+  if (originalG) _testRestoreG(originalG);
+  else { try { render(); } catch(e){} }
+  return results;
+}
+
+function showTestPanel() {
+  const results = runCardTests();
+  const pass = results.filter(r=>r.pass).length;
+  const fail = results.filter(r=>!r.pass).length;
+  const rows = results.map(r=>`
+    <tr style="border-bottom:1px solid #222;">
+      <td style="padding:6px 8px;font-size:13px;">${r.pass?'✅':'❌'}</td>
+      <td style="padding:6px 8px;font-size:13px;color:${r.pass?'#88ffaa':'#ff8888'};">${r.name}</td>
+      <td style="padding:6px 8px;font-size:11px;color:#888;">${r.detail||''}</td>
+    </tr>`).join('');
+  const html=`
+    <div style="margin-bottom:12px;font-size:15px;">
+      結果: <span style="color:#88ffaa;">✅ ${pass}件合格</span>
+      ${fail?`<span style="color:#ff8888;margin-left:12px;">❌ ${fail}件失敗</span>`:''}
+    </div>
+    <table style="width:100%;border-collapse:collapse;background:#0a0a14;">
+      <thead><tr style="border-bottom:1px solid #444;">
+        <th style="padding:4px 8px;text-align:left;font-size:11px;color:#666;"></th>
+        <th style="padding:4px 8px;text-align:left;font-size:11px;color:#666;">テスト名</th>
+        <th style="padding:4px 8px;text-align:left;font-size:11px;color:#666;">詳細</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+  showModal('🧪 カード効果テスト', html);
 }
 
 // render呼び出し時にフリーズタイマーをリセット
