@@ -1876,6 +1876,7 @@ function shuffle(arr) {
 let G; // global game state
 
 function initGame() {
+  if (typeof REPLAY_HISTORY !== 'undefined') REPLAY_HISTORY = []; // 新ゲームでリプレイ履歴をクリア
   G = {
     turn: 1,
     activePlayer: 0, // 0=player, 1=ai
@@ -2610,8 +2611,84 @@ function endGame(winner) {
   }
   const who = winner === 0 ? 'あなたの' : 'AIの';
   log(`ゲーム終了！ ${who}勝利！`, 'important');
-  showModal('ゲーム終了', `<p style="font-size:24px; text-align:center; margin:20px 0;">${who}勝利！</p><button onclick="location.reload()" style="width:100%;padding:10px;margin-bottom:8px;">もう一度プレイ</button><button onclick="closeModal();showHomeScreen();" style="width:100%;padding:10px;background:#12121e;border:1px solid #4a4a6a;color:#aaaacc;border-radius:6px;cursor:pointer;">🏠 ホームに戻る</button>`);
+  recordReplaySnapshot(`ゲーム終了 (${who}勝利)`);
+  showModal('ゲーム終了', `<p style="font-size:24px; text-align:center; margin:20px 0;">${who}勝利！</p><button onclick="location.reload()" style="width:100%;padding:10px;margin-bottom:8px;">もう一度プレイ</button><button onclick="closeModal();showReplayViewer();" style="width:100%;padding:10px;margin-bottom:8px;background:#1a1a3a;border:1px solid #4444aa;color:#aaaaff;border-radius:6px;cursor:pointer;">📽️ リプレイを見る</button><button onclick="closeModal();showHomeScreen();" style="width:100%;padding:10px;background:#12121e;border:1px solid #4a4a6a;color:#aaaacc;border-radius:6px;cursor:pointer;">🏠 ホームに戻る</button>`);
   G.phase = 'ended';
+}
+
+// ============================================================
+// REPLAY (ターン毎の盤面スナップショットを記録してステップ再生)
+// ============================================================
+let REPLAY_HISTORY = [];
+
+function recordReplaySnapshot(label) {
+  try {
+    if (!G) return;
+    if (REPLAY_HISTORY.length >= 200) REPLAY_HISTORY.shift();
+    const snap = JSON.parse(JSON.stringify(G, (_,v)=> v instanceof Set ? [...v] : v));
+    REPLAY_HISTORY.push({ label, snap });
+  } catch(e) {}
+}
+
+function _replayRestore(snap) {
+  G = JSON.parse(JSON.stringify(snap));
+  G.mustAttackCreatures = new Set(G.mustAttackCreatures||[]);
+  G.cantAttackPermanent = new Set(G.cantAttackPermanent||[]);
+  G.kaizen_used_names   = new Set(G.kaizen_used_names||[]);
+  G.directlyAttackedCreatures = new Set(G.directlyAttackedCreatures||[]);
+  if (G.mulliganSelected) G.mulliganSelected = new Set(G.mulliganSelected);
+  G.targetMode = null; G.combatArrows = [];
+}
+
+let _replayIndex = 0;
+function showReplayViewer() {
+  if (REPLAY_HISTORY.length === 0) { showModal('📽️ リプレイ', '<p style="color:#888;">記録がありません</p>'); return; }
+  _replayIndex = 0;
+  let bar = document.getElementById('replay-bar');
+  if (!bar) {
+    bar = document.createElement('div');
+    bar.id = 'replay-bar';
+    bar.style.cssText = 'position:fixed;bottom:0;left:0;right:0;z-index:700;background:rgba(8,8,22,0.96);border-top:2px solid #4444aa;display:flex;align-items:center;justify-content:center;gap:14px;padding:10px;';
+    bar.innerHTML = `
+      <button onclick="replayStep(-1)" style="padding:10px 22px;font-size:18px;background:#1a1a3a;border:1px solid #4444aa;color:#aaaaff;border-radius:8px;cursor:pointer;">◀ 前</button>
+      <span id="replay-label" style="color:#ccccff;font-size:14px;min-width:200px;text-align:center;"></span>
+      <button onclick="replayStep(1)" style="padding:10px 22px;font-size:18px;background:#1a1a3a;border:1px solid #4444aa;color:#aaaaff;border-radius:8px;cursor:pointer;">次 ▶</button>
+      <button onclick="closeReplayViewer()" style="padding:10px 18px;font-size:14px;background:#3a1a1a;border:1px solid #aa4444;color:#ffaaaa;border-radius:8px;cursor:pointer;">✕ 終了</button>`;
+    document.body.appendChild(bar);
+    // リプレイ中の盤面操作を吸収する透明シールド
+    const shield = document.createElement('div');
+    shield.id = 'replay-shield';
+    shield.style.cssText = 'position:fixed;inset:0;z-index:690;background:transparent;';
+    document.body.appendChild(shield);
+  }
+  bar.style.display = 'flex';
+  const shield = document.getElementById('replay-shield');
+  if (shield) shield.style.display = 'block';
+  replayShow(0);
+}
+
+function replayStep(dir) {
+  replayShow(Math.max(0, Math.min(REPLAY_HISTORY.length - 1, _replayIndex + dir)));
+}
+
+function replayShow(i) {
+  _replayIndex = i;
+  const entry = REPLAY_HISTORY[i];
+  _replayRestore(entry.snap);
+  const labelEl = document.getElementById('replay-label');
+  if (labelEl) labelEl.textContent = `${i+1}/${REPLAY_HISTORY.length}: ${entry.label}`;
+  render();
+}
+
+function closeReplayViewer() {
+  const bar = document.getElementById('replay-bar');
+  const shield = document.getElementById('replay-shield');
+  if (bar) bar.style.display = 'none';
+  if (shield) shield.style.display = 'none';
+  // 最終状態(ゲーム終了時)に戻す
+  const last = REPLAY_HISTORY[REPLAY_HISTORY.length - 1];
+  if (last) { _replayRestore(last.snap); G.phase = 'ended'; render(); }
+  showHomeScreen();
 }
 
 // ============================================================
@@ -2934,6 +3011,7 @@ function endTurn() {
   const apName = NET_MODE !== 'local' ? (ap === NET_MY_IDX ? 'あなたのターン' : '相手のターン') : (ap === 0 ? 'あなたのターン' : 'AIのターン');
   showPhaseFlash(`ターン ${G.turn}`, apName);
   log(`--- ターン${G.turn} ${ap===0?'プレイヤー':'AI'}のターン ---`, 'important');
+  recordReplaySnapshot(`ターン${G.turn} ${apName}`);
 
   // Untap
   untapAll(ap);
