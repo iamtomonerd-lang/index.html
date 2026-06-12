@@ -2984,7 +2984,7 @@ function endPhase() {
     const opponent = 1 - G.activePlayer;
     G._skipPriorityWindow = true;
     openPriorityWindow(opponent, () => {
-      G._skipPriorityWindow = false;
+      // フラグはtrueのまま再入 → ウィンドウ再オープンせず本処理へ（下でリセット）
       endPhase();
     }, 'フェイズ終了時');
     return;
@@ -3809,7 +3809,12 @@ function aiHandlePriority() {
 }
 
 function passPriority() {
-  if (NET_MODE === 'guest') { netSendAction('passPriority', {}); return; }
+  if (NET_MODE === 'guest') {
+    // 自分に優先権がある時のみパスを送信（相手の優先権は奪えない）
+    if (G.awaitingPriority && G.priorityFor === NET_MY_IDX) netSendAction('passPriority', {});
+    return;
+  }
+  if (NET_MODE === 'host' && G.awaitingPriority && G.priorityFor !== NET_MY_IDX) return;
   if (G.awaitingPriority) {
     closePriorityAndResolve();
     return;
@@ -4917,7 +4922,7 @@ function updateHints() {
     const pr = G.priorityReason ? `【${G.priorityReason}】` : '';
     hint.innerHTML = `⚡ <b>優先権${pr}</b> — Quickスペルを使用できます（「優先権パス」で続行）`;
     hint.style.color = '#ffcc44';
-  } else if (G.awaitingPriority && !myTurn && G.priorityFor !== NET_MY_IDX) {
+  } else if (G.awaitingPriority && G.priorityFor !== NET_MY_IDX) {
     const pr = G.priorityReason ? `【${G.priorityReason}】` : '';
     hint.innerHTML = `⚡ <b>優先権${pr}</b> — ${oppName}が応答中です...`;
     hint.style.color = '#aaddff';
@@ -4955,14 +4960,15 @@ function updateHints() {
   const btnEnd = document.getElementById('btn-end-phase');
   btnEnd.disabled = (!G.playerBlockMode && G.activePlayer !== actingPlayer) || G.phase === 'ended';
 
-  // Pass button: enable when priority window open for player, and update label
+  // Pass button: 自分に優先権がある時のみ有効
   const btnPass = document.getElementById('btn-pass');
-  if (G.awaitingPriority && G.priorityFor === 0) {
-    btnPass.textContent = '優先権パス';
-    btnPass.disabled = false;
+  if (G.awaitingPriority) {
+    const mine = NET_MODE === 'hotseat' ? true : G.priorityFor === actingPlayer;
+    btnPass.textContent = mine ? '優先権パス' : '相手の優先権...';
+    btnPass.disabled = !mine;
   } else {
     btnPass.textContent = '優先権パス';
-    btnPass.disabled = false;
+    btnPass.disabled = G.stack.length === 0;
   }
 }
 
@@ -6610,7 +6616,11 @@ function netExecuteGuestAction(msg) {
   const {actionType, payload} = msg;
   switch (actionType) {
     case 'endPhase':    endPhase(); break;
-    case 'passPriority': passPriority(); break;
+    case 'passPriority': {
+      // ゲスト(player1)に優先権がある時のみ受理
+      if (G.awaitingPriority && G.priorityFor === 1) closePriorityAndResolve();
+      break;
+    }
     case 'charge':      startCharge(); break;
     case 'playCard': {
       const idx = payload.handIdx;
