@@ -989,7 +989,7 @@ button.danger:hover { background: #6a2a2a; }
   #controls-btns { gap: 10px; flex-wrap: nowrap; }
   #controls-btns button { padding: 14px 28px; font-size: 30px; }
   #btn-end-phase { padding: 14px 34px; font-size: 34px; font-weight: 700; }
-  #action-hint   { font-size: 18px; max-width: 160px; white-space: normal; line-height: 1.2; }
+  #action-hint   { display: none !important; }
   #controls-btns button[onclick="showTrainingPanel()"],
   #controls-btns button[onclick="showDebugPanel()"] { font-size: 12px; padding: 6px 10px; }
 
@@ -1200,7 +1200,7 @@ button.danger:hover { background: #6a2a2a; }
 
 <!-- ログオーバーレイ -->
 <div id="log-overlay">
-  <button id="log-toggle-btn" onclick="toggleLog()"></button>
+  <button id="log-toggle-btn" onclick="toggleLog()">ログ</button>
   <div id="log-inner">
     <div style="font-size:10px;color:#555;padding:4px 8px;border-bottom:1px solid #1a1a3a;">ゲームログ</div>
     <div id="log-recent"></div>
@@ -4794,18 +4794,28 @@ function saveWeightsToFile() {
   const json=JSON.stringify(data,null,2);
   const blob=new Blob([json],{type:'application/json'});
   const filename=`ai_weights_v${AI_WEIGHTS_VERSION}.json`;
-  // iOS Safari doesn't support <a download> — use share API or open in new tab
-  if (navigator.share && /iPhone|iPad|iPod/i.test(navigator.userAgent)) {
-    const file=new File([blob], filename, {type:'application/json'});
-    navigator.share({files:[file], title:filename}).catch(()=>{
-      // share cancelled or failed — fall back to data URI
-      const url='data:application/json;charset=utf-8,'+encodeURIComponent(json);
-      window.open(url,'_blank');
-    });
+  const isIOS=/iPhone|iPad|iPod/i.test(navigator.userAgent);
+  if (isIOS && navigator.share && navigator.canShare && navigator.canShare({files:[new File([blob],filename,{type:'application/json'})]})) {
+    navigator.share({files:[new File([blob],filename,{type:'application/json'})], title:filename})
+      .catch(()=>_saveWeightsFallback(json));
+  } else if (isIOS) {
+    _saveWeightsFallback(json);
   } else {
     const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
     a.download=filename; document.body.appendChild(a); a.click(); document.body.removeChild(a);
   }
+}
+function _saveWeightsFallback(json) {
+  // iOS fallback: show JSON in a textarea for manual copy/save
+  const box=document.createElement('div');
+  box.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:20px;';
+  box.innerHTML=`
+    <div style="color:#aaaaff;font-size:14px;font-weight:700;">💾 学習データ — テキストをコピーして保存してください</div>
+    <textarea style="width:100%;max-width:560px;height:260px;background:#0a0a1a;color:#aaffaa;border:1px solid #336633;border-radius:6px;padding:8px;font-size:10px;font-family:monospace;" readonly onclick="this.select()">${json}</textarea>
+    <div style="color:#888;font-size:11px;">テキストを全選択してコピー → メモ帳などに貼り付けて .json で保存</div>
+    <button style="padding:10px 28px;background:#1a3a1a;border:1px solid #44aa44;color:#aaffaa;border-radius:6px;font-size:14px;" onclick="this.parentNode.remove()">閉じる</button>`;
+  document.body.appendChild(box);
+  box.querySelector('textarea').select();
 }
 
 function loadWeightsFromFile(file) {
