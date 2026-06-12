@@ -953,32 +953,6 @@ button.danger:hover { background: #6a2a2a; }
 .net-status {
   font-size: 11px; color: #888; min-height: 18px; margin-top: 10px;
 }
-#net-timer-bar {
-  display: none;
-  position: fixed;
-  bottom: 0; left: 0; right: 0;
-  height: 5px;
-  background: #1a1a3a;
-  z-index: 400;
-  overflow: hidden;
-}
-#net-timer-fill {
-  height: 100%;
-  transition: width 1s linear, background 0.3s;
-  background: #44ff88;
-}
-#net-timer-label {
-  position: fixed;
-  bottom: 7px; right: 8px;
-  font-size: 10px;
-  color: #888;
-  z-index: 401;
-  pointer-events: none;
-  background: rgba(0,0,0,0.6);
-  padding: 1px 4px;
-  border-radius: 3px;
-}
-
 /* ── レスポンシブレイアウト ── */
 
 /* ══════════════════════════════════════════════════════
@@ -1779,12 +1753,6 @@ button.danger:hover { background: #6a2a2a; }
   <button class="hs-btn" onclick="hotseatResume()">▶ ターン開始</button>
 </div>
 
-<!-- Turn Timer Bar -->
-<div id="net-timer-bar">
-  <div id="net-timer-fill" style="width:100%;"></div>
-</div>
-<div id="net-timer-label"></div>
-
 <!-- Arrow Overlay -->
 <svg id="arrow-overlay"></svg>
 
@@ -2061,6 +2029,8 @@ function initGame() {
     combatArrows: [],
     mulliganMode: false,
     mulliganSelected: new Set(),
+    // オンライン対戦では両者がマリガンを確定するまで待つ（local/hotseatはP1のみ）
+    mulliganDone: [false, NET_MODE === 'host' ? false : true],
   };
 
   // Draw initial hands
@@ -2091,7 +2061,14 @@ function showStartMulligan() {
 }
 
 function confirmStartMulligan() {
-  if (NET_MODE === 'guest') { netSendAction('mulliganConfirm', {selected: Array.from(G.mulliganSelected||[])}); return; }
+  if (NET_MODE === 'guest') {
+    netSendAction('mulliganConfirm', {selected: Array.from(G.mulliganSelected||[])});
+    // ゲスト側は楽観的にUIを閉じて相手を待つ（正式な状態はホストから同期される）
+    const mc = document.getElementById('mulligan-controls');
+    if (mc) mc.style.display = 'none';
+    log('マリガンを確定しました。相手を待っています...');
+    return;
+  }
   _doConfirmStartMulligan();
 }
 function _doConfirmStartMulligan() {
@@ -2105,23 +2082,44 @@ function _doConfirmStartMulligan() {
     p.mulliganUsed = true;
     log(`マリガン: ${chosen.size}枚入れ替え`);
   }
-  G.mulliganMode = false;
   G.mulliganSelected = new Set();
-  const mc = document.getElementById('mulligan-controls');
-  if (mc) mc.style.display = 'none';
-  startFirstTurn();
+  if (!G.mulliganDone) G.mulliganDone = [false, true];
+  G.mulliganDone[NET_MY_IDX] = true;
+  checkMulliganComplete();
 }
 
 function skipStartMulligan() {
-  if (NET_MODE === 'guest') { netSendAction('mulliganSkip', {}); return; }
+  if (NET_MODE === 'guest') {
+    netSendAction('mulliganSkip', {});
+    const mc = document.getElementById('mulligan-controls');
+    if (mc) mc.style.display = 'none';
+    log('マリガンなしで確定しました。相手を待っています...');
+    return;
+  }
   _doSkipStartMulligan();
 }
 function _doSkipStartMulligan() {
-  G.mulliganMode = false;
   G.mulliganSelected = new Set();
+  if (!G.mulliganDone) G.mulliganDone = [false, true];
+  G.mulliganDone[NET_MY_IDX] = true;
+  checkMulliganComplete();
+}
+
+// 両プレイヤーのマリガンが確定したらゲーム開始
+function checkMulliganComplete() {
+  const done = G.mulliganDone || [true, true];
   const mc = document.getElementById('mulligan-controls');
-  if (mc) mc.style.display = 'none';
-  startFirstTurn();
+  if (done[0] && done[1]) {
+    G.mulliganMode = false;
+    G.mulliganSelected = new Set();
+    if (mc) mc.style.display = 'none';
+    startFirstTurn();
+  } else {
+    // 自分は確定済み → 相手待ち
+    if (mc && done[NET_MY_IDX]) mc.style.display = 'none';
+    log('相手のマリガンを待っています...');
+    render(); updateHints();
+  }
 }
 
 function startFirstTurn() {
@@ -2475,8 +2473,8 @@ function kaizenOCDeploy(player) {
   if (eligible.length === 0) { log('介善OC: 出せるクリーチャーがありません'); return; }
   if (p.field.length >= 5) { log('介善OC: フィールドが満杯のため出せません'); return; }
 
-  // AIは自動で最強を選ぶ
-  if (player === 1 && NET_MODE === 'local') {
+  // AI・オンラインのゲスト側は自動で最強を選ぶ（モーダルは自分の画面にしか出せないため）
+  if (player === 1 && NET_MODE !== 'hotseat') {
     const best = eligible.reduce((a,b)=>(b.card.power||0)>(a.card.power||0)?b:a);
     _kaizenDeployCreature(player, best.cid, best.i);
     return;
@@ -2994,14 +2992,17 @@ function endPhase() {
   G._skipPriorityWindow = false;
   clearTargetMode();
 
-  if (G.phase === 'main' && G.activePlayer === 0) {
+  // メインフェイズ終了（人間が操作する側のターン: local=P0 / hotseat・host=両方）
+  const humanAp = NET_MODE === 'local' ? 0 : G.activePlayer;
+  if (G.phase === 'main' && G.activePlayer === humanAp) {
     // mustAttackクリーチャーが残っていれば強制攻撃
-    const mustAtkers = G.players[0].field.filter(c =>
-      c.mustAttack && canCreatureAttack(0, c)
+    const ap = G.activePlayer;
+    const mustAtkers = G.players[ap].field.filter(c =>
+      c.mustAttack && canCreatureAttack(ap, c)
     );
     if (mustAtkers.length > 0) {
       log(`⚠️ ${CARD_DB[mustAtkers[0].cardId].name} は攻撃しなければなりません（アレスティア効果）`, 'important');
-      startSingleAttack(0, mustAtkers[0].instanceId);
+      startSingleAttack(ap, mustAtkers[0].instanceId);
       return;
     }
     endTurn();
@@ -3129,8 +3130,8 @@ function startSingleAttack(player, atkInstId) {
       if (player === 1) setTimeout(() => continueAIAttack(), 300);
       return;
     }
-    if (NET_MODE === 'hotseat') {
-      // ホットシート: 守備側プレイヤーが自分でブロックを宣言
+    if (NET_MODE === 'hotseat' || NET_MODE === 'host') {
+      // 人間が守備側（ホットシート/オンライン）: 守備側プレイヤーが自分でブロックを宣言
       const atkInst2 = G.players[player].field.find(c => c.instanceId === atkInstId);
       const eligible = G.players[opp].field.filter(c => {
         const bc = CARD_DB[c.cardId];
@@ -3396,7 +3397,9 @@ function endTurn() {
 // ============================================================
 function startCharge() {
   if (NET_MODE === 'guest') { netSendAction('charge', {}); return; }
-  const charger = NET_MODE === 'hotseat' ? G.activePlayer : 0;
+  // チャージは自分のターンのみ可能 → 操作主体は常にアクティブプレイヤー
+  // (local: ボタンはP0のターンのみ有効 / host: ゲストの中継はゲストのターンのみ)
+  const charger = NET_MODE === 'local' ? 0 : G.activePlayer;
   if (G.activePlayer !== charger) { log('あなたのターンではありません'); return; }
   if (G.phase !== 'main') { log('メインフェイズ中のみチャージできます'); return; }
   if (G.chargeUsedThisTurn) { log('チャージはターンに1回のみです'); return; }
@@ -3412,7 +3415,7 @@ function startCharge() {
 }
 
 function doCharge(handIndex) {
-  const charger = NET_MODE === 'hotseat' ? G.activePlayer : 0;
+  const charger = NET_MODE === 'local' ? 0 : G.activePlayer;
   const p = G.players[charger];
   const cardId = p.hand[handIndex];
   // Now need to pick a land
@@ -3423,7 +3426,7 @@ function doCharge(handIndex) {
 }
 
 function chargeToLand(landInstId) {
-  const charger = NET_MODE === 'hotseat' ? G.activePlayer : 0;
+  const charger = NET_MODE === 'local' ? 0 : G.activePlayer;
   const p = G.players[charger];
   const land = p.lands.find(l => l.instanceId === landInstId);
   if (!land || land.chargeCard) {
@@ -4326,7 +4329,7 @@ function renderHand(player, zoneId) {
     const el = document.createElement('div');
     if (player !== NET_MY_IDX) {
       el.className = 'card face-down';
-    } else if (G.mulliganMode) {
+    } else if (G.mulliganMode && !(G.mulliganDone && G.mulliganDone[player])) {
       el.className = `card color-${card.color}`;
       el.innerHTML = buildCardHTML(card);
       el.style.cursor = 'pointer';
@@ -4342,7 +4345,7 @@ function renderHand(player, zoneId) {
         else G.mulliganSelected.add(i);
         const countEl = document.getElementById('mulligan-count');
         if (countEl) countEl.textContent = G.mulliganSelected.size;
-        renderHand(0);
+        renderHand(player, zone.id);
       };
     } else {
       el.className = `card color-${card.color}`;
@@ -4381,38 +4384,41 @@ function renderField(player, zoneId) {
       const el = document.createElement('div');
       el.className = `card color-${card.color}`;
       if (inst.tapped) el.classList.add('tapped');
-      // 攻撃可能ハイライト (メインフェイズ)
-      if (player === 0 && G.activePlayer === 0 && G.phase === 'main' && !G.kakutouTargetMode && !G.targetMode) {
-        if (canCreatureAttack(0, inst)) el.classList.add('attackable');
+      // 攻撃可能ハイライト (メインフェイズ): 操作側プレイヤーの自軍クリーチャー
+      const viewerP = NET_MODE === 'hotseat' ? G.activePlayer : NET_MY_IDX;
+      if (player === viewerP && G.activePlayer === viewerP && G.phase === 'main' && !G.kakutouTargetMode && !G.targetMode) {
+        if (canCreatureAttack(player, inst)) el.classList.add('attackable');
         // 格闘ハイライト（出たターンのみ、アンタップ、相手クリーチャーあり）
         if (card.kakutou && inst.entryTurn === G.turn && !inst.tapped
-            && G.players[1].field.some(c => !CARD_DB[c.cardId].flying || card.flying)) {
+            && G.players[1-player].field.some(c => !CARD_DB[c.cardId].flying || card.flying)) {
           el.classList.add('attackable');
         }
       }
-      // 格闘ターゲット選択 (AI側クリーチャーをハイライト、飛行制限あり)
-      if (G.kakutouTargetMode && player === 1) {
-        const atkInst = G.players[0].field.find(c=>c.instanceId===G.pendingKakutouInstId);
+      // 格闘ターゲット選択 (守備側クリーチャーをハイライト、飛行制限あり)
+      const kkAtkSide = NET_MODE === 'local' ? 0 : G.activePlayer;
+      if (G.kakutouTargetMode && player === 1 - kkAtkSide) {
+        const atkInst = G.players[kkAtkSide].field.find(c=>c.instanceId===G.pendingKakutouInstId);
         const atkCard = atkInst ? CARD_DB[atkInst.cardId] : null;
         const canTarget = atkCard && (atkCard.flying || !CARD_DB[inst.cardId].flying);
         if (canTarget) el.classList.add('targetable');
       }
-      // ブロック宣言ハイライト
+      // ブロック宣言ハイライト（守備側=playerBlockDefender）
       if (G.playerBlockMode) {
-        if (player === 0) {
+        const defP = (G.playerBlockDefender !== undefined && G.playerBlockDefender !== null) ? G.playerBlockDefender : 0;
+        if (player === defP) {
           const card2 = CARD_DB[inst.cardId];
-          const canBlk = (!inst.tapped || (card2.ocBlockWhileTapped && isOCActive(0)))
+          const canBlk = (!inst.tapped || (card2.ocBlockWhileTapped && isOCActive(defP)))
             && !G.directlyAttackedCreatures.has(inst.instanceId);
           if (canBlk) el.classList.add('blockable');
           if (G.selectedBlockerToAssign === inst.instanceId) el.classList.add('selected');
           const isAssigned = Object.values(G.playerBlockAssignments).includes(inst.instanceId);
           if (isAssigned) el.classList.add('selected');
         }
-        if (player === 1) {
+        if (player === 1 - defP) {
           const isAtkr = G.aiCurrentAttackers.some(a=>a.instId===inst.instanceId);
           if (isAtkr) el.classList.add('attackable');
           if (G.playerBlockAssignments[inst.instanceId]) {
-            const blkInst = G.players[0].field.find(c=>c.instanceId===G.playerBlockAssignments[inst.instanceId]);
+            const blkInst = G.players[defP].field.find(c=>c.instanceId===G.playerBlockAssignments[inst.instanceId]);
             if (blkInst) el.title = `ブロック: ${CARD_DB[blkInst.cardId].name}`;
             el.classList.add('selected');
           }
@@ -4457,8 +4463,9 @@ function renderLands(player, zoneId) {
     const el = document.createElement('div');
     el.className = `land-card color-${card.color}`;
     if (land.tapped) el.classList.add('tapped');
-    if (G.chargingMode === 'pick_land' && player === 0 && !land.chargeCard) el.classList.add('selected');
-    if (G.targetMode && G.targetMode.type === 'ownLand' && player === 0 && !land.tapped) el.classList.add('targetable');
+    const chargerP = NET_MODE === 'local' ? 0 : G.activePlayer;
+    if (G.chargingMode === 'pick_land' && player === chargerP && !land.chargeCard) el.classList.add('selected');
+    if (G.targetMode && G.targetMode.type === 'ownLand' && player === (G.targetMode.owner !== undefined ? G.targetMode.owner : 0) && !land.tapped) el.classList.add('targetable');
     el.innerHTML = `${card.icon}<div class="land-name">${card.name}</div>`;
     if (land.chargeCard) {
       const pip = document.createElement('div');
@@ -4530,7 +4537,7 @@ function updateCounts() {
 // ============================================================
 function handleHandClick(player, index) {
   if (NET_MODE === 'guest' && player === NET_MY_IDX) { netSendAction('playCard', {handIdx: index}); return; }
-  const localHuman = NET_MODE === 'hotseat' ? G.activePlayer : 0;
+  const localHuman = NET_MODE === 'hotseat' ? G.activePlayer : NET_MY_IDX;
   if (player !== localHuman) return; // Can't click opponent hand
   if (G.activePlayer !== localHuman && G.phase !== 'ended') {
     // Allow quick spells
@@ -4555,11 +4562,12 @@ function handleFieldClick(player, instId) {
     if (!netCanAct()) { log('相手のターンです'); return; }
     const cardId = (G.players[player].field.find(c=>c.instanceId===instId)||{}).cardId;
     if (G.targetMode) { netSendAction('targetSelect', {instId, cardId}); return; }
-    if (player === NET_MY_IDX || G.playerBlockMode) { netSendAction('activateCreature', {instId, cardId}); return; }
+    // 攻撃宣言・格闘対象・ブロック割当などはホスト側のロジックに委譲
+    netSendAction('fieldClick', {player, instId});
     return;
   }
   // 格闘ターゲット選択を最優先（攻撃側=アクティブプレイヤー、対象=その相手）
-  const kkAtkP = NET_MODE === 'hotseat' ? G.activePlayer : 0;
+  const kkAtkP = NET_MODE === 'local' ? 0 : G.activePlayer;
   const kkDefP = 1 - kkAtkP;
   if (G.kakutouTargetMode && player === kkDefP) {
     const atkInst = G.players[kkAtkP].field.find(c=>c.instanceId===G.pendingKakutouInstId);
@@ -4590,8 +4598,8 @@ function handleFieldClick(player, instId) {
         return;
       }
       // 格闘対象以外のクリーチャーはブロック可能
-      if (NET_MODE === 'hotseat') {
-        // ホットシート: 守備側プレイヤーがブロックを宣言できる
+      if (NET_MODE === 'hotseat' || NET_MODE === 'host') {
+        // 人間が守備側: 守備側プレイヤーがブロックを宣言できる
         const eligible = G.players[kkDefP].field.filter(c => {
           if (c.instanceId === kakutouTgtId) return false;
           const bc = CARD_DB[c.cardId];
@@ -4691,8 +4699,8 @@ function handleFieldClick(player, instId) {
     return;
   }
 
-  // メインフェイズに1体ずつ攻撃
-  const actP = NET_MODE === 'hotseat' ? G.activePlayer : 0;
+  // メインフェイズに1体ずつ攻撃（local: P0のみ / hotseat・host: アクティブプレイヤー）
+  const actP = NET_MODE === 'local' ? 0 : G.activePlayer;
   if (player === actP && G.activePlayer === actP && G.phase === 'main') {
     const p = G.players[actP];
     const inst = p.field.find(c => c.instanceId === instId);
@@ -4702,6 +4710,12 @@ function handleFieldClick(player, instId) {
     // アレスティア: 攻撃 or 還元 を選択
     if (card.id === 'arestia') {
       const canAtk = canCreatureAttack(actP, inst);
+      // ゲストの操作（ホスト上で実行）: モーダルはホスト画面に出てしまうため直接攻撃
+      if (NET_MODE === 'host' && actP === 1) {
+        if (canAtk) startSingleAttack(actP, instId);
+        else log('アレスティア: 攻撃できません（オンラインでは還元は未対応）');
+        return;
+      }
       const untappedLands = G.players[actP].lands.filter(l => !l.tapped);
       const hasTapped = G.players[actP].field.some(c => c.instanceId !== instId && c.tapped);
       const canKaizou = untappedLands.length > 0 && hasTapped;
@@ -4738,7 +4752,7 @@ function handleLandClick(player, instId) {
     if (player === NET_MY_IDX) { netSendAction('tapLand', {instId}); return; }
     return;
   }
-  const lp = NET_MODE === 'hotseat' ? G.activePlayer : 0; // land player
+  const lp = NET_MODE === 'hotseat' ? G.activePlayer : NET_MY_IDX; // land player（自分の土地のみ操作）
   if (G.chargingMode === 'pick_land' && player === lp) {
     chargeToLand(instId);
     return;
@@ -4935,7 +4949,8 @@ function updateHints() {
   }
 
   const btnCharge = document.getElementById('btn-charge');
-  const actingPlayer = NET_MODE === 'hotseat' ? G.activePlayer : 0;
+  // 操作主体: hotseat=アクティブプレイヤー / online=自分のindex / local=P0
+  const actingPlayer = NET_MODE === 'hotseat' ? G.activePlayer : NET_MY_IDX;
   btnCharge.disabled = G.activePlayer !== actingPlayer || G.phase !== 'main' || G.chargeUsedThisTurn;
   const btnEnd = document.getElementById('btn-end-phase');
   btnEnd.disabled = (!G.playerBlockMode && G.activePlayer !== actingPlayer) || G.phase === 'ended';
@@ -6400,19 +6415,13 @@ function uiStopTraining() {
 }
 
 // ============================================================
-// ONLINE MULTIPLAYER (PeerJS)
+// ONLINE MULTIPLAYER (PeerJS) — 時間制限なし
 // ============================================================
-const NET_TURN_LIMIT = 60;     // active player seconds
-const NET_OPP_LIMIT  = 40;     // non-turn player seconds
-
 let NET_MODE    = 'local';     // 'local' | 'host' | 'guest' | 'hotseat'
 let NET_PEER    = null;        // PeerJS Peer instance
 let NET_CONN    = null;        // DataConnection
 let NET_MY_IDX  = 0;          // which G.players[] index is "me" (guest=1)
 let NET_ROOM_ID = null;        // 6-char room code (host's peer id)
-let _netTimerInterval = null;
-let _netTimerRemaining = 0;
-let _netTimerFor = -1;         // which player the current timer is for
 
 // ── ロビー表示／非表示 ──────────────────────────────────────
 function netShowLobby() {
@@ -6515,7 +6524,6 @@ function netJoin() {
 function netOnDisconnect() {
   if (NET_MODE === 'local') return;
   log('⚠️ 相手との接続が切れました。再接続を待っています...', 'important');
-  netStopTimer();
   if (NET_MODE === 'host') {
     // Reconnect: just wait for new connection on same peer
     if (NET_PEER && !NET_PEER.destroyed) {
@@ -6527,7 +6535,6 @@ function netOnDisconnect() {
           conn.on('close', netOnDisconnect);
           conn.on('error', netOnDisconnect);
           netSyncToGuest(); // resend full state
-          netStartTimer();
         });
       });
     }
@@ -6556,10 +6563,6 @@ function netOnGuestReceive(msg) {
   if (!msg || !msg.type) return;
   if (msg.type === 'state') {
     netApplyStateFromHost(msg.state);
-  } else if (msg.type === 'timer') {
-    netStartTimerClient(msg.forPlayer, msg.remaining);
-  } else if (msg.type === 'timerStop') {
-    netStopTimer();
   }
 }
 
@@ -6578,10 +6581,19 @@ function netSyncToGuest() {
 // ── ゲスト: ホストの状態を適用 ───────────────────────────────
 function netApplyStateFromHost(snapshot) {
   try {
+    // 自分(ゲスト)がまだマリガン選択中なら、その選択をホスト同期で消さない
+    const localMullSel = (G && G.mulliganSelected instanceof Set) ? G.mulliganSelected : null;
     G = JSON.parse(snapshot, (key, val) => {
       if (val && val.__set) return new Set(val.__set);
       return val;
     });
+    if (!G.mulliganDone) G.mulliganDone = [true, true];
+    if (G.mulliganMode && !G.mulliganDone[NET_MY_IDX] && localMullSel) {
+      G.mulliganSelected = localMullSel;
+    }
+    // マリガンUIの表示制御（自分が未確定の間だけ表示）
+    const mc = document.getElementById('mulligan-controls');
+    if (mc) mc.style.display = (G.mulliganMode && !G.mulliganDone[NET_MY_IDX]) ? 'flex' : 'none';
     render();
     updateHints();
   } catch(e) { /* ignore */ }
@@ -6601,16 +6613,21 @@ function netExecuteGuestAction(msg) {
     case 'passPriority': passPriority(); break;
     case 'charge':      startCharge(); break;
     case 'playCard': {
-      const p = G.players[1];
       const idx = payload.handIdx;
-      if (idx != null && p.hand[idx]) {
-        G.selectedCard = {owner: 1, zone: 'hand', index: idx};
-        playSelectedCard(1);
+      if (idx != null && G.players[1].hand[idx] != null) {
+        if (G.chargingMode === true) doCharge(idx);
+        else playCardFromHand(1, idx);
       }
       break;
     }
     case 'tapLand': {
-      tapLandForMana(1, payload.instId);
+      if (G.chargingMode === 'pick_land') chargeToLand(payload.instId);
+      else tapLandForMana(1, payload.instId);
+      break;
+    }
+    case 'fieldClick': {
+      // ゲストの場クリックを汎用ルーティング（攻撃・格闘対象・ブロック割当など）
+      handleFieldClick(payload.player, payload.instId);
       break;
     }
     case 'activateCreature': {
@@ -6630,12 +6647,28 @@ function netExecuteGuestAction(msg) {
       break;
     }
     case 'mulliganConfirm': {
-      G.mulliganSelected = new Set(payload.selected);
-      _doConfirmStartMulligan();
+      // ゲスト(player 1)の手札を入れ替える（ホストの選択状態には触れない）
+      const p1 = G.players[1];
+      const chosen = (payload.selected || []).filter(i => Number.isInteger(i) && i >= 0 && i < p1.hand.length);
+      if (chosen.length > 0) {
+        [...chosen].sort((a, b) => b - a).forEach(i => p1.deck.push(p1.hand.splice(i, 1)[0]));
+        p1.deck = shuffle(p1.deck);
+        for (let i = 0; i < chosen.length; i++) drawCard(1);
+        p1.mulliganUsed = true;
+        log(`相手がマリガン: ${chosen.length}枚入れ替え`);
+      } else {
+        log('相手はマリガンなし');
+      }
+      if (!G.mulliganDone) G.mulliganDone = [false, false];
+      G.mulliganDone[1] = true;
+      checkMulliganComplete();
       break;
     }
     case 'mulliganSkip': {
-      _doSkipStartMulligan();
+      log('相手はマリガンなし');
+      if (!G.mulliganDone) G.mulliganDone = [false, false];
+      G.mulliganDone[1] = true;
+      checkMulliganComplete();
       break;
     }
   }
@@ -6664,85 +6697,7 @@ function netGuestTargetSelect(payload) {
   }
 }
 
-// ── ターンタイマー ────────────────────────────────────────────
-function netStartTimer() {
-  if (NET_MODE === 'local') return;
-  netStopTimer();
-  const isMyTurn = G.activePlayer === NET_MY_IDX;
-  const limit = isMyTurn ? NET_TURN_LIMIT : NET_OPP_LIMIT;
-  _netTimerFor = G.activePlayer;
-  _netTimerRemaining = limit;
-  _netShowTimer(limit, limit, _netTimerFor);
-
-  // Host tells guest about the timer
-  if (NET_MODE === 'host' && NET_CONN && NET_CONN.open) {
-    NET_CONN.send({type:'timer', forPlayer: _netTimerFor, remaining: limit});
-  }
-
-  _netTimerInterval = setInterval(() => {
-    _netTimerRemaining--;
-    _netShowTimer(_netTimerRemaining, limit, _netTimerFor);
-    if (_netTimerRemaining <= 0) {
-      netTimerExpired();
-    }
-  }, 1000);
-}
-
-function netStartTimerClient(forPlayer, remaining) {
-  netStopTimer();
-  const limit = forPlayer === NET_MY_IDX ? NET_TURN_LIMIT : NET_OPP_LIMIT;
-  _netTimerFor = forPlayer;
-  _netTimerRemaining = remaining;
-  _netShowTimer(remaining, limit, forPlayer);
-  _netTimerInterval = setInterval(() => {
-    _netTimerRemaining--;
-    _netShowTimer(_netTimerRemaining, limit, _netTimerFor);
-    if (_netTimerRemaining <= 0) {
-      clearInterval(_netTimerInterval);
-      // Guest just shows expired; host handles the actual auto-action
-    }
-  }, 1000);
-}
-
-function netStopTimer() {
-  if (_netTimerInterval) { clearInterval(_netTimerInterval); _netTimerInterval = null; }
-  document.getElementById('net-timer-bar').style.display = 'none';
-  document.getElementById('net-timer-label').textContent = '';
-}
-
-function _netShowTimer(remaining, total, forPlayer) {
-  const bar  = document.getElementById('net-timer-bar');
-  const fill = document.getElementById('net-timer-fill');
-  const lbl  = document.getElementById('net-timer-label');
-  bar.style.display = 'block';
-  const pct = Math.max(0, remaining / total * 100);
-  fill.style.width = pct + '%';
-  const isMe = forPlayer === NET_MY_IDX;
-  fill.style.background = remaining <= 10 ? '#ff4444' : remaining <= 20 ? '#ffaa00' : isMe ? '#44ff88' : '#4488ff';
-  lbl.textContent = isMe ? `あなたの残り ${remaining}秒` : `相手の残り ${remaining}秒`;
-}
-
-function netTimerExpired() {
-  netStopTimer();
-  if (NET_MODE !== 'host') return; // only host executes
-  if (G.activePlayer === 0) {
-    // Active player (player 0 = host's player) → auto end turn
-    log('⏰ 制限時間超過: 自動ターン終了', 'important');
-    endTurn();
-  } else {
-    // Non-turn player (player 1 = guest) timed out
-    if (G.awaitingPriority && G.priorityFor === 1) {
-      log('⏰ 相手の制限時間超過: 優先権パス', 'important');
-      closePriorityAndResolve();
-    } else if (G.playerBlockMode) {
-      log('⏰ 相手の制限時間超過: ブロックパス', 'important');
-      G.playerBlockMode = false;
-      G.selectedBlockerToAssign = null;
-      setTimeout(() => resolveAICombat(), 100);
-    }
-  }
-  netSyncToGuest();
-}
+// （ターンタイマーは削除: プレイ時間に制限なし）
 
 // ============================================================
 // DEBUG / FREEZE REPORTER
@@ -7220,12 +7175,10 @@ function netPostAction() {
   if (NET_MODE === 'host') netSyncToGuest();
 }
 
-// ── ターン終了後: タイマーリセット＆同期 ─────────────────────
+// ── ターン終了後: 状態同期（時間制限なし） ───────────────────
 function netPostTurnEnd() {
   if (NET_MODE === 'local') return;
-  netStopTimer();
   netSyncToGuest();
-  setTimeout(() => netStartTimer(), 300);
 }
 
 // ============================================================
