@@ -1673,8 +1673,12 @@ function buildAILandDeck() {
   if (typeof NET_MODE !== 'undefined' && NET_MODE === 'local') {
     if (typeof AI_LAND_COUNTS !== 'undefined' && AI_LAND_COUNTS) {
       const arr = [];
-      Object.entries(AI_LAND_COUNTS).forEach(([lid,n]) => { for (let k=0;k<n;k++) arr.push(lid); });
-      if (arr.length === 10) return shuffle(arr);
+      let valid = true;
+      Object.entries(AI_LAND_COUNTS).forEach(([lid,n]) => {
+        if (n > 2) valid = false; // 土地は同名2枚まで
+        for (let k=0;k<n;k++) arr.push(lid);
+      });
+      if (valid && arr.length === 10) return shuffle(arr);
     }
     // ローカル対戦のAIはプレイヤーの構築土地を使わずデフォルト構成
     const lands = ['hito_heichi','wasure_heichi','shigen_heichi','kemono_heichi','serashia_miyako'];
@@ -1687,7 +1691,13 @@ function buildLandDeck() {
     const saved = localStorage.getItem('dcg_deck');
     if (saved) {
       const data = JSON.parse(saved);
-      if (data.land && data.land.length === 10) return shuffle([...data.land]);
+      if (data.land && data.land.length === 10) {
+        // 土地は同名2枚まで（旧保存データの3枚以上は無効としてデフォルトへ）
+        const cnt = {};
+        let valid = true;
+        data.land.forEach(l => { cnt[l]=(cnt[l]||0)+1; if (cnt[l]>2) valid=false; });
+        if (valid) return shuffle([...data.land]);
+      }
     }
   } catch(e) {}
   const lands = ['hito_heichi','wasure_heichi','shigen_heichi','kemono_heichi','serashia_miyako'];
@@ -4623,8 +4633,12 @@ class SimGame {
     const counts = this.landDecks[idx];
     if (counts) {
       const arr = [];
-      Object.entries(counts).forEach(([lid,n]) => { for (let k=0;k<n;k++) arr.push(lid); });
-      if (arr.length === 10) return shuffle(arr);
+      let valid = true;
+      Object.entries(counts).forEach(([lid,n]) => {
+        if (n > 2) valid = false; // 土地は同名2枚まで
+        for (let k=0;k<n;k++) arr.push(lid);
+      });
+      if (valid && arr.length === 10) return shuffle(arr);
     }
     return shuffle(AI_LAND_POOL.flatMap(l=>[l,l]));
   }
@@ -5164,8 +5178,8 @@ async function startTraining(limitMode, limitValue, gamesPerBatch, onProgress) {
         ),0));
         if (deckWr > 0.55) AI_DECK_COUNTS = candDeck;
       }
-      // 土地デッキ進化（5種×最大4枚から10枚: 現状でも自由度あり）
-      {
+      // 土地デッキ進化（同名2枚まで: 土地プールに余裕がある場合のみ）
+      if (AI_LAND_POOL.length*2 > 10) {
         const curLand = AI_LAND_COUNTS || defaultLandCounts();
         const candLand = mutateLandCounts(curLand);
         const landWr = await new Promise(resolve=>setTimeout(()=>resolve(
@@ -5213,12 +5227,12 @@ function defaultLandCounts() {
   return d;
 }
 function mutateLandCounts(d) {
-  // 土地1枚を別の土地に入替え（各土地0〜4枚、合計10枚を維持）
+  // 土地1枚を別の土地に入替え（同名2枚まで、合計10枚を維持）
   const m = {...d};
   for (let tries=0; tries<30; tries++) {
     const a = AI_LAND_POOL[Math.floor(Math.random()*AI_LAND_POOL.length)];
     const b = AI_LAND_POOL[Math.floor(Math.random()*AI_LAND_POOL.length)];
-    if (a!==b && (m[a]||0)>0 && (m[b]||0)<4) { m[a]--; m[b]++; return m; }
+    if (a!==b && (m[a]||0)>0 && (m[b]||0)<2) { m[a]--; m[b]++; return m; }
   }
   return m;
 }
@@ -5329,7 +5343,7 @@ function showTrainingPanel() {
       </div>
       <label style="display:flex;align-items:center;gap:5px;cursor:pointer;color:#aaa;">
         <input type="checkbox" id="train-deck-evolve" ${_trainDeckEvolve?'checked':''}>
-        🃏 デッキ構築も学習する${AI_CARD_POOL.length*4 <= 40 ? '<span style="color:#666;">（メインは現在固定・土地構成のみ進化。カード追加後にメインも有効化）</span>' : ''}
+        🃏 デッキ構築も学習する${AI_CARD_POOL.length*4 <= 40 && AI_LAND_POOL.length*2 <= 10 ? '<span style="color:#666;">（現カードプールでは構成が固定のため無効。カード・土地の追加後に自動で有効化）</span>' : ''}
       </label>
       <div style="display:flex;gap:8px;">
         <button id="btn-train-start" onclick="uiStartTraining()" style="padding:6px 14px;background:#1a3a1a;border:1px solid #44aa44;color:#aaffaa;border-radius:4px;cursor:pointer;">▶ 開始</button>
@@ -6297,13 +6311,13 @@ function dbRenderCollection() {
     const c = dbCardInfo(id);
     if (!c) return;
     const cnt = landMap[id] || 0;
-    const maxed = cnt >= 4;
+    const maxed = cnt >= 2; // 土地は同名2枚まで
     html += `<div class="db-card-row${maxed?' db-maxed':''}" onclick="dbAddLand('${id}')">
       <span class="db-card-icon">${c.icon||'🌿'}</span>
       <span class="db-card-name">${c.name}</span>
       <span class="db-card-cost land-cost">土地</span>
       <span class="db-card-stats"></span>
-      ${cnt>0?`<span class="db-card-count">${cnt}/4</span>`:''}
+      ${cnt>0?`<span class="db-card-count">${cnt}/2</span>`:''}
     </div>`;
   });
 
@@ -6380,7 +6394,7 @@ function dbRemoveMain(id) {
 
 function dbAddLand(id) {
   const cnt = dbCountMap(dbCurrentLand)[id] || 0;
-  if (cnt >= 4) return;
+  if (cnt >= 2) return; // 土地は同名2枚まで
   if (dbCurrentLand.length >= 10) return;
   dbCurrentLand.push(id);
   dbRenderAll();
