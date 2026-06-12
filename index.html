@@ -2043,7 +2043,7 @@ function initGame() {
     permanentBuffs: [], // {instanceId, power, toughness}
     landPlacedThisTurn: 0,
     mustAttackCreatures: new Set(),
-    blockDrawTrigger: false,
+    blockDrawActive: [false, false], // 介善: ブロック時1ドロー（各プレイヤー、次の自分のターン開始時まで）
     arestiaBuffActive: false,
     combatBlockersAlive: {},
     cantAttackPermanent: new Set(),
@@ -2453,9 +2453,10 @@ function kaizenResolve(player, cardId, targets, ocAtCast, totalSteps) {
     log(`${card.name} 効果2/${totalSteps}: 対象なしのためスキップ`);
   }
 
-  // 効果3: このターン、自分のクリーチャーがブロックする時1枚引く
-  showEffectStep(card.name, 3, totalSteps, 'このターン、ブロック時に1ドロー');
-  G.blockDrawTrigger = true;
+  // 効果3: 自分のクリーチャーがブロックする時1枚引く（次の自分のターン開始時まで持続）
+  showEffectStep(card.name, 3, totalSteps, 'ブロック時1ドロー（次の自分のターン開始まで）');
+  if (!G.blockDrawActive) G.blockDrawActive = [false, false];
+  G.blockDrawActive[player] = true;
 
   p.graveyard.push(cardId);
 
@@ -3232,6 +3233,11 @@ function resolveSingleCombat(atkPlayer, atkInstId, kakutouTargetId, blockerInstI
       }
       if (blkCard.onBlock === 'draw1') { drawCard(opp); log(`${blkCard.name}: 1ドロー`); }
       if (blkCard.onBlock === 'gain3life') { G.players[opp].life += 3; log(`${blkCard.name}: ライフ+3`); }
+      // 介善: ブロック側のブロック時ドローが有効なら1枚引く
+      if (G.blockDrawActive && G.blockDrawActive[opp]) {
+        drawCard(opp);
+        log('介善: ブロック時1ドロー');
+      }
       if (blkCard.cx8Block === 'buff1ally' && getCXValue(opp) >= 8) {
         if (opp === 0) {
           G.targetMode = { type:'ownCreature', owner:0, callback:(tgt) => {
@@ -3300,7 +3306,6 @@ function endTurnAfterMainPhase() {
 function endTurn() {
   // Clear temp buffs and any leftover modes
   G.tempBuffs = [];
-  G.blockDrawTrigger = false;
   G.arestiaBuffActive = false;
   G.targetMode = null;
   G.kakutouTargetMode = false;
@@ -3319,6 +3324,13 @@ function endTurn() {
   G.turn++;
   G.landPlacedThisTurn = 0;
   G.phase = 'untap';
+
+  // 介善ブロック時ドロー: 「次の自分のターン開始時まで」→ 新アクティブプレイヤーの効果はここで失効
+  if (!G.blockDrawActive) G.blockDrawActive = [false, false];
+  if (G.blockDrawActive[G.activePlayer]) {
+    G.blockDrawActive[G.activePlayer] = false;
+    log('介善のブロック時ドロー効果が終了（自分のターン開始）');
+  }
 
   const ap = G.activePlayer;
   const apName = NET_MODE === 'hotseat' ? (ap === 0 ? 'P1のターン' : 'P2のターン')
@@ -3667,10 +3679,10 @@ function resolveCombat() {
             log(`AI ${blkCard.name} CX8ブロック: 味方+1/+1`);
           }
         }
-        // blockDrawTrigger (介善)
-        if (G.blockDrawTrigger) {
-          drawCard(0);
-          log('介善: ブロック時1ドロー');
+        // 介善: ブロック側(AI)のブロック時ドローが有効なら1枚引く
+        if (G.blockDrawActive && G.blockDrawActive[1]) {
+          drawCard(1);
+          log('AI 介善: ブロック時1ドロー');
         }
 
         const blockerDied = checkCreatureDeath(1, blkId, 0);
@@ -3703,7 +3715,6 @@ function resolveCombat() {
   G.players[0].blockers = {};
   G.combatStep = null;
   G.attackMode = false;
-  G.blockDrawTrigger = false;
   G.phase = 'main';
   render();
   setTimeout(() => endTurnAfterMainPhase(), 400);
@@ -4001,9 +4012,10 @@ function aiKaizenEffects() {
   } else {
     log(`AI 介善 効果2/${total}: 対象なしのためスキップ`);
   }
-  // 効果3
-  showEffectStep('AI 介善', 3, total, 'このターン、ブロック時に1ドロー');
-  G.blockDrawTrigger = true;
+  // 効果3（次の自分のターン開始時まで持続）
+  showEffectStep('AI 介善', 3, total, 'ブロック時1ドロー（次のAIターン開始まで）');
+  if (!G.blockDrawActive) G.blockDrawActive = [false, false];
+  G.blockDrawActive[1] = true;
   // 効果4 (OC)
   if (ocAtCast) {
     showEffectStep('AI 介善', 4, total, '〈OC〉クリーチャー展開');
@@ -6837,7 +6849,7 @@ function _testMakeState() {
     attackMode:false, blockMode:false, selectedAttacker:null, selectedCard:null,
     tempBuffs:[], permanentBuffs:[],
     landPlacedThisTurn:0, mustAttackCreatures:new Set(),
-    blockDrawTrigger:false, arestiaBuffActive:false, combatBlockersAlive:{},
+    blockDrawActive:[false,false], arestiaBuffActive:false, combatBlockersAlive:{},
     cantAttackPermanent:new Set(), kaizen_used_names:new Set(),
     playerBlockMode:false, aiCurrentAttackers:[], playerBlockAssignments:{},
     selectedBlockerToAssign:null, directlyAttackedCreatures:new Set(), kakutouTargets:{}
@@ -7064,7 +7076,7 @@ function runCardTests() {
     assert('介善 効果1: 5ダメージで5/5が破壊', !r1);
     const r2 = G.players[1].field.find(x=>x.instanceId===t2.instanceId);
     assert('介善 効果2: 攻撃強制フラグ', r2 && r2.mustAttack===true && G.mustAttackCreatures.has(t2.instanceId));
-    assert('介善 効果3: blockDrawTriggerが立つ', G.blockDrawTrigger===true);
+    assert('介善 効果3: ブロック時ドローが有効化', G.blockDrawActive[0]===true);
     assert('介善: 墓地に置かれる', G.players[0].graveyard.includes('kaizen'));
   });
 
@@ -7075,7 +7087,25 @@ function runCardTests() {
     playKaizen(0, 0);
     assert('介善(対象なし): 即スタック', G.stack.length===1);
     G.stack.pop().resolve();
-    assert('介善(対象なし): blockDrawTrigger', G.blockDrawTrigger===true);
+    assert('介善(対象なし): ブロック時ドローが有効化', G.blockDrawActive[0]===true);
+  });
+
+  // 16b. 介善ブロックドロー: 持続は次の自分のターン開始まで＆ブロック時にドロー
+  withState(()=>{
+    G.blockDrawActive = [true, false]; // プレイヤーが介善を唱えた状態
+    // AIの攻撃をプレイヤーがブロック → プレイヤーが1枚引く
+    const atk = _testAddCreature(1,'arestia');         // 5/5 攻撃側(AI)
+    const blk = _testAddCreature(0,'serashia_souryo'); // 3/5 ブロッカー
+    G.players[0].deck = ['shinmai_heishi','shinmai_heishi'];
+    G.players[0].hand = [];
+    resolveSingleCombat(1, atk.instanceId, null, blk.instanceId);
+    assert('介善持続: ブロック時にプレイヤーが1ドロー', G.players[0].hand.length===1);
+    // 相手ターン終了→自分のターン開始で効果失効
+    G.activePlayer = 1; // AIのターン中とする
+    G.activePlayer = 1 - G.activePlayer; // endTurn相当の切替
+    if (G.blockDrawActive[G.activePlayer]) G.blockDrawActive[G.activePlayer] = false;
+    assert('介善持続: 自分のターン開始で失効', G.blockDrawActive[0]===false);
+    assert('介善持続: 相手側のフラグには影響しない', G.blockDrawActive[1]===false);
   });
 
   // 17. getCXValue: 土地数 + チャージ数
