@@ -2404,7 +2404,42 @@ function applyDamageToCreature(player, instId, amount, sourcePlayer) {
   const c = pf.field.find(x=>x.instanceId===instId);
   if (!c) return;
   c.damage += amount;
+  showCreatureDamage(instId, amount);
   checkCreatureDeath(player, instId, sourcePlayer);
+}
+
+// クリーチャーの上にダメージ数字をポップ表示
+function showCreatureDamage(instId, amount) {
+  try {
+    const cardEl = document.querySelector(`[data-inst="${instId}"]`);
+    if (!cardEl) return;
+    const rect = cardEl.getBoundingClientRect();
+    const el = document.createElement('div');
+    el.className = 'float-damage';
+    el.style.color = '#ff5544';
+    el.style.fontSize = '22px';
+    el.textContent = `-${amount}`;
+    el.style.left = (rect.left + rect.width/2 - 10) + 'px';
+    el.style.top = (rect.top + rect.height/3) + 'px';
+    document.body.appendChild(el);
+    setTimeout(() => el.remove(), 1200);
+    // カードを揺らす
+    cardEl.style.animation = 'shake 0.3s';
+    setTimeout(() => { if (cardEl.isConnected) cardEl.style.animation = ''; }, 350);
+  } catch(e) {}
+}
+
+// 破壊時のフェードアウト演出: render()前にゴーストを作って消す
+function showDestroyAnimation(instId) {
+  try {
+    const cardEl = document.querySelector(`[data-inst="${instId}"]`);
+    if (!cardEl) return;
+    const rect = cardEl.getBoundingClientRect();
+    const ghost = cardEl.cloneNode(true);
+    ghost.style.cssText = `position:fixed;left:${rect.left}px;top:${rect.top}px;width:${rect.width}px;height:${rect.height}px;margin:0;z-index:80;pointer-events:none;animation:die 0.5s forwards;`;
+    document.body.appendChild(ghost);
+    setTimeout(() => ghost.remove(), 600);
+  } catch(e) {}
 }
 
 function applyDamage3(sourcePlayer, target) {
@@ -2427,6 +2462,7 @@ function checkCreatureDeath(player, instId, sourcePlayer) {
   const toughness = card.toughness + (c.tempToughness||0) + permBuff.toughness + getCXBonus(player, c).toughness;
   const dead = c.damage >= toughness;
   if (dead) {
+    showDestroyAnimation(instId);
     p.field.splice(idx, 1);
     p.graveyard.push(c.cardId);
     log(`${card.name} が破壊された`, 'damage');
