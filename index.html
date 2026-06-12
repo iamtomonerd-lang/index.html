@@ -197,13 +197,12 @@ body {
   flex-shrink: 0;
 }
 #player-hand .card {
-  margin-right: -8px;
+  margin-right: 5px;
   transition: transform 0.15s, margin 0.15s, z-index 0s;
   flex-shrink: 0;
 }
 #player-hand .card:hover {
   transform: translateY(-14px) scale(1.12);
-  margin-right: 4px;
   z-index: 30;
 }
 #player-hand .card:last-child { margin-right: 0; }
@@ -641,7 +640,58 @@ button.danger:hover { background: #6a2a2a; }
   max-height: 260px;
   overflow-y: auto;
   scrollbar-width: thin;
-  z-index: 55;
+  z-index: 670; /* モーダル(100)・デッキ構築(550)より上: ルック中・構築中も見える */
+}
+
+/* ── リタイアボタン（対戦中右上） ── */
+#btn-retire {
+  display: none;
+  position: fixed;
+  top: 4px; right: 4px;
+  z-index: 60;
+  background: rgba(40,10,10,0.85);
+  border: 1px solid #884444;
+  color: #cc8888;
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+#btn-retire:hover { background: rgba(70,15,15,0.9); color: #ffaaaa; }
+
+/* ── モーダル一時非表示中の戻るボタン ── */
+#modal-peek-return {
+  position: fixed;
+  bottom: 140px; left: 50%; transform: translateX(-50%);
+  z-index: 200;
+  background: linear-gradient(135deg,#1a1a3a,#252550);
+  border: 2px solid #6060ff;
+  color: #ccccff;
+  border-radius: 10px;
+  padding: 12px 28px;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 0 24px #6060ff66;
+}
+
+/* ── デッキ構築: カード詳細パネル（右上） ── */
+#db-detail-panel {
+  width: 240px;
+  flex-shrink: 0;
+  border-left: 1px solid #2a2a4a;
+  padding: 12px;
+  overflow-y: auto;
+  background: #0c0c1a;
+  font-size: 11px;
+}
+#db-detail-panel .cdp-title { font-size: 14px; font-weight: 700; color: #aaaaff; margin-bottom: 4px; }
+#db-detail-panel .cdp-type { font-size: 10px; color: #888; margin-bottom: 4px; }
+#db-detail-panel .cdp-pt { font-size: 13px; font-weight: 700; color: #ffcc44; margin-bottom: 4px; }
+#db-detail-panel .cdp-text { font-size: 11px; color: #aaa; white-space: pre-wrap; line-height: 1.6; }
+#db-detail-panel .cdp-placeholder { color: #444; font-size: 11px; }
+@media (max-width: 900px) {
+  #db-detail-panel { width: 170px; padding: 8px; }
 }
 
 /* ── モーダル ── */
@@ -1092,7 +1142,7 @@ button.danger:hover { background: #6a2a2a; }
 #player-hand .card {
   width: 72px !important; height: calc(100% - 8px) !important;
   max-height: 110px !important;
-  margin-right: 1px;
+  margin-right: 5px; /* 誤操作防止の隙間 */
   transition: transform 0.15s;
   flex-shrink: 0;
   font-size: 9px !important;
@@ -1697,6 +1747,10 @@ button.danger:hover { background: #6a2a2a; }
         </div>
       </div>
     </div>
+    <!-- Right-most: card detail -->
+    <div id="db-detail-panel">
+      <div class="cdp-placeholder">カードをタップすると効果テキストがここに表示されます</div>
+    </div>
   </div>
 </div>
 
@@ -1714,6 +1768,9 @@ button.danger:hover { background: #6a2a2a; }
     <div class="net-status" id="net-status-msg">接続待機中...</div>
   </div>
 </div>
+
+<!-- Retire button -->
+<button id="btn-retire" onclick="confirmRetire()">🏳️ リタイア</button>
 
 <!-- Hotseat Pass Screen -->
 <div id="hotseat-pass">
@@ -1814,7 +1871,7 @@ const CARD_DB = {
   'kaizen': {
     id:'kaizen', name:'介善', type:'spell', color:'W',
     cost:{W:4}, icon:'✨', keywords:['Quick'],
-    text:'■選択1\n(1)相手クリーチャー1体に2ダメージ\n(2)相手クリーチャー1体を選ぶ。このターン、それは可能なら攻撃する\n■このターン、自分のクリーチャーがブロックする時、1枚引く\n〈OC〉\n■自分の手札からマナ総量8以下のクリーチャーを出す。この能力によって出したクリーチャーはこのゲーム中、攻撃できない(ターン1:同名)',
+    text:'■相手クリーチャー1体に５ダメージ\n■相手クリーチャー1体を選ぶ。このターン、それは可能なら攻撃する\n■このターン、自分のクリーチャーがブロックする時、1枚引く\n〈OC〉\n■自分の手札からマナ総量8以下のクリーチャーを出す。この能力によって出したクリーチャーはこのゲーム中、攻撃できない(ターン1:同名)',
     effect:'kaizen'
   },
   // LANDS
@@ -1931,9 +1988,10 @@ let G; // global game state
 
 function initGame() {
   if (typeof REPLAY_HISTORY !== 'undefined') REPLAY_HISTORY = []; // 新ゲームでリプレイ履歴をクリア
+  const firstPlayer = Math.random() < 0.5 ? 0 : 1; // 先手後手ランダム
   G = {
     turn: 1,
-    activePlayer: 0, // 0=player, 1=ai
+    activePlayer: firstPlayer, // 0=player, 1=ai（ランダム決定）
     phase: 'untap', // untap, draw, main, combat, end
     combatStep: null, // declare_attackers, declare_blockers, damage
     priority: 0,
@@ -1973,6 +2031,7 @@ function initGame() {
     awaitingPriority: false,
     priorityFor: null,
     priorityContinuation: null,
+    priorityReason: '',
     chargingMode: false,
     chargeUsedThisTurn: false,
     targetMode: null, // {type, callback}
@@ -2010,6 +2069,9 @@ function initGame() {
   }
 
   G.phase = 'main';
+
+  const retireBtn = document.getElementById('btn-retire');
+  if (retireBtn) retireBtn.style.display = 'block';
 
   log('ゲーム開始！', 'important');
   render();
@@ -2063,13 +2125,22 @@ function _doSkipStartMulligan() {
 }
 
 function startFirstTurn() {
-  placeLands(0, 1);
-  showPhaseFlash('ターン 1', 'あなたのターン');
-  log(`--- ターン${G.turn} プレイヤーのターン ---`, 'important');
-  log('ターン1: プレイヤーのメインフェイズ', 'important');
+  const fp = G.activePlayer;
+  placeLands(fp, 1);
+  const fpName = NET_MODE === 'hotseat' ? (fp === 0 ? 'P1のターン' : 'P2のターン')
+    : NET_MODE !== 'local' ? (fp === NET_MY_IDX ? 'あなたのターン' : '相手のターン')
+    : (fp === 0 ? 'あなたのターン' : 'AIのターン');
+  showPhaseFlash('ターン 1', fpName);
+  const fpLabel = NET_MODE === 'hotseat' ? (fp === 0 ? 'P1' : 'P2') : fp === 0 ? 'プレイヤー' : 'AI';
+  log(`--- ターン${G.turn} ${fpLabel}のターン（先手はランダムで決定） ---`, 'important');
   document.getElementById('btn-mulligan').disabled = true;
   render();
   updateHints();
+  if (fp === 1 && NET_MODE === 'local') {
+    setTimeout(aiTurn, 600);
+  } else if (fp === 1 && NET_MODE === 'hotseat') {
+    hotseatShowPass(1);
+  }
 }
 
 function newInstance(cardId) {
@@ -2084,6 +2155,21 @@ function newInstance(cardId) {
 // ============================================================
 // CORE ACTIONS
 // ============================================================
+const HAND_LIMIT = 10;
+
+// 手札に加える（上限超過分は墓地へ）
+function addCardToHand(player, cardId) {
+  const p = G.players[player];
+  if (p.hand.length >= HAND_LIMIT) {
+    p.graveyard.push(cardId);
+    const card = CARD_DB[cardId];
+    log(`手札上限(${HAND_LIMIT}枚)超過: ${card ? card.name : cardId} は墓地に置かれた`, 'important');
+    return false;
+  }
+  p.hand.push(cardId);
+  return true;
+}
+
 function drawCard(player) {
   const p = G.players[player];
   if (p.deck.length === 0) {
@@ -2091,13 +2177,8 @@ function drawCard(player) {
     endGame(1 - player);
     return false;
   }
-  if (p.hand.length >= 10) {
-    log(`プレイヤー${player+1}は手札が10枚以上のため引けません`);
-    return false;
-  }
   const cardId = p.deck.shift();
-  p.hand.push(cardId);
-  return true;
+  return addCardToHand(player, cardId);
 }
 
 function placeLands(player, count) {
@@ -2200,28 +2281,48 @@ function playCardFromHand(player, handIndex) {
 
   if (card.type === 'spell') {
     if (card.effect === 'junigeki') {
-      // 対象選択してからスタックへ
-      G.targetMode = { type:'opponentCreature', callback: (tgt1) => {
-        G.targetMode = { type:'ownCreature', owner:player, callback: (tgt2) => {
-          G.targetMode = null;
-          payMana(player, card.cost);
-          p.hand.splice(handIndex, 1);
-          log(`${card.name} をスタックに積んだ`, 'important');
-          G.stack.push({ name: card.name, icon: card.icon||'🛡️', owner: player, resolve: () => {
+      // 対象選択してからスタックへ（■効果を上から順に処理。対象がいない効果はスキップ）
+      const castJunigeki = (tgt1, tgt2) => {
+        payMana(player, card.cost);
+        p.hand.splice(handIndex, 1);
+        log(`${card.name} をスタックに積んだ`, 'important');
+        G.stack.push({ name: card.name, icon: card.icon||'🛡️', owner: player, resolve: () => {
+          if (tgt1) {
+            showEffectStep(card.name, 1, 2, '相手クリーチャーに2ダメージ');
             applyDamageToCreature(1-player, tgt1.instId, 2, player);
+          } else {
+            log(`${card.name} 効果1/2: 対象なしのためスキップ`);
+          }
+          if (tgt2) {
+            showEffectStep(card.name, 2, 2, '自クリーチャー+0/+1');
             const oc = G.players[player].field.find(x=>x.instanceId===tgt2.instId);
             if (oc) { oc.tempToughness=(oc.tempToughness||0)+1; G.tempBuffs.push({instanceId:tgt2.instId,power:0,toughness:1}); }
-            p.graveyard.push(cardId);
-            log(`${card.name} 解決: 2ダメージ + +0/+1`, 'damage');
-            render();
-          }});
-          renderStack(); render(); updateHints();
-          openPriorityWindow(1 - player, G.priorityContinuation);
+          } else {
+            log(`${card.name} 効果2/2: 対象なしのためスキップ`);
+          }
+          p.graveyard.push(cardId);
+          render();
+        }});
+        renderStack(); render(); updateHints();
+        openPriorityWindow(1 - player, G.priorityContinuation, `${card.name}に対応`);
+      };
+      const selectOwn = (tgt1) => {
+        if (G.players[player].field.length === 0) { castJunigeki(tgt1, null); return; }
+        showEffectStep(card.name, 2, 2, '+0/+1する自クリーチャーを選択');
+        G.targetMode = { type:'ownCreature', owner:player, callback: (tgt2) => {
+          G.targetMode = null;
+          castJunigeki(tgt1, tgt2);
         }};
-        log('自クリーチャーを選択（+0/+1）');
         render(); updateHints();
-      }};
-      log('対戦相手クリーチャーを選択（2ダメージ）');
+      };
+      if (G.players[1-player].field.length === 0) {
+        selectOwn(null);
+      } else {
+        showEffectStep(card.name, 1, 2, '2ダメージの対象を選択');
+        G.targetMode = { type:'opponentCreature', callback: (tgt1) => {
+          selectOwn(tgt1);
+        }};
+      }
       G.selectedCard = {owner:player, zone:'hand', index:handIndex};
       render(); updateHints();
       return;
@@ -2239,7 +2340,7 @@ function playCardFromHand(player, handIndex) {
       render();
     }});
     renderStack(); render(); updateHints();
-    openPriorityWindow(1 - player, G.priorityContinuation);
+    openPriorityWindow(1 - player, G.priorityContinuation, `${card.name}に対応`);
     return;
   }
 
@@ -2260,110 +2361,158 @@ function playCardFromHand(player, handIndex) {
     render();
   }});
   renderStack(); render(); updateHints();
-  openPriorityWindow(1 - player, G.priorityContinuation);
+  openPriorityWindow(1 - player, G.priorityContinuation, `${card.name}の召喚に対応`);
 }
 
 // ============================================================
-// KAIZEN SPELL
+// KAIZEN SPELL（効果は■区切りで上から順に処理）
 // ============================================================
+// 効果処理の進行を画面に表示する共通ヘルパー
+function showEffectStep(cardName, step, total, desc) {
+  log(`${cardName} 効果${step}/${total}: ${desc}`, 'important');
+  const banner = document.getElementById('status-banner');
+  if (banner) {
+    banner.innerHTML = `✨ <b>${cardName}</b> 効果${step}/${total}: ${desc}`;
+    banner.style.color = '#ffcc88';
+    banner.style.display = 'block';
+  }
+}
+
 function playKaizen(player, handIndex) {
   const p = G.players[player];
   const cardId = p.hand[handIndex];
   const card = CARD_DB[cardId];
-  const oc = isOCActive(player);
-
-  // Build modal content
-  let html = `<p style="margin-bottom:10px;">効果を選択してください:</p>
-    <div style="display:flex; gap:10px; margin-bottom:10px;">
-      <button onclick="kaizenChoice(${player},${handIndex},'A')" style="flex:1;padding:10px;">A: 対戦相手クリーチャーに2ダメージ</button>
-      <button onclick="kaizenChoice(${player},${handIndex},'B')" style="flex:1;padding:10px;">B: 対戦相手クリーチャーに攻撃強制</button>
-    </div>`;
-  if (oc) {
-    html += `<div style="border-top:1px solid #444; padding-top:10px; margin-top:5px;">
-      <p style="color:#ff88aa; margin-bottom:6px;">OC: コスト≤8のクリーチャーを手札からBF（攻撃不可、同名1回限り）</p>
-      <button onclick="kaizenOCPlay(${player},${handIndex})" style="width:100%;padding:8px;">OC能力を使用</button>
-    </div>`;
-  }
-  showModal('介善', html);
-}
-
-function kaizenChoice(player, handIndex, choice) {
-  closeModal();
-  const p = G.players[player];
-  const cardId = p.hand[handIndex];
-  const card = CARD_DB[cardId];
-
   if (!canAfford(player, card.cost)) { log('マナが足りません'); return; }
 
-  if (choice === 'A') {
+  const ocAtCast = isOCActive(player); // OCは唱えた時点の達成で判定
+  const totalSteps = ocAtCast ? 4 : 3;
+  const oppField = G.players[1-player].field;
+
+  // 唱える時に対象を上から順に選択 → スタック → 解決時に順に処理
+  const targets = { damage: null, mustAttack: null };
+
+  const castNow = () => {
+    payMana(player, card.cost);
+    p.hand.splice(handIndex, 1);
+    log(`介善 をスタックに積んだ (${costToString(card.cost)})`, 'important');
+    G.stack.push({ name: card.name, icon: card.icon||'✨', owner: player, resolve: () => {
+      kaizenResolve(player, cardId, targets, ocAtCast, totalSteps);
+    }});
+    renderStack(); render(); updateHints();
+    openPriorityWindow(1 - player, G.priorityContinuation, '介善に対応');
+  };
+
+  // 効果2の対象選択 → キャスト
+  const selectMustAttackTarget = () => {
+    if (oppField.length === 0) { castNow(); return; }
+    showEffectStep(card.name, 2, totalSteps, '攻撃強制の対象を選択');
     G.targetMode = { type:'opponentCreature', callback:(tgt) => {
       G.targetMode = null;
-      payMana(player, card.cost);
-      p.hand.splice(handIndex, 1);
-      log(`介善(A) をスタックに積んだ`, 'important');
-      G.stack.push({ name: card.name, icon: card.icon||'✨', owner: player, resolve: () => {
-        applyDamageToCreature(1-player, tgt.instId, 2, player);
-        p.graveyard.push(cardId);
-        G.blockDrawTrigger = true;
-        log(`介善(A) 解決: 2ダメージ、ブロック時1ドロー`, 'damage');
-        render();
-      }});
-      renderStack(); render(); updateHints();
-      openPriorityWindow(1 - player, G.priorityContinuation);
+      targets.mustAttack = tgt.instId;
+      castNow();
     }};
-    log('対象クリーチャーを選択（2ダメージ）');
+    render(); updateHints();
+  };
+
+  // 効果1の対象選択 → 効果2へ
+  if (oppField.length === 0) {
+    log('介善: 相手クリーチャーがいないため効果1・2は対象なし');
+    castNow();
+    return;
+  }
+  showEffectStep(card.name, 1, totalSteps, '5ダメージの対象を選択');
+  G.targetMode = { type:'opponentCreature', callback:(tgt) => {
+    G.targetMode = null;
+    targets.damage = tgt.instId;
+    selectMustAttackTarget();
+  }};
+  render(); updateHints();
+}
+
+// 解決: ■効果を上から順に処理して表示
+function kaizenResolve(player, cardId, targets, ocAtCast, totalSteps) {
+  const card = CARD_DB[cardId];
+  const p = G.players[player];
+  const opp = 1 - player;
+
+  // 効果1: 相手クリーチャー1体に5ダメージ
+  if (targets.damage != null) {
+    const tgtInst = G.players[opp].field.find(x=>x.instanceId===targets.damage);
+    showEffectStep(card.name, 1, totalSteps, `5ダメージ${tgtInst?` → ${CARD_DB[tgtInst.cardId].name}`:''}`);
+    if (tgtInst) applyDamageToCreature(opp, targets.damage, 5, player);
   } else {
-    G.targetMode = { type:'opponentCreature', callback:(tgt) => {
-      G.targetMode = null;
-      payMana(player, card.cost);
-      p.hand.splice(handIndex, 1);
-      log(`介善(B) をスタックに積んだ`, 'important');
-      G.stack.push({ name: card.name, icon: card.icon||'✨', owner: player, resolve: () => {
-        const tc = G.players[1-player].field.find(x=>x.instanceId===tgt.instId);
-        if (tc) { tc.mustAttack = true; G.mustAttackCreatures.add(tgt.instId); }
-        p.graveyard.push(cardId);
-        G.blockDrawTrigger = true;
-        log(`介善(B) 解決: 攻撃強制、ブロック時1ドロー`, 'important');
-        render();
-      }});
-      renderStack(); render(); updateHints();
-      openPriorityWindow(1 - player, G.priorityContinuation);
-    }};
-    log('対象クリーチャーを選択（攻撃強制）');
+    log(`${card.name} 効果1/${totalSteps}: 対象なしのためスキップ`);
+  }
+
+  // 効果2: 相手クリーチャー1体に攻撃強制
+  if (targets.mustAttack != null) {
+    const tc = G.players[opp].field.find(x=>x.instanceId===targets.mustAttack);
+    showEffectStep(card.name, 2, totalSteps, `攻撃強制${tc?` → ${CARD_DB[tc.cardId].name}`:''}`);
+    if (tc) { tc.mustAttack = true; G.mustAttackCreatures.add(targets.mustAttack); }
+  } else {
+    log(`${card.name} 効果2/${totalSteps}: 対象なしのためスキップ`);
+  }
+
+  // 効果3: このターン、自分のクリーチャーがブロックする時1枚引く
+  showEffectStep(card.name, 3, totalSteps, 'このターン、ブロック時に1ドロー');
+  G.blockDrawTrigger = true;
+
+  p.graveyard.push(cardId);
+
+  // 効果4 (OC): 手札からマナ総量8以下のクリーチャーを出す（攻撃不可・ターン1:同名）
+  if (ocAtCast) {
+    showEffectStep(card.name, 4, totalSteps, '〈OC〉手札からクリーチャーを出す（任意）');
+    kaizenOCDeploy(player);
   }
   render(); updateHints();
 }
 
-function kaizenOCPlay(player, handIndex) {
-  closeModal();
+function kaizenOCDeploy(player) {
   const p = G.players[player];
-  // Show eligible creatures from hand (total cost ≤ 8, not used same name)
   const eligible = p.hand.map((cid,i)=>({cid,i,card:CARD_DB[cid]}))
     .filter(({cid,card}) => card.type === 'creature' && totalCost(card.cost) <= 8 && !G.kaizen_used_names.has(card.name));
-  if (eligible.length === 0) { log('介善OC: 該当クリーチャーなし'); return; }
+  if (eligible.length === 0) { log('介善OC: 出せるクリーチャーがありません'); return; }
+  if (p.field.length >= 5) { log('介善OC: フィールドが満杯のため出せません'); return; }
 
-  let html = `<p style="margin-bottom:10px;">BFに出すクリーチャーを選択（攻撃不可）:</p><div style="display:flex; flex-wrap:wrap; gap:8px;" id="koc-cards"></div>`;
-  showModal('介善 OC', html);
+  // AIは自動で最強を選ぶ
+  if (player === 1 && NET_MODE === 'local') {
+    const best = eligible.reduce((a,b)=>(b.card.power||0)>(a.card.power||0)?b:a);
+    _kaizenDeployCreature(player, best.cid, best.i);
+    return;
+  }
+
+  let html = `<p style="margin-bottom:10px;">場に出すクリーチャーを選択（このゲーム中攻撃不可）:</p>
+    <div style="display:flex; flex-wrap:wrap; gap:8px;" id="koc-cards"></div>
+    <button onclick="closeModal()" style="margin-top:10px;width:100%;">出さない（スキップ）</button>`;
+  showModal('介善 OC効果', html);
   const container = document.getElementById('koc-cards');
   eligible.forEach(({cid,i,card}) => {
     const el = document.createElement('div');
     el.className = `card color-${card.color}`;
     el.innerHTML = buildCardHTML(card);
+    el.dataset.cardId = cid;
     el.onclick = () => {
       closeModal();
-      if (p.field.length >= 5) { log('フィールドがいっぱい'); return; }
-      G.kaizen_used_names.add(card.name);
-      const inst2 = newInstance(cid);
-      inst2.sick = false;
-      G.cantAttackPermanent.add(inst2.instanceId);
-      p.hand.splice(i, 1);
-      p.field.push(inst2);
-      fireETB(player, inst2.instanceId);
-      log(`介善OC: ${card.name} をBFに配置（攻撃不可）`, 'important');
-      render(); updateHints();
+      _kaizenDeployCreature(player, cid, i);
     };
     container.appendChild(el);
   });
+}
+
+function _kaizenDeployCreature(player, cid, handIdx) {
+  const p = G.players[player];
+  const card = CARD_DB[cid];
+  if (p.field.length >= 5) { log('介善OC: フィールドが満杯'); return; }
+  G.kaizen_used_names.add(card.name);
+  const inst2 = newInstance(cid);
+  inst2.sick = false;
+  G.cantAttackPermanent.add(inst2.instanceId);
+  p.hand.splice(handIdx, 1);
+  _enteringInstIds.add(inst2.instanceId);
+  p.field.push(inst2);
+  fireETB(player, inst2.instanceId);
+  log(`介善OC: ${card.name} を場に出した（このゲーム中攻撃不可）`, 'important');
+  render(); updateHints();
 }
 
 // ============================================================
@@ -2509,10 +2658,10 @@ function doLook3Keep1White(player) {
   const top3 = p.deck.splice(0, Math.min(3, p.deck.length));
   const whites = top3.filter(cid => CARD_DB[cid] && CARD_DB[cid].color === 'W');
 
-  if (player === 1) {
+  if (player === 1 && NET_MODE === 'local') {
     // AI: keep a white card if any
     if (whites.length > 0) {
-      p.hand.push(whites[0]);
+      addCardToHand(player, whites[0]);
       const rest = top3.filter(cid=>cid!==whites[0]);
       rest.forEach(cid=>p.deck.push(cid));
       log(`AI 3ルック1(白): 白カードをキープ`);
@@ -2523,13 +2672,23 @@ function doLook3Keep1White(player) {
     return;
   }
 
-  // Player: show modal
-  let html = `<p style="margin-bottom:10px;">白カードを1枚選んで手札に加えてください（白以外は選択不可）:</p>
-    <div style="display:flex; flex-wrap:wrap; gap:8px;" id="look3-cards"></div>
-    <button onclick="look3NoKeep()" style="margin-top:10px; width:100%;">白カードなし/パス（全て底へ）</button>`;
-  showModal('3ルック1(白)', html);
   window._look3Cards = top3;
   window._look3Player = player;
+  renderLook3Modal();
+}
+
+// ルックモーダルを（再）描画: 盤面確認から戻った時にも使う
+function renderLook3Modal() {
+  const top3 = window._look3Cards || [];
+  const player = window._look3Player || 0;
+  const p = G.players[player];
+  let html = `<p style="margin-bottom:10px;">白カードを1枚選んで手札に加えてください（白以外は選択不可）:</p>
+    <p style="margin-bottom:8px;font-size:11px;color:#888;">右クリック/長押しで効果テキストを右上に表示できます</p>
+    <div style="display:flex; flex-wrap:wrap; gap:8px;" id="look3-cards"></div>
+    <button onclick="modalPeek()" style="margin-top:10px; width:100%; background:#1a1a3a; border:1px solid #4444aa; color:#aaaaff; padding:8px; border-radius:6px; cursor:pointer;">👁 盤面を確認（手札・墓地・場）</button>
+    <button onclick="look3NoKeep()" style="margin-top:8px; width:100%;">白カードなし/パス（全て底へ）</button>`;
+  showModal('3ルック1(白)', html);
+  window._modalReturnRender = renderLook3Modal;
 
   const container = document.getElementById('look3-cards');
   top3.forEach((cid, i) => {
@@ -2537,14 +2696,16 @@ function doLook3Keep1White(player) {
     const el = document.createElement('div');
     el.className = `card color-${card.color}`;
     el.innerHTML = buildCardHTML(card);
+    el.dataset.cardId = cid; // 右クリック/長押しで詳細表示可能に
     const isWhite = card.color === 'W';
     if (!isWhite) { el.style.opacity = '0.4'; el.style.cursor = 'default'; }
     else {
       el.onclick = () => {
-        p.hand.push(cid);
+        addCardToHand(player, cid);
         const rest = top3.filter(c2=>c2!==cid);
         rest.forEach(c2=>p.deck.push(c2));
         log(`3ルック1: ${card.name} をキープ`);
+        window._look3Cards = null; window._modalReturnRender = null;
         closeModal(); render(); updateHints();
       };
     }
@@ -2556,7 +2717,30 @@ function look3NoKeep() {
   const player = window._look3Player || 0;
   top3.forEach(cid=>G.players[player].deck.push(cid));
   log('3ルック1: 全て底へ');
+  window._look3Cards = null; window._modalReturnRender = null;
   closeModal(); render(); updateHints();
+}
+
+// ── モーダル一時非表示（盤面確認） ───────────────────────────
+function modalPeek() {
+  closeModal();
+  hideCardDetail();
+  if (document.getElementById('modal-peek-return')) return;
+  const btn = document.createElement('button');
+  btn.id = 'modal-peek-return';
+  btn.textContent = '↩ カード選択に戻る';
+  btn.onclick = modalPeekReturn;
+  document.body.appendChild(btn);
+  log('盤面確認中: 手札・墓地・場を確認できます。「カード選択に戻る」で選択に戻ります');
+}
+function modalPeekReturn() {
+  const btn = document.getElementById('modal-peek-return');
+  if (btn) btn.remove();
+  if (window._modalReturnRender) {
+    window._modalReturnRender(); // ルックモーダルを再構築（クリックハンドラ含む）
+  } else {
+    document.getElementById('modal').classList.add('active');
+  }
 }
 
 function addPermanentBuff(player, instanceId, power, toughness) {
@@ -2664,11 +2848,54 @@ function endGame(winner) {
       localStorage.setItem('dcg_record', JSON.stringify(rec));
     } catch(e) {}
   }
-  const who = winner === 0 ? 'あなたの' : 'AIの';
+  const who = NET_MODE === 'hotseat' ? (winner === 0 ? 'P1の' : 'P2の') : winner === 0 ? 'あなたの' : 'AIの';
   log(`ゲーム終了！ ${who}勝利！`, 'important');
   recordReplaySnapshot(`ゲーム終了 (${who}勝利)`);
-  showModal('ゲーム終了', `<p style="font-size:24px; text-align:center; margin:20px 0;">${who}勝利！</p><button onclick="location.reload()" style="width:100%;padding:10px;margin-bottom:8px;">もう一度プレイ</button><button onclick="closeModal();showReplayViewer();" style="width:100%;padding:10px;margin-bottom:8px;background:#1a1a3a;border:1px solid #4444aa;color:#aaaaff;border-radius:6px;cursor:pointer;">📽️ リプレイを見る</button><button onclick="closeModal();showHomeScreen();" style="width:100%;padding:10px;background:#12121e;border:1px solid #4a4a6a;color:#aaaacc;border-radius:6px;cursor:pointer;">🏠 ホームに戻る</button>`);
+  showModal('ゲーム終了', `<p style="font-size:24px; text-align:center; margin:20px 0;">${who}勝利！</p><button onclick="closeModal();resetBoardAndRestart();" style="width:100%;padding:10px;margin-bottom:8px;">もう一度プレイ</button><button onclick="closeModal();showReplayViewer();" style="width:100%;padding:10px;margin-bottom:8px;background:#1a1a3a;border:1px solid #4444aa;color:#aaaaff;border-radius:6px;cursor:pointer;">📽️ リプレイを見る</button><button onclick="closeModal();resetBoardAndHome();" style="width:100%;padding:10px;background:#12121e;border:1px solid #4a4a6a;color:#aaaacc;border-radius:6px;cursor:pointer;">🏠 ホームに戻る</button>`);
   G.phase = 'ended';
+}
+
+// ── 盤面リセット: 対戦終了後にゲーム状態を初期化 ──
+function resetBoardAndRestart() {
+  // 同モードでもう一度: ログをクリアし、initGameが全状態をリセット
+  const logEl = document.getElementById('log');
+  if (logEl) logEl.innerHTML = '';
+  initGame();
+}
+
+function resetBoardAndHome() {
+  // ログと盤面をクリアしてホームへ（次の対戦はinitGameで完全リセット）
+  const logEl = document.getElementById('log');
+  if (logEl) logEl.innerHTML = '';
+  if (G) {
+    G.phase = 'ended';
+    G.stack = [];
+    G.combatArrows = [];
+    G.targetMode = null;
+  }
+  showHomeScreen();
+}
+
+// ── リタイア（投了）────────────────────────────────────────
+function confirmRetire() {
+  if (!G || G.phase === 'ended') { resetBoardAndHome(); return; }
+  showModal('リタイア確認', `
+    <p style="margin-bottom:16px;">対戦をリタイアしてホームに戻りますか？<br><span style="color:#888;font-size:12px;">（AI対戦の場合は敗北として記録されます）</span></p>
+    <button onclick="closeModal();doRetire();" style="width:100%;padding:10px;margin-bottom:8px;background:#2a1212;border:1px solid #884444;color:#ffaaaa;border-radius:6px;cursor:pointer;">🏳️ リタイアする</button>
+    <button onclick="closeModal();" style="width:100%;padding:10px;background:#12121e;border:1px solid #4a4a6a;color:#aaaacc;border-radius:6px;cursor:pointer;">対戦に戻る</button>`);
+}
+
+function doRetire() {
+  if (G && G.phase !== 'ended' && NET_MODE === 'local') {
+    try {
+      const rec = JSON.parse(localStorage.getItem('dcg_record') || '{"wins":0,"losses":0}');
+      rec.losses = (rec.losses || 0) + 1;
+      localStorage.setItem('dcg_record', JSON.stringify(rec));
+    } catch(e) {}
+  }
+  if (G) G.phase = 'ended';
+  log('🏳️ リタイアしました', 'important');
+  resetBoardAndHome();
 }
 
 // ============================================================
@@ -2760,7 +2987,7 @@ function endPhase() {
     openPriorityWindow(opponent, () => {
       G._skipPriorityWindow = false;
       endPhase();
-    });
+    }, 'フェイズ終了時');
     return;
   }
   G._skipPriorityWindow = false;
@@ -2883,7 +3110,7 @@ function startSingleAttack(player, atkInstId) {
     G.kakutouTargetMode = true;
     G.pendingKakutouInstId = atkInstId;
     G.kakutouTargets = {};
-    log(`${card.name} 格闘: 攻撃するAIクリーチャーを選択してください`);
+    log(`${card.name} 格闘: 攻撃する相手クリーチャーを選択してください`);
     render(); updateHints();
     return;
   }
@@ -2901,6 +3128,27 @@ function startSingleAttack(player, atkInstId) {
       if (player === 1) setTimeout(() => continueAIAttack(), 300);
       return;
     }
+    if (NET_MODE === 'hotseat') {
+      // ホットシート: 守備側プレイヤーが自分でブロックを宣言
+      const atkInst2 = G.players[player].field.find(c => c.instanceId === atkInstId);
+      const eligible = G.players[opp].field.filter(c => {
+        const bc = CARD_DB[c.cardId];
+        return (!c.tapped || (bc.ocBlockWhileTapped && isOCActive(opp))) && canFlyBlock(atkInst2, c);
+      });
+      if (eligible.length === 0) {
+        resolveSingleCombat(player, atkInstId, null, null);
+        return;
+      }
+      G.aiCurrentAttackers = [{instId: atkInstId, targetType:'player', targetInstId:null}];
+      G.playerBlockMode = true;
+      G.playerBlockDefender = opp;
+      G.playerBlockAssignments = {};
+      G.selectedBlockerToAssign = null;
+      G._pendingBlockAtkP = player;
+      log(`--- ${card.name} に対してブロッカーを宣言（任意）→「ブロック確定」 ---`, 'important');
+      render(); updateHints();
+      return;
+    }
     const aiBlocker = pickAIBlockerFor(player, atkInstId);
     if (aiBlocker) {
       G.combatArrows = [{fromId: atkInstId, toId: aiBlocker.instanceId, color: '#ff4444'}];
@@ -2909,15 +3157,16 @@ function startSingleAttack(player, atkInstId) {
     } else {
       resolveSingleCombat(player, atkInstId, null, null);
     }
-  });
+  }, '攻撃宣言に対応');
 }
 
-function pickAIBlockerFor(atkPlayer, atkInstId) {
+function pickAIBlockerFor(atkPlayer, atkInstId, excludeInstId) {
   const opp = 1 - atkPlayer;
   const oppField = G.players[opp].field;
   const atkInst = G.players[atkPlayer].field.find(c => c.instanceId === atkInstId);
   if (!atkInst) return null;
   const eligible = oppField.filter(b => {
+    if (excludeInstId != null && b.instanceId === excludeInstId) return false; // 格闘対象はブロック不可
     const bc = CARD_DB[b.cardId];
     return (!b.tapped || (bc.ocBlockWhileTapped && isOCActive(opp))) && canFlyBlock(atkInst, b);
   });
@@ -3045,7 +3294,7 @@ function resolveSingleCombat(atkPlayer, atkInstId, kakutouTargetId, blockerInstI
 function endTurnAfterMainPhase() {
   if (G.awaitingPriority) { endTurn(); return; }
   const nonTurn = 1 - G.activePlayer;
-  openPriorityWindow(nonTurn, () => endTurn());
+  openPriorityWindow(nonTurn, () => endTurn(), 'ターン終了時');
 }
 
 function endTurn() {
@@ -3056,6 +3305,7 @@ function endTurn() {
   G.targetMode = null;
   G.kakutouTargetMode = false;
   G.pendingKakutouInstId = null;
+  G.kaizen_used_names.clear(); // 介善OCの「ターン1:同名」制限はターン毎にリセット
   G.players.forEach(p => {
     p.field.forEach(c => { c.tempPower = 0; c.tempToughness = 0; });
     p.mana = {R:0,U:0,G:0,W:0,B:0,C:0};
@@ -3125,7 +3375,7 @@ function endTurn() {
         updateHints();
       }
     }
-  });
+  }, 'ターン開始時');
   netPostTurnEnd();
 }
 
@@ -3481,14 +3731,19 @@ function isOCActive(player) {
 // ============================================================
 // PRIORITY WINDOW SYSTEM
 // ============================================================
-function openPriorityWindow(forPlayer, continuation) {
+function openPriorityWindow(forPlayer, continuation, reason) {
   G.awaitingPriority = true;
   G.priorityFor = forPlayer;
   G.priorityContinuation = continuation;
+  if (reason) G.priorityReason = reason;
+  else if (!G.priorityReason) G.priorityReason = G.stack.length > 0 ? `${G.stack[G.stack.length-1].name}に対応` : '';
   render();
   updateHints();
-  if (forPlayer === 1) {
+  if (NET_MODE === 'local' && forPlayer === 1) {
     setTimeout(() => aiHandlePriority(), 700);
+  } else if (NET_MODE === 'hotseat' && forPlayer !== G.activePlayer) {
+    // ホットシート: 非アクティブ側の優先権は自動パス（手札が隠れているため）
+    setTimeout(() => { if (G.awaitingPriority) closePriorityAndResolve(); }, 400);
   }
 }
 
@@ -3497,6 +3752,8 @@ function closePriorityAndResolve() {
   G.priorityFor = null;
   const cont = G.priorityContinuation;
   G.priorityContinuation = null;
+  const reason = G.priorityReason;
+  G.priorityReason = '';
 
   if (G.stack.length > 0) {
     // LIFO: 最後に積んだものを解決
@@ -3507,7 +3764,7 @@ function closePriorityAndResolve() {
     render();
     // まだスタックが残っていれば再度優先権ウィンドウ
     if (G.stack.length > 0) {
-      setTimeout(() => openPriorityWindow(1 - G.activePlayer, cont), 400);
+      setTimeout(() => openPriorityWindow(1 - G.activePlayer, cont, reason), 400);
       return;
     }
   }
@@ -3687,7 +3944,7 @@ function aiTurn() {
   }
 
   if (aiPlayedCard) {
-    openPriorityWindow(0, () => setTimeout(() => aiAttack(), 300));
+    openPriorityWindow(0, () => setTimeout(() => aiAttack(), 300), 'AIのプレイに対応');
   } else {
     setTimeout(() => { aiAttack(); }, 600);
   }
@@ -3715,16 +3972,43 @@ function aiPlaySpellEffect(card) {
       }
     }
   } else if (card.effect === 'kaizen') {
-    if (player.field.length > 0) {
-      const tgt = player.field.reduce((a,b)=>getEffectivePower(0,b)>getEffectivePower(0,a)?b:a);
-      applyDamageToCreature(0, tgt.instanceId, 2, 1);
-      log(`AI 介善(A): プレイヤークリーチャーに2ダメージ`, 'damage');
-    }
-    G.blockDrawTrigger = true;
+    aiKaizenEffects();
   } else {
     log(`AI: ${card.name} を使用`);
   }
   checkDeath();
+}
+
+// AI介善: ■効果を上から順に処理（5ダメージ→攻撃強制→ブロックドロー→OC展開）
+function aiKaizenEffects() {
+  const ai = G.players[1];
+  const player = G.players[0];
+  const ocAtCast = isOCActive(1);
+  const total = ocAtCast ? 4 : 3;
+  // 効果1: 最強クリーチャーに5ダメージ
+  if (player.field.length > 0) {
+    const tgt = player.field.reduce((a,b)=>getEffectivePower(0,b)>getEffectivePower(0,a)?b:a);
+    showEffectStep('AI 介善', 1, total, `5ダメージ → ${CARD_DB[tgt.cardId].name}`);
+    applyDamageToCreature(0, tgt.instanceId, 5, 1);
+  } else {
+    log(`AI 介善 効果1/${total}: 対象なしのためスキップ`);
+  }
+  // 効果2: 残った最弱クリーチャーに攻撃強制
+  if (player.field.length > 0) {
+    const tgt2 = player.field.reduce((a,b)=>getEffectivePower(0,b)<getEffectivePower(0,a)?b:a);
+    showEffectStep('AI 介善', 2, total, `攻撃強制 → ${CARD_DB[tgt2.cardId].name}`);
+    tgt2.mustAttack = true; G.mustAttackCreatures.add(tgt2.instanceId);
+  } else {
+    log(`AI 介善 効果2/${total}: 対象なしのためスキップ`);
+  }
+  // 効果3
+  showEffectStep('AI 介善', 3, total, 'このターン、ブロック時に1ドロー');
+  G.blockDrawTrigger = true;
+  // 効果4 (OC)
+  if (ocAtCast) {
+    showEffectStep('AI 介善', 4, total, '〈OC〉クリーチャー展開');
+    kaizenOCDeploy(1);
+  }
 }
 
 function aiPlaySpell(card, handIndex) {
@@ -3749,13 +4033,7 @@ function aiPlaySpell(card, handIndex) {
       }
     }
   } else if (card.effect === 'kaizen') {
-    // AI version: choice A (damage) if opponent has creatures, else B (mustAttack)
-    if (player.field.length > 0) {
-      const tgt = player.field.reduce((a,b)=>getEffectivePower(0,b)>getEffectivePower(0,a)?b:a);
-      applyDamageToCreature(0, tgt.instanceId, 2, 1);
-      log(`AI 介善(A): プレイヤークリーチャーに2ダメージ`, 'damage');
-    }
-    G.blockDrawTrigger = true; // applies to whoever blocks this turn (AI turn, so player blocking AI attacks)
+    aiKaizenEffects();
   } else {
     log(`AI: ${card.name} を使用`);
   }
@@ -3875,8 +4153,25 @@ function continueAIAttack() {
         setTimeout(() => continueAIAttack(), 300);
         return;
       }
-      resolveSingleCombat(1, atkInstId, tgtId, null);
-    });
+      // 格闘対象以外のクリーチャーはブロック可能: プレイヤーにブロック機会を与える
+      const eligibleBlockers = player.field.filter(c => {
+        if (c.instanceId === tgtId) return false; // 格闘対象はブロック不可
+        const bc = CARD_DB[c.cardId];
+        return (!c.tapped || (bc.ocBlockWhileTapped && isOCActive(0))) && canFlyBlock(atkInst, c);
+      });
+      if (eligibleBlockers.length === 0) {
+        resolveSingleCombat(1, atkInstId, tgtId, null);
+        return;
+      }
+      G.aiCurrentAttackers = [{instId: atkInstId, targetType:'creature', targetInstId: tgtId}];
+      G.playerBlockMode = true;
+      G.playerBlockDefender = 0;
+      G.playerBlockAssignments = {};
+      G.selectedBlockerToAssign = null;
+      G.directlyAttackedCreatures.add(tgtId); // 格闘対象はブロッカーに選べない
+      log(`--- ${card.name} の格闘に対してブロッカーを宣言可能（格闘対象以外）→「ブロック確定」 ---`, 'important');
+      render(); updateHints();
+    }, '格闘宣言に対応');
     return;
   }
 
@@ -3908,22 +4203,34 @@ function continueAIAttack() {
     G.selectedBlockerToAssign = null;
     log(`--- ${card.name} に対してブロッカーを宣言（任意）→「ブロック確定」 ---`, 'important');
     render(); updateHints();
-  });
+  }, '攻撃宣言に対応');
 }
 
 function resolveAICombat() {
   if (G.phase === 'ended') return;
   // Single-attacker block confirmed: get the one queued attacker
-  const {instId: atkId} = G.aiCurrentAttackers[0] || {};
+  const {instId: atkId, targetType, targetInstId} = G.aiCurrentAttackers[0] || {};
   const blkId = atkId ? G.playerBlockAssignments[atkId] : null;
+  // ホットシート格闘では攻撃側がP0の場合もある
+  const atkP = (G._pendingBlockAtkP !== undefined && G._pendingBlockAtkP !== null) ? G._pendingBlockAtkP : 1;
+  G._pendingBlockAtkP = null;
 
   G.playerBlockMode = false;
   G.aiCurrentAttackers = [];
   G.playerBlockAssignments = {};
   G.selectedBlockerToAssign = null;
   G.combatArrows = [];
+  G.directlyAttackedCreatures.clear();
 
-  resolveSingleCombat(1, atkId, null, blkId || null);
+  if (blkId) {
+    // ブロック成立: 攻撃者vsブロッカー（格闘対象は守られた）
+    resolveSingleCombat(atkP, atkId, null, blkId);
+  } else if (targetType === 'creature' && targetInstId) {
+    // 格闘: ブロックされなかったので対象と戦闘
+    resolveSingleCombat(atkP, atkId, targetInstId, null);
+  } else {
+    resolveSingleCombat(atkP, atkId, null, null);
+  }
 }
 
 // ============================================================
@@ -4031,8 +4338,9 @@ function renderHand(player, zoneId) {
       const isMain = G.phase === 'main' && G.activePlayer === player;
       const isQuick = card.keywords && card.keywords.includes('Quick');
       const affordable = card.type !== 'land' && canAfford(player, card.cost);
+      const fieldFull = card.type === 'creature' && G.players[player].field.length >= 5;
       const inPriorityWindow = G.awaitingPriority;
-      const canPlay = affordable && (
+      const canPlay = affordable && !fieldFull && (
         isMain ||
         isQuick ||
         (inPriorityWindow && G.activePlayer === player)
@@ -4238,11 +4546,13 @@ function handleFieldClick(player, instId) {
     if (player === NET_MY_IDX || G.playerBlockMode) { netSendAction('activateCreature', {instId, cardId}); return; }
     return;
   }
-  // 格闘ターゲット選択を最優先
-  if (G.kakutouTargetMode && player === 1) {
-    const atkInst = G.players[0].field.find(c=>c.instanceId===G.pendingKakutouInstId);
+  // 格闘ターゲット選択を最優先（攻撃側=アクティブプレイヤー、対象=その相手）
+  const kkAtkP = NET_MODE === 'hotseat' ? G.activePlayer : 0;
+  const kkDefP = 1 - kkAtkP;
+  if (G.kakutouTargetMode && player === kkDefP) {
+    const atkInst = G.players[kkAtkP].field.find(c=>c.instanceId===G.pendingKakutouInstId);
     const atkCard = atkInst ? CARD_DB[atkInst.cardId] : null;
-    const tgtInst = G.players[1].field.find(c=>c.instanceId===instId);
+    const tgtInst = G.players[kkDefP].field.find(c=>c.instanceId===instId);
     const tgtCard = tgtInst ? CARD_DB[tgtInst.cardId] : null;
     // 飛行チェック: 非飛行は飛行クリーチャーを格闘対象にできない
     if (tgtCard && tgtCard.flying && !(atkCard && atkCard.flying)) {
@@ -4258,17 +4568,49 @@ function handleFieldClick(player, instId) {
     G.pendingKakutouInstId = null;
     render();
     // Priority window after 格闘 target declared
-    openPriorityWindow(1, () => {
-      const atkStillAlive = G.players[0].field.find(c => c.instanceId === atkInstId);
-      const tgtStillAlive = G.players[1].field.find(c => c.instanceId === kakutouTgtId);
+    openPriorityWindow(kkDefP, () => {
+      const atkStillAlive = G.players[kkAtkP].field.find(c => c.instanceId === atkInstId);
+      const tgtStillAlive = G.players[kkDefP].field.find(c => c.instanceId === kakutouTgtId);
       if (!atkStillAlive || !tgtStillAlive) {
         log('格闘: クリーチャーが破壊されたため攻撃中止');
         G.combatArrows = [];
         render(); updateHints();
         return;
       }
-      setTimeout(() => resolveSingleCombat(0, atkInstId, kakutouTgtId, null), 300);
-    });
+      // 格闘対象以外のクリーチャーはブロック可能
+      if (NET_MODE === 'hotseat') {
+        // ホットシート: 守備側プレイヤーがブロックを宣言できる
+        const eligible = G.players[kkDefP].field.filter(c => {
+          if (c.instanceId === kakutouTgtId) return false;
+          const bc = CARD_DB[c.cardId];
+          return (!c.tapped || (bc.ocBlockWhileTapped && isOCActive(kkDefP))) && canFlyBlock(atkInst, c);
+        });
+        if (eligible.length === 0) {
+          setTimeout(() => resolveSingleCombat(kkAtkP, atkInstId, kakutouTgtId, null), 300);
+          return;
+        }
+        G.aiCurrentAttackers = [{instId: atkInstId, targetType:'creature', targetInstId: kakutouTgtId}];
+        G.playerBlockMode = true;
+        G.playerBlockDefender = kkDefP;
+        G.playerBlockAssignments = {};
+        G.selectedBlockerToAssign = null;
+        G.directlyAttackedCreatures.add(kakutouTgtId);
+        G._pendingBlockAtkP = kkAtkP;
+        log(`--- 格闘に対してブロッカーを宣言可能（格闘対象以外）→「ブロック確定」 ---`, 'important');
+        render(); updateHints();
+        return;
+      }
+      // ローカル: AIがブロックを判断
+      const aiBlocker = pickAIBlockerFor(kkAtkP, atkInstId, kakutouTgtId);
+      if (aiBlocker) {
+        G.combatArrows = [{fromId: atkInstId, toId: aiBlocker.instanceId, color: '#ff4444'}];
+        log(`AI: ${CARD_DB[aiBlocker.cardId].name} が格闘をブロック（対象以外はブロック可能）`, 'important');
+        render();
+        setTimeout(() => resolveSingleCombat(kkAtkP, atkInstId, null, aiBlocker.instanceId), 400);
+      } else {
+        setTimeout(() => resolveSingleCombat(kkAtkP, atkInstId, kakutouTgtId, null), 300);
+      }
+    }, '格闘宣言に対応');
     return;
   }
 
@@ -4546,10 +4888,12 @@ function updateHints() {
     hint.innerHTML = '🔄 <b>マリガン</b> — 戻すカードをクリック（赤枠）して「確認」を押す';
     hint.style.color = '#aaaaff';
   } else if (G.awaitingPriority && G.priorityFor === NET_MY_IDX) {
-    hint.innerHTML = '⚡ <b>優先権</b> — Quickスペルを使用できます（「優先権パス」で続行）';
+    const pr = G.priorityReason ? `【${G.priorityReason}】` : '';
+    hint.innerHTML = `⚡ <b>優先権${pr}</b> — Quickスペルを使用できます（「優先権パス」で続行）`;
     hint.style.color = '#ffcc44';
   } else if (G.awaitingPriority && !myTurn && G.priorityFor !== NET_MY_IDX) {
-    hint.innerHTML = `⚡ <b>優先権</b> — ${oppName}が応答中です...`;
+    const pr = G.priorityReason ? `【${G.priorityReason}】` : '';
+    hint.innerHTML = `⚡ <b>優先権${pr}</b> — ${oppName}が応答中です...`;
     hint.style.color = '#aaddff';
   } else if (myTurn && G.phase === 'main') {
     const canAtk = G.players[NET_MY_IDX].field.some(c => canCreatureAttack(NET_MY_IDX, c));
@@ -4682,6 +5026,7 @@ function showGraveyard(player) {
     el.style.cursor = 'default';
     el.innerHTML = buildCardHTML(card);
     el.title = card.text || card.name;
+    el.dataset.cardId = cid; // 右クリック/長押しで詳細表示
     container.appendChild(el);
   });
 }
@@ -5294,9 +5639,10 @@ class SimGame {
         if (me.field.length) { const ally=me.field.reduce((a,b)=>this.hp(a)<this.hp(b)?a:b); ally.tempToughness=(ally.tempToughness||0)+1; }
       } else opp.life-=2;
     } else if (card.effect==='kaizen') {
-      // Choice: 2 damage to weakest opp creature (best option)
-      if (opp.field.length) { const tgt=opp.field.reduce((a,b)=>this.hp(b)<this.hp(a)?b:a); tgt.damage+=2; }
-      // OC: play cheapest creature from hand (simplified)
+      // 効果1: 5 damage to strongest opp creature
+      if (opp.field.length) { const tgt=opp.field.reduce((a,b)=>this.hp(b)>this.hp(a)?b:a); tgt.damage+=5; this.simCheckDeath(1-ap); }
+      // 効果2: mustAttack (sim simplification: skip flag, minimal impact)
+      // 効果3+OC: play cheapest creature from hand (simplified)
       if (this.simIsOC(me)) {
         const idx=me.hand.findIndex(cid=>{ const c=CARD_DB[cid]; return c.type==='creature'&&totalCost(c.cost||{})<=8&&me.field.length<5; });
         if (idx!==-1) {
@@ -5715,29 +6061,77 @@ function _saveWeightsFallback(json) {
   document.body.appendChild(box);
 }
 
+// JSON文字列から学習データを読み込む共通処理
+function importWeightsJSON(jsonText) {
+  const data=JSON.parse(jsonText);
+  if (!data._version) throw new Error('バージョン情報なし');
+  const w=data.weights||data;
+  const keys=Object.keys(AI_WEIGHTS_DEFAULT).filter(k=>!k.startsWith('_'));
+  // Load available keys, fill missing with defaults
+  const merged={...AI_WEIGHTS_DEFAULT};
+  keys.forEach(k=>{ if(typeof w[k]==='number') merged[k]=w[k]; });
+  merged._version=AI_WEIGHTS_VERSION;
+  AI_WEIGHTS=merged;
+  if (data.stats) AI_TRAIN_STATS={...AI_TRAIN_STATS,...data.stats};
+  if (data.cardStats) CARD_STATS=data.cardStats;
+  if (data.aiDeck) AI_DECK_COUNTS=data.aiDeck;
+  if (data.aiLand) AI_LAND_COUNTS=data.aiLand;
+}
+
 function loadWeightsFromFile(file) {
   const reader=new FileReader();
   reader.onload=e=>{
     try {
-      const data=JSON.parse(e.target.result);
-      if (!data._version) throw new Error('バージョン情報なし');
-      const w=data.weights||data;
-      const keys=Object.keys(AI_WEIGHTS_DEFAULT).filter(k=>!k.startsWith('_'));
-      // Load available keys, fill missing with defaults
-      const merged={...AI_WEIGHTS_DEFAULT};
-      keys.forEach(k=>{ if(typeof w[k]==='number') merged[k]=w[k]; });
-      merged._version=AI_WEIGHTS_VERSION;
-      AI_WEIGHTS=merged;
-      if (data.stats) AI_TRAIN_STATS={...AI_TRAIN_STATS,...data.stats};
-      if (data.cardStats) CARD_STATS=data.cardStats;
-      if (data.aiDeck) AI_DECK_COUNTS=data.aiDeck;
-      if (data.aiLand) AI_LAND_COUNTS=data.aiLand;
+      importWeightsJSON(e.target.result);
       document.getElementById('train-status').textContent=`✅ 読込完了 (${AI_TRAIN_STATS.games}戦)`;
     } catch(err) {
       document.getElementById('train-status').textContent=`❌ 読込失敗: ${err.message}`;
     }
   };
   reader.readAsText(file);
+}
+
+// ── コピペ読込 (iPad等ファイル選択が使えない環境向け) ──
+function showPasteImport() {
+  const box=document.createElement('div');
+  box.id='paste-import-box';
+  box.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.9);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:20px;';
+  const title=document.createElement('div');
+  title.textContent='📋 学習データをコピペで読込';
+  title.style.cssText='color:#aaaaff;font-size:16px;font-weight:700;';
+  const note=document.createElement('div');
+  note.textContent='保存時にコピーしたJSONテキストを下に貼り付けて「読込」を押してください';
+  note.style.cssText='color:#888;font-size:12px;text-align:center;max-width:480px;';
+  const ta=document.createElement('textarea');
+  ta.placeholder='ここにJSONを貼り付け...';
+  ta.style.cssText='width:100%;max-width:560px;height:220px;background:#0a0a1a;color:#aaffaa;border:1px solid #336633;border-radius:6px;padding:8px;font-size:11px;font-family:monospace;';
+  const status=document.createElement('div');
+  status.style.cssText='color:#888;font-size:13px;min-height:18px;';
+  const btnRow=document.createElement('div');
+  btnRow.style.cssText='display:flex;gap:12px;';
+  const btnLoad=document.createElement('button');
+  btnLoad.textContent='📥 読込';
+  btnLoad.style.cssText='padding:12px 28px;background:#1a3a1a;border:1px solid #44aa44;color:#aaffaa;border-radius:8px;font-size:16px;cursor:pointer;';
+  btnLoad.onclick=()=>{
+    try {
+      importWeightsJSON(ta.value.trim());
+      status.textContent=`✅ 読込完了 (${AI_TRAIN_STATS.games}戦の学習データ)`;
+      status.style.color='#88ff88';
+      const ts=document.getElementById('train-status');
+      if (ts) ts.textContent=`✅ 読込完了 (${AI_TRAIN_STATS.games}戦)`;
+      setTimeout(()=>box.remove(), 1200);
+    } catch(err) {
+      status.textContent=`❌ 読込失敗: ${err.message}`;
+      status.style.color='#ff8888';
+    }
+  };
+  const btnClose=document.createElement('button');
+  btnClose.textContent='閉じる';
+  btnClose.style.cssText='padding:12px 28px;background:#1a1a2a;border:1px solid #555;color:#aaa;border-radius:8px;font-size:16px;cursor:pointer;';
+  btnClose.onclick=()=>box.remove();
+  btnRow.append(btnLoad, btnClose);
+  box.append(title, note, ta, status, btnRow);
+  document.body.appendChild(box);
 }
 
 function showTrainingPanel() {
@@ -5780,9 +6174,10 @@ function showTrainingPanel() {
       <div id="train-status" style="color:#88cc88;min-height:18px;">待機中</div>
       <hr style="border-color:#333;margin:4px 0;">
       <div style="display:flex;gap:8px;flex-wrap:wrap;">
-        <button onclick="saveWeightsToFile()" style="padding:6px 12px;background:#1a1a3a;border:1px solid #4444aa;color:#aaaaff;border-radius:4px;cursor:pointer;">💾 保存</button>
+        <button onclick="saveWeightsToFile()" style="padding:6px 12px;background:#1a1a3a;border:1px solid #4444aa;color:#aaaaff;border-radius:4px;cursor:pointer;">💾 保存(コピー)</button>
+        <button onclick="showPasteImport()" style="padding:6px 12px;background:#1a2a1a;border:1px solid #447744;color:#aaffaa;border-radius:4px;cursor:pointer;">📋 コピペで読込</button>
         <label style="padding:6px 12px;background:#2a1a1a;border:1px solid #774444;color:#ffaaaa;border-radius:4px;cursor:pointer;">
-          📂 読込<input type="file" accept=".json" style="display:none;" onchange="loadWeightsFromFile(this.files[0])">
+          📂 ファイル読込<input type="file" accept=".json" style="display:none;" onchange="loadWeightsFromFile(this.files[0])">
         </label>
         <button onclick="closeModal();showBalancePanel()" style="padding:6px 12px;background:#1a2a2a;border:1px solid #447777;color:#aaffff;border-radius:4px;cursor:pointer;">📊 バランス分析</button>
         <button onclick="closeModal();showAIDeckPanel()" style="padding:6px 12px;background:#2a2a1a;border:1px solid #777744;color:#ffffaa;border-radius:4px;cursor:pointer;">🃏 AIデッキ</button>
@@ -6652,30 +7047,35 @@ function runCardTests() {
     assert('Arestiaバフ: 実効パワーに反映(5+1=6)', eff===6);
   });
 
-  // 15. 介善(A): スタック解決で2ダメージ + blockDrawTrigger
+  // 15. 介善: 効果1(5ダメージ)→効果2(攻撃強制)→効果3(ブロック時ドロー)を順に処理
   withState(()=>{
     G.players[0].hand = ['kaizen'];
-    const target = _testAddCreature(1,'arestia'); // 5/5
-    kaizenChoice(0, 0, 'A');
-    assert('介善A: targetModeがセット', G.targetMode && G.targetMode.type==='opponentCreature');
-    G.targetMode.callback({instId: target.instanceId});
-    assert('介善A: スタックに積まれる', G.stack.length===1);
+    G.players[0].mana = {R:0,U:0,G:0,W:4,B:0,C:0};
+    const t1 = _testAddCreature(1,'arestia');        // 5/5 ← 5ダメージ対象
+    const t2 = _testAddCreature(1,'shinmai_heishi'); // 攻撃強制対象
+    playKaizen(0, 0);
+    assert('介善: 効果1のtargetModeがセット', G.targetMode && G.targetMode.type==='opponentCreature');
+    G.targetMode.callback({instId: t1.instanceId});
+    assert('介善: 効果2のtargetModeがセット', G.targetMode && G.targetMode.type==='opponentCreature');
+    G.targetMode.callback({instId: t2.instanceId});
+    assert('介善: スタックに積まれる', G.stack.length===1);
     G.stack.pop().resolve();
-    const t = G.players[1].field.find(x=>x.instanceId===target.instanceId);
-    assert('介善A: 解決で2ダメージ', t && t.damage===2);
-    assert('介善A: blockDrawTriggerが立つ', G.blockDrawTrigger===true);
-    assert('介善A: 墓地に置かれる', G.players[0].graveyard.includes('kaizen'));
+    const r1 = G.players[1].field.find(x=>x.instanceId===t1.instanceId);
+    assert('介善 効果1: 5ダメージで5/5が破壊', !r1);
+    const r2 = G.players[1].field.find(x=>x.instanceId===t2.instanceId);
+    assert('介善 効果2: 攻撃強制フラグ', r2 && r2.mustAttack===true && G.mustAttackCreatures.has(t2.instanceId));
+    assert('介善 効果3: blockDrawTriggerが立つ', G.blockDrawTrigger===true);
+    assert('介善: 墓地に置かれる', G.players[0].graveyard.includes('kaizen'));
   });
 
-  // 16. 介善(B): 攻撃強制
+  // 16. 介善: 相手クリーチャーなしでも効果3は処理される
   withState(()=>{
     G.players[0].hand = ['kaizen'];
-    const target = _testAddCreature(1,'shinmai_heishi');
-    kaizenChoice(0, 0, 'B');
-    G.targetMode.callback({instId: target.instanceId});
+    G.players[0].mana = {R:0,U:0,G:0,W:4,B:0,C:0};
+    playKaizen(0, 0);
+    assert('介善(対象なし): 即スタック', G.stack.length===1);
     G.stack.pop().resolve();
-    const t = G.players[1].field.find(x=>x.instanceId===target.instanceId);
-    assert('介善B: 攻撃強制フラグ', t && t.mustAttack===true && G.mustAttackCreatures.has(target.instanceId));
+    assert('介善(対象なし): blockDrawTrigger', G.blockDrawTrigger===true);
   });
 
   // 17. getCXValue: 土地数 + チャージ数
@@ -6809,6 +7209,9 @@ function showHomeScreen() {
   if (lobby) lobby.style.display = 'none';
   const hsp = document.getElementById('hotseat-pass');
   if (hsp) hsp.classList.remove('show');
+  const retireBtn = document.getElementById('btn-retire');
+  if (retireBtn) retireBtn.style.display = 'none';
+  hideCardDetail();
   NET_MODE = 'local';
   updateHomeRecord();
 }
@@ -7023,10 +7426,11 @@ function dbRenderCollection() {
     const cnt = mainMap[id] || 0;
     const maxed = cnt >= 4;
     const stats = c.power !== undefined ? `${c.power}/${c.toughness}` : (c.type === 'spell' ? '呪文' : '');
-    html += `<div class="db-card-row${maxed?' db-maxed':''}" onclick="dbAddMain('${id}')">
+    const costStr = c.cost ? costToString(c.cost) : '-';
+    html += `<div class="db-card-row${maxed?' db-maxed':''}" data-card-id="${id}" onclick="dbAddMain('${id}');dbShowDetail('${id}')">
       <span class="db-card-icon">${c.icon||'🃏'}</span>
       <span class="db-card-name">${c.name}</span>
-      <span class="db-card-cost">${c.cost}</span>
+      <span class="db-card-cost">${costStr}</span>
       <span class="db-card-stats">${stats}</span>
       ${cnt>0?`<span class="db-card-count">${cnt}/4</span>`:''}
     </div>`;
@@ -7038,7 +7442,7 @@ function dbRenderCollection() {
     if (!c) return;
     const cnt = landMap[id] || 0;
     const maxed = cnt >= 2; // 土地は同名2枚まで
-    html += `<div class="db-card-row${maxed?' db-maxed':''}" onclick="dbAddLand('${id}')">
+    html += `<div class="db-card-row${maxed?' db-maxed':''}" data-card-id="${id}" onclick="dbAddLand('${id}');dbShowDetail('${id}')">
       <span class="db-card-icon">${c.icon||'🌿'}</span>
       <span class="db-card-name">${c.name}</span>
       <span class="db-card-cost land-cost">土地</span>
@@ -7048,6 +7452,27 @@ function dbRenderCollection() {
   });
 
   el.innerHTML = html;
+}
+
+// ── デッキ構築: 右上パネルに効果テキストを表示 ──
+function dbShowDetail(cardId) {
+  const panel = document.getElementById('db-detail-panel');
+  if (!panel) return;
+  const card = CARD_DB[cardId];
+  if (!card) { panel.innerHTML = '<div class="cdp-placeholder">カード情報なし</div>'; return; }
+  const typeLabel = card.type === 'creature' ? `クリーチャー — ${card.subtype||''}`
+    : card.type === 'spell' ? (card.keywords && card.keywords.includes('Quick') ? 'クイック・スペル' : 'スペル')
+    : '土地';
+  const costStr = card.cost ? `コスト: ${costToString(card.cost)}` : '';
+  const ptStr = card.type === 'creature' ? `<div class="cdp-pt">${card.power}/${card.toughness}</div>` : '';
+  const kwStr = card.keywords && card.keywords.length ? `<div style="color:#ffcc44;font-size:11px;margin-bottom:4px;">${card.keywords.join(' / ')}</div>` : '';
+  panel.innerHTML = `
+    <div class="cdp-title">${card.icon||''} ${card.name}</div>
+    <div class="cdp-type">${typeLabel}${costStr ? ' ｜ ' + costStr : ''}</div>
+    ${ptStr}
+    ${kwStr}
+    <div class="cdp-text">${(card.text || '(効果テキストなし)')}</div>
+  `;
 }
 
 function dbRenderDeck() {
@@ -7064,10 +7489,11 @@ function dbRenderDeck() {
     const c = dbCardInfo(id);
     const cnt = mainMap[id] || 0;
     const stats = c && c.power !== undefined ? `${c.power}/${c.toughness}` : '';
-    html += `<div class="db-card-row" onclick="dbRemoveMain('${id}')">
+    const costStr = c && c.cost ? costToString(c.cost) : '-';
+    html += `<div class="db-card-row" data-card-id="${id}" onclick="dbRemoveMain('${id}');dbShowDetail('${id}')">
       <span class="db-card-icon">${c?c.icon:'🃏'}</span>
       <span class="db-card-name">${c?c.name:id}</span>
-      <span class="db-card-cost">${c?c.cost:'?'}</span>
+      <span class="db-card-cost">${costStr}</span>
       <span class="db-card-stats">${stats}</span>
       <span class="db-card-count">×${cnt}</span>
     </div>`;
@@ -7080,7 +7506,7 @@ function dbRenderDeck() {
     landDone[id] = true;
     const c = dbCardInfo(id);
     const cnt = landMap[id] || 0;
-    html += `<div class="db-card-row" onclick="dbRemoveLand('${id}')">
+    html += `<div class="db-card-row" data-card-id="${id}" onclick="dbRemoveLand('${id}');dbShowDetail('${id}')">
       <span class="db-card-icon">${c?c.icon:'🌿'}</span>
       <span class="db-card-name">${c?c.name:id}</span>
       <span class="db-card-cost land-cost">土地</span>
