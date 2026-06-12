@@ -1200,7 +1200,7 @@ button.danger:hover { background: #6a2a2a; }
 
 <!-- ログオーバーレイ -->
 <div id="log-overlay">
-  <button id="log-toggle-btn" onclick="toggleLog()">ログ</button>
+  <button id="log-toggle-btn" onclick="toggleLog()"></button>
   <div id="log-inner">
     <div style="font-size:10px;color:#555;padding:4px 8px;border-bottom:1px solid #1a1a3a;">ゲームログ</div>
     <div id="log-recent"></div>
@@ -4791,9 +4791,21 @@ async function startTraining(limitMode, limitValue, gamesPerBatch, onProgress) {
 
 function saveWeightsToFile() {
   const data={_version:AI_WEIGHTS_VERSION, weights:AI_WEIGHTS, stats:AI_TRAIN_STATS};
-  const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
-  const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
-  a.download=`ai_weights_v${AI_WEIGHTS_VERSION}.json`; a.click();
+  const json=JSON.stringify(data,null,2);
+  const blob=new Blob([json],{type:'application/json'});
+  const filename=`ai_weights_v${AI_WEIGHTS_VERSION}.json`;
+  // iOS Safari doesn't support <a download> — use share API or open in new tab
+  if (navigator.share && /iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+    const file=new File([blob], filename, {type:'application/json'});
+    navigator.share({files:[file], title:filename}).catch(()=>{
+      // share cancelled or failed — fall back to data URI
+      const url='data:application/json;charset=utf-8,'+encodeURIComponent(json);
+      window.open(url,'_blank');
+    });
+  } else {
+    const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+    a.download=filename; document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  }
 }
 
 function loadWeightsFromFile(file) {
