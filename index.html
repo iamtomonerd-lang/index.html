@@ -3442,26 +3442,69 @@ function aiPlaySpell(card, handIndex) {
   checkDeath();
 }
 
+// 攻撃の損得を評価: この攻撃者で攻撃する価値があるか
+function aiShouldAttack(atkInst) {
+  const w = AI_WEIGHTS;
+  const ai = G.players[1];
+  const player = G.players[0];
+  const atkPow = getEffectivePower(1, atkInst);
+  const atkTou = getEffectiveToughness(1, atkInst);
+  // ブロック可能なプレイヤークリーチャーを列挙
+  const blockers = player.field.filter(c => {
+    const bc = CARD_DB[c.cardId];
+    return (!c.tapped || (bc.ocBlockWhileTapped && isOCActive(0))) && canFlyBlock(atkInst, c);
+  });
+  if (blockers.length === 0) return true; // ブロッカーなし→直接ダメージは常に得
+  // 最悪ケース: プレイヤーが最も有利なブロックをすると想定
+  let worstTrade = Infinity;
+  blockers.forEach(blk => {
+    const blkPow = getEffectivePower(0, blk);
+    const blkTou = getEffectiveToughness(0, blk);
+    const iDie = (atkTou - atkInst.damage) <= blkPow;
+    const blkDies = (blkTou - blk.damage) <= atkPow;
+    // トレード価値: 相手を倒すゲイン - 自分が死ぬ損失
+    const trade = (blkDies ? w.fieldPower*blkPow + w.fieldCount : 0)
+                - (iDie    ? w.fieldPower*atkPow + w.fieldCount : 0);
+    if (trade < worstTrade) worstTrade = trade;
+  });
+  // 攻撃バイアス(学習値)を加味: 多少の不利でも攻める性格を学習で調整可能
+  return worstTrade + (w.attackBias||0) * atkPow >= -0.5;
+}
+
 function aiAttack() {
   if (G.phase === 'ended') return;
   // Build attacker queue
   const ai = G.players[1];
   const player = G.players[0];
-  const attackerInsts = [];
+  const candidates = [];
   ai.field.forEach(c => {
     const card = CARD_DB[c.cardId];
     if (G.cantAttackPermanent.has(c.instanceId)) return;
     if (c.tapped && !card.vigilance) return;
     if (c.sick) {
-      if (card.kakutou && c.entryTurn === G.turn && player.field.length > 0) attackerInsts.push(c);
+      if (card.kakutou && c.entryTurn === G.turn && player.field.length > 0) candidates.push(c);
       return;
     }
-    attackerInsts.push(c);
+    candidates.push(c);
   });
+
+  if (candidates.length === 0) { setTimeout(() => endTurnAfterMainPhase(), 300); return; }
+
+  // リーサル判定: 全員攻撃の合計パワーがブロック後でも相手ライフを超えるなら総攻撃
+  const totalPow = candidates.reduce((s,c)=>s+getEffectivePower(1,c),0);
+  const untappedBlockers = player.field.filter(c=>!c.tapped).length;
+  // ブロッカー1体につき最大1体の攻撃が止まる前提の保守的リーサル計算
+  const sorted = [...candidates].sort((a,b)=>getEffectivePower(1,a)-getEffectivePower(1,b));
+  const blockedPow = sorted.slice(0, untappedBlockers).reduce((s,c)=>s+getEffectivePower(1,c),0);
+  const isLethal = (totalPow - blockedPow) >= player.life;
+
+  // リーサルなら全員攻撃、そうでなければ損得判断で選抜
+  const attackerInsts = isLethal ? candidates
+    : candidates.filter(c => c.mustAttack || aiShouldAttack(c));
 
   if (attackerInsts.length === 0) { setTimeout(() => endTurnAfterMainPhase(), 300); return; }
 
-  showAIBalloon('⚔️ 攻撃宣言！');
+  showAIBalloon(isLethal ? '💀 総攻撃！' : '⚔️ 攻撃宣言！');
   G._aiAttackQueue = attackerInsts.map(c => c.instanceId);
   setTimeout(() => continueAIAttack(), 400);
 }
@@ -4993,6 +5036,12 @@ class SimGame {
       if (c.sick&&!(cd.kakutou&&c.entryTurn===s.turn)) return false;
       return true;
     });
+    // リーサル判定: ブロックで止められる分を引いても相手ライフ以上なら総攻撃
+    const candPow=attackers.reduce((sum,c)=>sum+(CARD_DB[c.cardId].power||0)+(c.tempPower||0),0);
+    const freeBlk=opp.field.filter(b=>!b.tapped).length;
+    const sortedPow=attackers.map(c=>(CARD_DB[c.cardId].power||0)+(c.tempPower||0)).sort((a,b)=>a-b);
+    const blockedPow=sortedPow.slice(0,freeBlk).reduce((a,b)=>a+b,0);
+    const lethal=(candPow-blockedPow)>=opp.life;
     for (const atk of attackers) {
       const atkCard=CARD_DB[atk.cardId];
       const atkPow=(atkCard.power||0)+(atk.tempPower||0);
@@ -5015,7 +5064,7 @@ class SimGame {
       } else {
         attackValue=w.life*atkPow*0.8;
       }
-      if (attackValue+w.attackBias<=0) continue; // #2: skip bad attacks
+      if (!lethal && attackValue+w.attackBias<=0) continue; // #2: skip bad attacks (リーサル時は強行)
       if (!atkCard.vigilance) atk.tapped=true;
       // kakutou: pick best target (#8)
       if (atkCard.kakutou&&atk.entryTurn===s.turn) {
