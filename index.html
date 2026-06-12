@@ -1050,8 +1050,20 @@ button.danger:hover { background: #6a2a2a; }
 #log-overlay { display: flex !important; transform: translateX(216px); }
 
 /* マリガン */
-#mulligan-controls { flex-wrap: nowrap; }
-#mulligan-controls button { padding: 4px 8px; font-size: 10px; }
+/* マリガン確認: 画面中央の固定オーバーレイで必ず画面内に表示 */
+#mulligan-controls {
+  position: fixed !important;
+  left: 50% !important;
+  bottom: 38% !important;
+  transform: translateX(-50%);
+  z-index: 90;
+  background: rgba(10,10,26,0.95);
+  border: 1px solid #4444aa;
+  border-radius: 10px;
+  padding: 14px 18px;
+  flex-wrap: nowrap;
+  margin: 0 !important;
+}
 
 /* ── スマホ 縦向き / 極小画面 ── */
 /* ── 縦向き: スマホ・タブレット全般 ── */
@@ -1175,9 +1187,9 @@ button.danger:hover { background: #6a2a2a; }
           <button onclick="showTrainingPanel()" style="background:#1a2a1a;border-color:#446644;font-size:10px;">🧠 学習</button>
           <button onclick="showDebugPanel()" style="background:#1a1a2a;border-color:#444466;font-size:10px;" title="フリーズ・バグ報告用デバッグ情報">🐛 debug</button>
         </div>
-        <div id="mulligan-controls" style="display:none; gap:6px; margin-top:4px;">
-          <button onclick="confirmStartMulligan()" style="flex:1; padding:6px 10px; background:#2a2a8a; border:1px solid #6060ff; color:#fff; border-radius:5px; font-size:11px; cursor:pointer;">確認（<span id="mulligan-count">0</span>枚入替）</button>
-          <button onclick="skipStartMulligan()" style="flex:1; padding:6px 10px; background:#2a2a2a; border:1px solid #555; color:#ccc; border-radius:5px; font-size:11px; cursor:pointer;">しない</button>
+        <div id="mulligan-controls" style="display:none; gap:10px;">
+          <button onclick="confirmStartMulligan()" style="padding:12px 24px; background:#2a2a8a; border:1px solid #6060ff; color:#fff; border-radius:8px; font-size:18px; cursor:pointer;">確認（<span id="mulligan-count">0</span>枚入替）</button>
+          <button onclick="skipStartMulligan()" style="padding:12px 24px; background:#2a2a2a; border:1px solid #555; color:#ccc; border-radius:8px; font-size:18px; cursor:pointer;">しない</button>
         </div>
         <div id="action-hint"></div>
         <div id="debug-freeze-warn" style="display:none;font-size:10px;color:#ffaa44;margin-top:4px;padding:4px 6px;background:#1a1400;border:1px solid #554400;border-radius:4px;cursor:pointer;" onclick="showDebugPanel()"></div>
@@ -4193,6 +4205,17 @@ const AI_WEIGHTS_DEFAULT = {
 };
 let AI_WEIGHTS = JSON.parse(JSON.stringify(AI_WEIGHTS_DEFAULT));
 let AI_TRAIN_STATS = { games: 0, wins: 0, epoch: 0 };
+// 前回localStorageに保存した学習データがあれば自動復元
+try {
+  const saved = localStorage.getItem('dcg_ai_weights');
+  if (saved) {
+    const data = JSON.parse(saved);
+    if (data.weights && data._version === AI_WEIGHTS_VERSION) {
+      AI_WEIGHTS = { ...AI_WEIGHTS, ...data.weights };
+      if (data.stats) AI_TRAIN_STATS = { ...AI_TRAIN_STATS, ...data.stats };
+    }
+  }
+} catch(e) {}
 
 function evalBoardScore(player) {
   const me = G.players[player], opp = G.players[1-player];
@@ -4794,30 +4817,54 @@ async function startTraining(limitMode, limitValue, gamesPerBatch, onProgress) {
 function saveWeightsToFile() {
   const data={_version:AI_WEIGHTS_VERSION, weights:AI_WEIGHTS, stats:AI_TRAIN_STATS};
   const json=JSON.stringify(data,null,2);
-  const blob=new Blob([json],{type:'application/json'});
-  const filename=`ai_weights_v${AI_WEIGHTS_VERSION}.json`;
-  const isIOS=/iPhone|iPad|iPod/i.test(navigator.userAgent);
-  if (isIOS && navigator.share && navigator.canShare && navigator.canShare({files:[new File([blob],filename,{type:'application/json'})]})) {
-    navigator.share({files:[new File([blob],filename,{type:'application/json'})], title:filename})
-      .catch(()=>_saveWeightsFallback(json));
-  } else if (isIOS) {
+  // 常にlocalStorageにも保存（ブラウザ内バックアップ）
+  try { localStorage.setItem('dcg_ai_weights', json); } catch(e) {}
+  const isIOS=/iPhone|iPad|iPod/i.test(navigator.userAgent) ||
+    (navigator.platform==='MacIntel' && navigator.maxTouchPoints>1); // iPadOS13+はMac偽装
+  if (isIOS) {
     _saveWeightsFallback(json);
   } else {
+    const blob=new Blob([json],{type:'application/json'});
     const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
-    a.download=filename; document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    a.download=`ai_weights_v${AI_WEIGHTS_VERSION}.json`;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
   }
 }
 function _saveWeightsFallback(json) {
-  // iOS fallback: show JSON in a textarea for manual copy/save
+  // iOS: テキスト表示 + コピーボタン (a.downloadが使えないため)
   const box=document.createElement('div');
-  box.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:20px;';
-  box.innerHTML=`
-    <div style="color:#aaaaff;font-size:14px;font-weight:700;">💾 学習データ — テキストをコピーして保存してください</div>
-    <textarea style="width:100%;max-width:560px;height:260px;background:#0a0a1a;color:#aaffaa;border:1px solid #336633;border-radius:6px;padding:8px;font-size:10px;font-family:monospace;" readonly onclick="this.select()">${json}</textarea>
-    <div style="color:#888;font-size:11px;">テキストを全選択してコピー → メモ帳などに貼り付けて .json で保存</div>
-    <button style="padding:10px 28px;background:#1a3a1a;border:1px solid #44aa44;color:#aaffaa;border-radius:6px;font-size:14px;" onclick="this.parentNode.remove()">閉じる</button>`;
+  box.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.9);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:20px;';
+  const ta=document.createElement('textarea');
+  ta.value=json;
+  ta.readOnly=true;
+  ta.style.cssText='width:100%;max-width:560px;height:220px;background:#0a0a1a;color:#aaffaa;border:1px solid #336633;border-radius:6px;padding:8px;font-size:10px;font-family:monospace;';
+  const title=document.createElement('div');
+  title.textContent='💾 学習データ (ブラウザ内には保存済み)';
+  title.style.cssText='color:#aaaaff;font-size:15px;font-weight:700;';
+  const note=document.createElement('div');
+  note.textContent='「コピー」を押してメモ帳などに貼り付ければファイルとして保存できます';
+  note.style.cssText='color:#888;font-size:12px;text-align:center;';
+  const btnRow=document.createElement('div');
+  btnRow.style.cssText='display:flex;gap:12px;';
+  const btnCopy=document.createElement('button');
+  btnCopy.textContent='📋 コピー';
+  btnCopy.style.cssText='padding:12px 28px;background:#1a1a3a;border:1px solid #4444aa;color:#aaaaff;border-radius:8px;font-size:16px;cursor:pointer;';
+  btnCopy.onclick=()=>{
+    ta.focus(); ta.select(); ta.setSelectionRange(0, ta.value.length);
+    const done=ok=>{ btnCopy.textContent=ok?'✅ コピー完了':'❌ 失敗(手動で選択してコピー)'; };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(json).then(()=>done(true)).catch(()=>done(document.execCommand('copy')));
+    } else {
+      done(document.execCommand('copy'));
+    }
+  };
+  const btnClose=document.createElement('button');
+  btnClose.textContent='閉じる';
+  btnClose.style.cssText='padding:12px 28px;background:#1a3a1a;border:1px solid #44aa44;color:#aaffaa;border-radius:8px;font-size:16px;cursor:pointer;';
+  btnClose.onclick=()=>box.remove();
+  btnRow.append(btnCopy, btnClose);
+  box.append(title, ta, note, btnRow);
   document.body.appendChild(box);
-  box.querySelector('textarea').select();
 }
 
 function loadWeightsFromFile(file) {
