@@ -266,6 +266,11 @@ body {
 @keyframes shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-5px)} 75%{transform:translateX(5px)} }
 @keyframes die { to { transform: scale(0) rotate(180deg); opacity: 0; } }
 @keyframes slideIn { from { transform: translateY(30px); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes cardEnter { 0%{transform:scale(0.4) translateY(20px);opacity:0;} 60%{transform:scale(1.1) translateY(-4px);opacity:1;} 100%{transform:scale(1) translateY(0);opacity:1;} }
+@keyframes cardAttack { 0%{transform:translateY(0);} 40%{transform:translateY(-18px) scale(1.06);} 100%{transform:translateY(0) scale(1);} }
+@keyframes attackShimmer { 0%{box-shadow:0 0 10px #ff8800;} 50%{box-shadow:0 0 24px #ffcc00,0 0 40px #ff880066;} 100%{box-shadow:0 0 10px #ff8800;} }
+.card.entering { animation: cardEnter 0.35s ease-out forwards; }
+.card.attacking-anim { animation: cardAttack 0.35s ease-out, attackShimmer 0.35s ease-out; }
 
 .card-art {
   flex: 1;
@@ -825,6 +830,45 @@ button.danger:hover { background: #6a2a2a; }
   100% { opacity: 0; transform: translate(-50%, -50%) scale(1.0); }
 }
 
+/* ── ホットシートパス画面 ── */
+#hotseat-pass {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 680;
+  background: rgba(4,4,12,0.97);
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 24px;
+}
+#hotseat-pass.show { display: flex; }
+#hotseat-pass .hs-title {
+  font-size: clamp(22px,5vw,36px);
+  color: #aaaaff;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  text-align: center;
+}
+#hotseat-pass .hs-sub {
+  font-size: clamp(13px,2.5vw,18px);
+  color: #666688;
+  text-align: center;
+}
+#hotseat-pass .hs-btn {
+  padding: 18px 48px;
+  background: linear-gradient(135deg, #1a1a3a, #252550);
+  border: 2px solid #6060ff;
+  border-radius: 12px;
+  color: #ccccff;
+  font-size: clamp(16px,3vw,22px);
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 0 30px #6060ff44;
+  transition: all 0.2s;
+}
+#hotseat-pass .hs-btn:hover { background: linear-gradient(135deg,#252550,#30306a); box-shadow: 0 0 50px #8080ff66; }
+
 /* ── オンライン対戦UI ── */
 #net-lobby {
   position: fixed;
@@ -1196,6 +1240,8 @@ button.danger:hover { background: #6a2a2a; }
 }
 #home-screen .home-btn.btn-battle { border-color: #6644aa; }
 #home-screen .home-btn.btn-battle:hover { border-color: #aa88ff; box-shadow: 0 8px 24px #9966ff44; }
+#home-screen .home-btn.btn-hotseat { border-color: #446688; }
+#home-screen .home-btn.btn-hotseat:hover { border-color: #66aacc; box-shadow: 0 8px 24px #4488cc44; }
 #home-screen .home-btn.btn-deck { border-color: #226688; }
 #home-screen .home-btn.btn-deck:hover { border-color: #44aaff; box-shadow: 0 8px 24px #4488ff44; }
 #home-screen .home-btn.btn-ai { border-color: #226633; }
@@ -1588,9 +1634,10 @@ button.danger:hover { background: #6a2a2a; }
   <div class="home-title">DCG</div>
   <div class="home-subtitle">デジタルカードゲーム</div>
   <div class="home-buttons">
-    <button class="home-btn btn-battle" onclick="showLobbyFromHome()">⚔️ 対戦する</button>
-    <button class="home-btn btn-deck"   onclick="showDeckBuilder()">📖 デッキ構築</button>
-    <button class="home-btn btn-ai"     onclick="showAIFromHome()">🧠 AI学習</button>
+    <button class="home-btn btn-battle"  onclick="showLobbyFromHome()">⚔️ AI対戦</button>
+    <button class="home-btn btn-hotseat" onclick="startHotseat()">👥 2人対戦（同デバイス）</button>
+    <button class="home-btn btn-deck"    onclick="showDeckBuilder()">📖 デッキ構築</button>
+    <button class="home-btn btn-ai"      onclick="showAIFromHome()">🧠 AI学習</button>
     <button class="home-btn btn-tutorial" onclick="showTutorial()">❓ 遊び方</button>
   </div>
   <div id="home-record"></div>
@@ -1666,6 +1713,13 @@ button.danger:hover { background: #6a2a2a; }
     <button onclick="netJoin()" style="width:100%;padding:10px;background:#2a1a2a;border:1px solid #774477;color:#ffaaff;border-radius:8px;font-size:13px;margin-top:6px;">🔗 参加する</button>
     <div class="net-status" id="net-status-msg">接続待機中...</div>
   </div>
+</div>
+
+<!-- Hotseat Pass Screen -->
+<div id="hotseat-pass">
+  <div class="hs-title" id="hotseat-pass-title">📱 デバイスを渡してください</div>
+  <div class="hs-sub" id="hotseat-pass-sub">プレイヤー2のターンです</div>
+  <button class="hs-btn" onclick="hotseatResume()">▶ ターン開始</button>
 </div>
 
 <!-- Turn Timer Bar -->
@@ -2199,6 +2253,7 @@ function playCardFromHand(player, handIndex) {
   log(`${card.name} をスタックに積んだ (${costToString(card.cost)})`, 'important');
   G.stack.push({ name: card.name, icon: card.icon||'⚔️', owner: player, resolve: () => {
     if (p.field.length >= 5) { p.graveyard.push(cardId); log(`${card.name}: フィールドが満杯`); return; }
+    _enteringInstIds.add(inst.instanceId);
     p.field.push(inst);
     log(`${card.name} が場に出た`, 'important');
     fireETB(player, inst.instanceId);
@@ -2620,6 +2675,7 @@ function endGame(winner) {
 // REPLAY (ターン毎の盤面スナップショットを記録してステップ再生)
 // ============================================================
 let REPLAY_HISTORY = [];
+let _enteringInstIds = new Set(); // カード入場アニメーション用
 
 function recordReplaySnapshot(label) {
   try {
@@ -2794,6 +2850,13 @@ function startSingleAttack(player, atkInstId) {
   const inst = p.field.find(c => c.instanceId === atkInstId);
   if (!inst) return;
   const card = CARD_DB[inst.cardId];
+
+  // 攻撃アニメーション
+  const atkEl = document.querySelector(`[data-inst="${atkInstId}"]`);
+  if (atkEl) {
+    atkEl.classList.add('attacking-anim');
+    setTimeout(() => atkEl.classList.remove('attacking-anim'), 400);
+  }
 
   // Tap attacker (vigilance stays untapped)
   if (!card.vigilance) inst.tapped = true;
@@ -3008,9 +3071,12 @@ function endTurn() {
   G.phase = 'untap';
 
   const ap = G.activePlayer;
-  const apName = NET_MODE !== 'local' ? (ap === NET_MY_IDX ? 'あなたのターン' : '相手のターン') : (ap === 0 ? 'あなたのターン' : 'AIのターン');
+  const apName = NET_MODE === 'hotseat' ? (ap === 0 ? 'P1のターン' : 'P2のターン')
+    : NET_MODE !== 'local' ? (ap === NET_MY_IDX ? 'あなたのターン' : '相手のターン')
+    : (ap === 0 ? 'あなたのターン' : 'AIのターン');
   showPhaseFlash(`ターン ${G.turn}`, apName);
-  log(`--- ターン${G.turn} ${ap===0?'プレイヤー':'AI'}のターン ---`, 'important');
+  const apLabel = NET_MODE === 'hotseat' ? (ap === 0 ? 'P1' : 'P2') : ap === 0 ? 'プレイヤー' : 'AI';
+  log(`--- ターン${G.turn} ${apLabel}のターン ---`, 'important');
   recordReplaySnapshot(`ターン${G.turn} ${apName}`);
 
   // Untap
@@ -3042,16 +3108,22 @@ function endTurn() {
   const nonTurn = 1 - ap;
   openPriorityWindow(nonTurn, () => {
     if (ap === 1) {
-      if (NET_MODE !== 'local') {
+      if (NET_MODE === 'hotseat') {
+        hotseatShowPass(1);
+      } else if (NET_MODE !== 'local') {
         log('相手のターンです（オンライン）');
         netPostTurnEnd();
       } else {
         setTimeout(aiTurn, 300);
       }
     } else {
-      log('あなたのメインフェイズ');
-      document.getElementById('btn-mulligan').disabled = true;
-      updateHints();
+      if (NET_MODE === 'hotseat' && G.turn > 1) {
+        hotseatShowPass(0);
+      } else {
+        log('あなたのメインフェイズ');
+        document.getElementById('btn-mulligan').disabled = true;
+        updateHints();
+      }
     }
   });
   netPostTurnEnd();
@@ -3062,13 +3134,14 @@ function endTurn() {
 // ============================================================
 function startCharge() {
   if (NET_MODE === 'guest') { netSendAction('charge', {}); return; }
-  if (G.activePlayer !== 0) { log('あなたのターンではありません'); return; }
+  const charger = NET_MODE === 'hotseat' ? G.activePlayer : 0;
+  if (G.activePlayer !== charger) { log('あなたのターンではありません'); return; }
   if (G.phase !== 'main') { log('メインフェイズ中のみチャージできます'); return; }
   if (G.chargeUsedThisTurn) { log('チャージはターンに1回のみです'); return; }
-  if (G.players[0].hand.length === 0) { log('手札がありません'); return; }
+  if (G.players[charger].hand.length === 0) { log('手札がありません'); return; }
 
   // Check if any land can still be charged
-  const validLands = G.players[0].lands.filter(l => !l.chargeCard);
+  const validLands = G.players[charger].lands.filter(l => !l.chargeCard);
   if (validLands.length === 0) { log('チャージできる土地がありません'); return; }
 
   G.chargingMode = true;
@@ -3077,17 +3150,19 @@ function startCharge() {
 }
 
 function doCharge(handIndex) {
-  const p = G.players[0];
+  const charger = NET_MODE === 'hotseat' ? G.activePlayer : 0;
+  const p = G.players[charger];
   const cardId = p.hand[handIndex];
   // Now need to pick a land
   G.chargingMode = 'pick_land';
-  G.selectedCard = {owner: 0, zone: 'hand', index: handIndex};
+  G.selectedCard = {owner: charger, zone: 'hand', index: handIndex};
   log('土地を選んでください（チャージカードを置く）');
   render(); updateHints();
 }
 
 function chargeToLand(landInstId) {
-  const p = G.players[0];
+  const charger = NET_MODE === 'hotseat' ? G.activePlayer : 0;
+  const p = G.players[charger];
   const land = p.lands.find(l => l.instanceId === landInstId);
   if (!land || land.chargeCard) {
     log('その土地にはチャージできません');
@@ -3108,7 +3183,7 @@ function chargeToLand(landInstId) {
   // wasure_heichi: draw 1 when charged
   const landCard = CARD_DB[land.cardId];
   if (landCard.chargeDrawTrigger) {
-    drawCard(0);
+    drawCard(charger);
     log('忘れ去られし平地: カードを1枚引く');
   }
   render(); updateHints();
@@ -3583,6 +3658,7 @@ function aiTurn() {
         showAIBalloon(`${card.icon} ${card.name} 召喚！`);
         G.stack.push({ name: card.name, icon: card.icon||'⚔️', owner: 1, resolve: () => {
           if (ai.field.length >= 5) { ai.graveyard.push(cid); return; }
+          _enteringInstIds.add(inst.instanceId);
           ai.field.push(inst);
           log(`AI: ${card.name} が場に出た`, 'important');
           fireETB(1, inst.instanceId);
@@ -3827,6 +3903,7 @@ function continueAIAttack() {
     // Player block phase for this single attacker
     G.aiCurrentAttackers = [{instId: atkInstId, targetType:'player', targetInstId:null}];
     G.playerBlockMode = true;
+    G.playerBlockDefender = 1 - G.activePlayer; // defender is the non-active player
     G.playerBlockAssignments = {};
     G.selectedBlockerToAssign = null;
     log(`--- ${card.name} に対してブロッカーを宣言（任意）→「ブロック確定」 ---`, 'important');
@@ -3881,6 +3958,14 @@ function render() {
   _resetFreezeTimer();
   const fw = document.getElementById('debug-freeze-warn');
   if (fw) fw.style.display = 'none';
+  // カード入場アニメーション
+  if (_enteringInstIds.size > 0) {
+    _enteringInstIds.forEach(id => {
+      const el = document.querySelector(`[data-inst="${id}"]`);
+      if (el) { el.classList.add('entering'); setTimeout(() => el.classList.remove('entering'), 400); }
+    });
+    _enteringInstIds.clear();
+  }
 }
 
 function buildCardHTML(card, inst, playerOwner) {
@@ -4125,13 +4210,14 @@ function updateCounts() {
 // ============================================================
 function handleHandClick(player, index) {
   if (NET_MODE === 'guest' && player === NET_MY_IDX) { netSendAction('playCard', {handIdx: index}); return; }
-  if (player !== 0) return; // Can't click AI hand
-  if (G.activePlayer !== 0 && G.phase !== 'ended') {
+  const localHuman = NET_MODE === 'hotseat' ? G.activePlayer : 0;
+  if (player !== localHuman) return; // Can't click opponent hand
+  if (G.activePlayer !== localHuman && G.phase !== 'ended') {
     // Allow quick spells
-    const cardId = G.players[0].hand[index];
+    const cardId = G.players[localHuman].hand[index];
     const card = CARD_DB[cardId];
     if (!(card.keywords && card.keywords.includes('Quick'))) {
-      log('AIのターン中は使用できません（Quickのみ可能）');
+      log('相手のターン中は使用できません（Quickのみ可能）');
       return;
     }
   }
@@ -4203,36 +4289,36 @@ function handleFieldClick(player, instId) {
     }
   }
 
-  // ブロック宣言: 自分クリーチャー選択 or AI攻撃クリーチャー選択
+  // ブロック宣言: 自分クリーチャー選択 or 相手(AI)攻撃クリーチャー選択
   if (G.playerBlockMode) {
-    if (player === 0) {
-      const inst2 = G.players[0].field.find(c=>c.instanceId===instId);
+    // G.playerBlockDefender = 防御側プレイヤーindex (usually 0)
+    const defP = G.playerBlockDefender !== undefined ? G.playerBlockDefender : 0;
+    const atkP = 1 - defP;
+    if (player === defP) {
+      const inst2 = G.players[defP].field.find(c=>c.instanceId===instId);
       if (!inst2) return;
       const card2 = CARD_DB[inst2.cardId];
-      const canBlk = (!inst2.tapped || (card2.ocBlockWhileTapped && isOCActive(0)))
+      const canBlk = (!inst2.tapped || (card2.ocBlockWhileTapped && isOCActive(defP)))
         && !G.directlyAttackedCreatures.has(instId);
       if (!canBlk) { log(`${card2.name} はブロックできません`); return; }
-      // トグル選択
       if (G.selectedBlockerToAssign === instId) {
         G.selectedBlockerToAssign = null;
       } else {
         G.selectedBlockerToAssign = instId;
-        log(`${card2.name} をブロッカーに選択 → AIの攻撃クリーチャーをクリック`);
+        log(`${card2.name} をブロッカーに選択 → 攻撃クリーチャーをクリック`);
       }
       render(); updateHints();
       return;
     }
-    if (player === 1 && G.selectedBlockerToAssign) {
+    if (player === atkP && G.selectedBlockerToAssign) {
       const isAtkr = G.aiCurrentAttackers.some(a=>a.instId===instId);
       if (!isAtkr) return;
-      const atkrInst = G.players[1].field.find(c=>c.instanceId===instId);
-      const blkrInst = G.players[0].field.find(c=>c.instanceId===G.selectedBlockerToAssign);
+      const atkrInst = G.players[atkP].field.find(c=>c.instanceId===instId);
+      const blkrInst = G.players[defP].field.find(c=>c.instanceId===G.selectedBlockerToAssign);
       if (!atkrInst || !blkrInst) return;
-      // 飛行チェック
       if (!canFlyBlock(atkrInst, blkrInst)) {
         log('飛行の制約でブロックできません'); return;
       }
-      // 既に同じブロッカーが別の相手に割り当て済みなら解除
       for (const [k,v] of Object.entries(G.playerBlockAssignments)) {
         if (v === G.selectedBlockerToAssign) delete G.playerBlockAssignments[k];
       }
@@ -4242,8 +4328,7 @@ function handleFieldClick(player, instId) {
       render(); updateHints();
       return;
     }
-    // AI攻撃クリーチャーをクリックしてブロック割り当てを解除
-    if (player === 1 && G.playerBlockAssignments[instId]) {
+    if (player === atkP && G.playerBlockAssignments[instId]) {
       delete G.playerBlockAssignments[instId];
       log('ブロック割り当てを解除');
       render(); updateHints();
@@ -4253,22 +4338,23 @@ function handleFieldClick(player, instId) {
   }
 
   // メインフェイズに1体ずつ攻撃
-  if (player === 0 && G.activePlayer === 0 && G.phase === 'main') {
-    const p = G.players[0];
+  const actP = NET_MODE === 'hotseat' ? G.activePlayer : 0;
+  if (player === actP && G.activePlayer === actP && G.phase === 'main') {
+    const p = G.players[actP];
     const inst = p.field.find(c => c.instanceId === instId);
     if (!inst) return;
     const card = CARD_DB[inst.cardId];
 
     // アレスティア: 攻撃 or 還元 を選択
     if (card.id === 'arestia') {
-      const canAtk = canCreatureAttack(0, inst);
-      const untappedLands = G.players[0].lands.filter(l => !l.tapped);
-      const hasTapped = G.players[0].field.some(c => c.instanceId !== instId && c.tapped);
+      const canAtk = canCreatureAttack(actP, inst);
+      const untappedLands = G.players[actP].lands.filter(l => !l.tapped);
+      const hasTapped = G.players[actP].field.some(c => c.instanceId !== instId && c.tapped);
       const canKaizou = untappedLands.length > 0 && hasTapped;
       const html = `
         <p style="margin-bottom:10px;">${card.name} の使用方法を選択:</p>
-        <button onclick="closeModal(); startSingleAttack(0,${instId});" style="width:100%;margin-bottom:8px;padding:8px;${canAtk?'':'opacity:0.4;cursor:not-allowed;'}" ${canAtk?'':'disabled'}>⚔️ 攻撃する</button>
-        <button onclick="closeModal(); arestiaKaizouStart(${instId});" style="width:100%;padding:8px;${canKaizou?'':'opacity:0.4;cursor:not-allowed;'}" ${canKaizou?'':'disabled'}>♻️ 還元: 味方クリーチャーをアンタップ</button>
+        <button onclick="closeModal(); startSingleAttack(${actP},'${instId}');" style="width:100%;margin-bottom:8px;padding:8px;${canAtk?'':'opacity:0.4;cursor:not-allowed;'}" ${canAtk?'':'disabled'}>⚔️ 攻撃する</button>
+        <button onclick="closeModal(); arestiaKaizouStart('${instId}');" style="width:100%;padding:8px;${canKaizou?'':'opacity:0.4;cursor:not-allowed;'}" ${canKaizou?'':'disabled'}>♻️ 還元: 味方クリーチャーをアンタップ</button>
       `;
       showModal(card.name, html);
       return;
@@ -4276,16 +4362,16 @@ function handleFieldClick(player, instId) {
 
     // 格闘キーワード: 出たターンのみ起動可（タップして相手クリーチャーと戦闘）
     if (card.kakutou && inst.entryTurn === G.turn && !inst.tapped) {
-      const opp = 1;
+      const opp = 1 - actP;
       const reachable = G.players[opp].field.filter(c => !CARD_DB[c.cardId].flying || card.flying);
       if (reachable.length === 0) { log(`${card.name} 格闘: 対象クリーチャーがいません`); return; }
-      startKakutou(0, instId);
+      startKakutou(actP, instId);
       return;
     }
 
     // 攻撃可能なら攻撃開始
-    if (canCreatureAttack(0, inst)) {
-      startSingleAttack(0, instId);
+    if (canCreatureAttack(actP, inst)) {
+      startSingleAttack(actP, instId);
     }
     return;
   }
@@ -4298,19 +4384,20 @@ function handleLandClick(player, instId) {
     if (player === NET_MY_IDX) { netSendAction('tapLand', {instId}); return; }
     return;
   }
-  if (G.chargingMode === 'pick_land' && player === 0) {
+  const lp = NET_MODE === 'hotseat' ? G.activePlayer : 0; // land player
+  if (G.chargingMode === 'pick_land' && player === lp) {
     chargeToLand(instId);
     return;
   }
-  if (G.targetMode && G.targetMode.type === 'ownLand' && player === 0) {
-    const land = G.players[0].lands.find(l=>l.instanceId===instId);
+  if (G.targetMode && G.targetMode.type === 'ownLand' && player === lp) {
+    const land = G.players[lp].lands.find(l=>l.instanceId===instId);
     if (land && !land.tapped) { G.targetMode.callback(instId); }
     return;
   }
   if (G.targetMode) return;
-  if (player !== 0) return;
+  if (player !== lp) return;
 
-  const p = G.players[0];
+  const p = G.players[lp];
   const land = p.lands.find(l=>l.instanceId===instId);
   if (!land) return;
 
@@ -4319,14 +4406,12 @@ function handleLandClick(player, instId) {
   // 起動効果はすべてクイック: フェイズ・ターン問わずタップ可能
   if (land.chargeCard && landCard.chargedAbility) {
     if (!land.tapped) {
-      // Show choice: mana or special ability
-      // look3keep1white costs tap+W3, so show ability as available
-      const canActivate = landCard.chargedAbility !== 'look3keep1white' || canAfford(0, {W:3});
+      const canActivate = landCard.chargedAbility !== 'look3keep1white' || canAfford(lp, {W:3});
       const abilityLabel = landCard.text.split('\n').find(l => l.includes('起動') && l.includes('チャージ')) || landCard.text.split('\n')[1] || '特殊能力';
       const html = `
         <p style="margin-bottom:10px;">${landCard.name} の使用方法を選択:</p>
-        <button onclick="closeModal(); tapLandForMana(0,${instId}); render();" style="width:100%;margin-bottom:8px;padding:8px;">マナを追加 (${landCard.produces||'C'})</button>
-        <button onclick="closeModal(); activateChargedLand(0,${instId});" style="width:100%;padding:8px;${canActivate?'':'opacity:0.4;cursor:not-allowed;'}">${abilityLabel}</button>
+        <button onclick="closeModal(); tapLandForMana(${lp},'${instId}'); render();" style="width:100%;margin-bottom:8px;padding:8px;">マナを追加 (${landCard.produces||'C'})</button>
+        <button onclick="closeModal(); activateChargedLand(${lp},'${instId}');" style="width:100%;padding:8px;${canActivate?'':'opacity:0.4;cursor:not-allowed;'}">${abilityLabel}</button>
       `;
       showModal(landCard.name, html);
       return;
@@ -4334,13 +4419,13 @@ function handleLandClick(player, instId) {
   }
 
   // Tap for mana (Quick: any time)
-  tapLandForMana(0, instId);
+  tapLandForMana(lp, instId);
 }
 
 // Direct damage target on life display
 document.getElementById('ai-life').addEventListener('click', () => {
   if (G.targetMode && G.targetMode.type === 'any') {
-    G.targetMode.callback({type:'player', player:1});
+    G.targetMode.callback({type:'player', player: 1 - NET_MY_IDX});
   }
 });
 
@@ -4424,9 +4509,9 @@ function updateHints() {
   document.getElementById('btn-end-phase').textContent =
     G.playerBlockMode ? 'ブロック確定' : 'フェイズ終了';
 
-  const isOnline = NET_MODE !== 'local';
+  const isOnline = NET_MODE !== 'local' && NET_MODE !== 'hotseat';
   const myTurn = G.activePlayer === NET_MY_IDX;
-  const oppName = isOnline ? '相手' : 'AI';
+  const oppName = NET_MODE === 'hotseat' ? (NET_MY_IDX === 0 ? 'P2' : 'P1') : isOnline ? '相手' : 'AI';
 
   if (G.playerBlockMode) {
     if (G.selectedBlockerToAssign) {
@@ -4494,9 +4579,10 @@ function updateHints() {
   }
 
   const btnCharge = document.getElementById('btn-charge');
-  btnCharge.disabled = G.activePlayer !== 0 || G.phase !== 'main' || G.chargeUsedThisTurn;
+  const actingPlayer = NET_MODE === 'hotseat' ? G.activePlayer : 0;
+  btnCharge.disabled = G.activePlayer !== actingPlayer || G.phase !== 'main' || G.chargeUsedThisTurn;
   const btnEnd = document.getElementById('btn-end-phase');
-  btnEnd.disabled = (!G.playerBlockMode && G.activePlayer !== 0) || G.phase === 'ended';
+  btnEnd.disabled = (!G.playerBlockMode && G.activePlayer !== actingPlayer) || G.phase === 'ended';
 
   // Pass button: enable when priority window open for player, and update label
   const btnPass = document.getElementById('btn-pass');
@@ -5707,56 +5793,117 @@ function showTrainingPanel() {
   showModal('🧠 AI学習モード', html);
 }
 
+// ── クイックシミュレーション（バランスデータ収集用） ──
+let _quickSimRunning = false;
+async function quickSimForBalance(nGames, onDone) {
+  if (_quickSimRunning) return;
+  _quickSimRunning = true;
+  const batchSize = 10;
+  let done = 0;
+  const w = AI_WEIGHTS;
+  const d0 = AI_DECK_COUNTS || defaultDeckCounts();
+  const d1 = AI_DECK_COUNTS || defaultDeckCounts();
+  const l0 = AI_LAND_COUNTS || defaultLandCounts();
+  const l1 = AI_LAND_COUNTS || defaultLandCounts();
+  function step() {
+    if (done >= nGames || _trainStop) { _quickSimRunning = false; onDone(); return; }
+    const n = Math.min(batchSize, nGames - done);
+    runTrainingBatch(w, w, n, d0, d1, l0, l1);
+    done += n;
+    AI_TRAIN_STATS.games += n;
+    setTimeout(step, 0);
+  }
+  step();
+}
+
 // ── カードバランス分析パネル ──
 // シミュレーション対戦で集めた「カードをプレイしたゲームの勝率」から
 // ナーフ/アッパー候補を提示する（実際の調整はユーザーが判断）
 function showBalancePanel() {
   const entries = Object.entries(CARD_STATS).filter(([cid]) => CARD_DB[cid]);
   if (!entries.length) {
-    showModal('📊 カードバランス分析', '<p style="color:#888;">データがありません。AI学習を実行するとシミュレーション対戦から統計が集まります。</p>');
+    const noDataHtml = `
+      <p style="color:#888;margin-bottom:16px;">データがありません。AI学習を実行するとシミュレーション対戦から統計が集まります。</p>
+      <button id="quick-sim-btn" onclick="quickSimForBalance(200, () => { closeModal(); setTimeout(showBalancePanel, 50); })"
+        style="padding:10px 20px;background:#1a2a1a;border:1px solid #447744;color:#88ff88;border-radius:6px;cursor:pointer;font-size:14px;">
+        ⚡ クイックシミュ 200戦 を実行してデータを収集
+      </button>`;
+    showModal('📊 カードバランス分析', noDataHtml);
     return;
   }
   const totalPlayed = entries.reduce((s,[,v]) => s+v.played, 0);
   const totalWins   = entries.reduce((s,[,v]) => s+v.wins, 0);
   const avgWr = totalWins / Math.max(1, totalPlayed);
-  const MIN_SAMPLE = 100;
+  const MIN_SAMPLE = 50;
   const rows = entries
-    .map(([cid,v]) => ({ cid, card:CARD_DB[cid], played:v.played, wr:v.wins/Math.max(1,v.played) }))
+    .map(([cid,v]) => ({
+      cid, card:CARD_DB[cid], played:v.played, wr:v.wins/Math.max(1,v.played),
+      w: AI_WEIGHTS['card_'+cid] || 0
+    }))
     .sort((a,b) => b.wr - a.wr)
     .map(r => {
       const diff = (r.wr - avgWr) * 100;
-      let verdict, color;
-      if (r.played < MIN_SAMPLE)      { verdict = `サンプル不足(${r.played})`; color = '#666'; }
-      else if (diff >= 5)             { verdict = '⚠️ ナーフ候補';   color = '#ff8866'; }
-      else if (diff <= -5)            { verdict = '💪 アッパー候補'; color = '#66aaff'; }
-      else                            { verdict = '─ 適正';          color = '#88cc88'; }
-      return `<tr style="border-bottom:1px solid #222;">
-        <td style="padding:5px 8px;font-size:13px;white-space:nowrap;">${r.card.icon} ${r.card.name}</td>
-        <td style="padding:5px 8px;font-size:12px;text-align:right;color:#aaa;">${r.played}</td>
-        <td style="padding:5px 8px;font-size:13px;text-align:right;font-weight:700;">${(r.wr*100).toFixed(1)}%</td>
-        <td style="padding:5px 8px;font-size:12px;text-align:right;color:${diff>=0?'#ffaa88':'#88aaff'};">${diff>=0?'+':''}${diff.toFixed(1)}pt</td>
-        <td style="padding:5px 8px;font-size:12px;color:${color};white-space:nowrap;">${verdict}</td>
+      let verdict, vcolor;
+      if (r.played < MIN_SAMPLE)      { verdict = `▪ ${r.played}戦`; vcolor = '#555'; }
+      else if (diff >= 8)             { verdict = '⚠️ ナーフ候補';   vcolor = '#ff6644'; }
+      else if (diff >= 4)             { verdict = '↑ やや強い';      vcolor = '#ffaa44'; }
+      else if (diff <= -8)            { verdict = '💪 アッパー候補'; vcolor = '#4488ff'; }
+      else if (diff <= -4)            { verdict = '↓ やや弱い';      vcolor = '#88aaff'; }
+      else                            { verdict = '✓ 適正';           vcolor = '#66cc88'; }
+      // CSS バーチャート
+      const barPct = Math.round(r.wr * 100);
+      const barColor = diff >= 8 ? '#ff6644' : diff >= 4 ? '#ffaa44' : diff <= -8 ? '#4488ff' : diff <= -4 ? '#88aaff' : '#44aa66';
+      const costTot = Object.values(r.card.cost||{}).reduce((a,b)=>a+b,0);
+      return `<tr style="border-bottom:1px solid #1a1a2a;">
+        <td style="padding:5px 6px;font-size:12px;white-space:nowrap;">${r.card.icon} ${r.card.name}</td>
+        <td style="padding:5px 6px;font-size:11px;text-align:center;color:#888;">${costTot}</td>
+        <td style="padding:5px 6px;">
+          <div style="display:flex;align-items:center;gap:6px;">
+            <div style="flex:1;height:8px;background:#111;border-radius:4px;overflow:hidden;min-width:60px;">
+              <div style="width:${barPct}%;height:100%;background:${barColor};border-radius:4px;transition:width 0.3s;"></div>
+            </div>
+            <span style="font-size:12px;font-weight:700;min-width:38px;text-align:right;">${barPct}%</span>
+          </div>
+        </td>
+        <td style="padding:5px 6px;font-size:11px;text-align:right;color:${diff>=0?'#ffaa77':'#88aaff'};">${diff>=0?'+':''}${diff.toFixed(1)}</td>
+        <td style="padding:5px 6px;font-size:11px;color:${vcolor};white-space:nowrap;">${verdict}</td>
+        <td style="padding:5px 6px;font-size:11px;text-align:right;color:${r.w>=0?'#66cc66':'#cc6666'};">${r.w>=0?'+':''}${r.w.toFixed(2)}</td>
       </tr>`;
     }).join('');
+
+  // サマリーチップ
+  const nerfs  = entries.filter(([cid,v]) => v.played>=MIN_SAMPLE && (v.wins/v.played - avgWr)*100 >= 8);
+  const uppers = entries.filter(([cid,v]) => v.played>=MIN_SAMPLE && (v.wins/v.played - avgWr)*100 <= -8);
+  const summaryChips = [
+    nerfs.length  ? `<span style="background:#2a1a14;border:1px solid #ff6644;color:#ff9977;padding:3px 8px;border-radius:4px;font-size:11px;">⚠️ ナーフ候補 ${nerfs.length}枚</span>` : '',
+    uppers.length ? `<span style="background:#14182a;border:1px solid #4488ff;color:#88aaff;padding:3px 8px;border-radius:4px;font-size:11px;">💪 アッパー候補 ${uppers.length}枚</span>` : '',
+  ].filter(Boolean).join(' ');
+
   const html = `
-    <div style="color:#aaa;font-size:12px;margin-bottom:10px;">
-      シミュレーション${AI_TRAIN_STATS.games}戦の統計 | 全体平均勝率: ${(avgWr*100).toFixed(1)}%<br>
-      <span style="color:#666;">「そのカードをプレイしたゲーム」の勝率。平均+5pt以上=ナーフ候補、-5pt以下=アッパー候補（${MIN_SAMPLE}回以上プレイで判定）</span>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:10px;">
+      <span style="font-size:12px;color:#888;">${AI_TRAIN_STATS.games}戦 | 平均勝率 ${(avgWr*100).toFixed(1)}%</span>
+      ${summaryChips}
     </div>
     <table style="width:100%;border-collapse:collapse;background:#0a0a14;">
-      <thead><tr style="border-bottom:1px solid #444;color:#666;font-size:11px;">
-        <th style="padding:4px 8px;text-align:left;">カード</th>
-        <th style="padding:4px 8px;text-align:right;">プレイ数</th>
-        <th style="padding:4px 8px;text-align:right;">勝率</th>
-        <th style="padding:4px 8px;text-align:right;">平均差</th>
-        <th style="padding:4px 8px;text-align:left;">判定</th>
+      <thead><tr style="border-bottom:1px solid #333;color:#555;font-size:10px;">
+        <th style="padding:4px 6px;text-align:left;">カード</th>
+        <th style="padding:4px 6px;text-align:center;">コスト</th>
+        <th style="padding:4px 6px;text-align:left;">勝率バー</th>
+        <th style="padding:4px 6px;text-align:right;">差分</th>
+        <th style="padding:4px 6px;text-align:left;">判定</th>
+        <th style="padding:4px 6px;text-align:right;">AI重み</th>
       </tr></thead>
       <tbody>${rows}</tbody>
     </table>
-    <div style="display:flex;gap:8px;margin-top:12px;">
-      <button onclick="CARD_STATS={};closeModal();" style="padding:6px 12px;background:#1a1a1a;border:1px solid #555;color:#888;border-radius:4px;cursor:pointer;">↺ 統計リセット</button>
-      <button onclick="closeModal();showTrainingPanel();" style="padding:6px 12px;background:#1a2a1a;border:1px solid #446644;color:#aaffaa;border-radius:4px;cursor:pointer;">← 学習パネルへ</button>
-    </div>`;
+    <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">
+      <button onclick="(()=>{ const b=document.getElementById('qs-btn'); if(b){b.textContent='実行中...';b.disabled=true;} quickSimForBalance(200,()=>{closeModal();setTimeout(showBalancePanel,50);}); })()"
+        id="qs-btn" style="padding:8px 16px;background:#1a2a1a;border:1px solid #447744;color:#88ff88;border-radius:4px;cursor:pointer;font-size:13px;">⚡ +200戦シミュ</button>
+      <button onclick="(()=>{ const b=document.getElementById('qs500-btn'); if(b){b.textContent='実行中...';b.disabled=true;} quickSimForBalance(500,()=>{closeModal();setTimeout(showBalancePanel,50);}); })()"
+        id="qs500-btn" style="padding:8px 16px;background:#1a2a1a;border:1px solid #447744;color:#aaffaa;border-radius:4px;cursor:pointer;font-size:13px;">⚡ +500戦シミュ</button>
+      <button onclick="CARD_STATS={};closeModal();showBalancePanel();" style="padding:8px 14px;background:#1a1a1a;border:1px solid #444;color:#888;border-radius:4px;cursor:pointer;font-size:12px;">↺ リセット</button>
+      <button onclick="closeModal();showTrainingPanel();" style="padding:8px 14px;background:#1a2a1a;border:1px solid #446644;color:#aaffaa;border-radius:4px;cursor:pointer;font-size:12px;">← 学習へ</button>
+    </div>
+    <div style="margin-top:8px;font-size:10px;color:#444;">差分±4pt=やや強/弱、±8pt=ナーフ/アッパー候補（${MIN_SAMPLE}戦以上で判定）　AI重み=学習後のカード評価値</div>`;
   showModal('📊 カードバランス分析', html);
 }
 
@@ -5851,7 +5998,7 @@ function uiStopTraining() {
 const NET_TURN_LIMIT = 60;     // active player seconds
 const NET_OPP_LIMIT  = 40;     // non-turn player seconds
 
-let NET_MODE    = 'local';     // 'local' | 'host' | 'guest'
+let NET_MODE    = 'local';     // 'local' | 'host' | 'guest' | 'hotseat'
 let NET_PEER    = null;        // PeerJS Peer instance
 let NET_CONN    = null;        // DataConnection
 let NET_MY_IDX  = 0;          // which G.players[] index is "me" (guest=1)
@@ -5880,6 +6027,32 @@ function netStartLocal() {
   NET_MY_IDX = 0;
   netHideLobby();
   initGame();
+}
+
+// ── ホットシート（同デバイス2人対戦）────────────────────────
+function startHotseat() {
+  NET_MODE = 'hotseat';
+  NET_MY_IDX = 0;
+  document.getElementById('home-screen').style.display = 'none';
+  initGame();
+}
+
+function hotseatShowPass(forPlayer) {
+  const el = document.getElementById('hotseat-pass');
+  const title = document.getElementById('hotseat-pass-title');
+  const sub   = document.getElementById('hotseat-pass-sub');
+  const name = forPlayer === 0 ? 'プレイヤー1' : 'プレイヤー2';
+  title.textContent = '📱 デバイスを渡してください';
+  sub.textContent   = `${name}のターンです`;
+  el.classList.add('show');
+}
+
+function hotseatResume() {
+  document.getElementById('hotseat-pass').classList.remove('show');
+  NET_MY_IDX = G.activePlayer;
+  render();
+  updateHints();
+  log(`${NET_MY_IDX === 0 ? 'プレイヤー1' : 'プレイヤー2'}のメインフェイズ`);
 }
 
 // ── ホスト ──────────────────────────────────────────────────
@@ -6634,6 +6807,9 @@ function showHomeScreen() {
   document.getElementById('deck-builder').style.display = 'none';
   const lobby = document.getElementById('net-lobby');
   if (lobby) lobby.style.display = 'none';
+  const hsp = document.getElementById('hotseat-pass');
+  if (hsp) hsp.classList.remove('show');
+  NET_MODE = 'local';
   updateHomeRecord();
 }
 
