@@ -1656,6 +1656,17 @@ function buildMainDeck() {
   cards.forEach(c => { for(let i=0;i<4;i++) deck.push(c); });
   return shuffle(deck); // exactly 40
 }
+// AI用デッキ: ローカル対戦では学習で進化したデッキ(AI_DECK_COUNTS)を使う
+// オンライン対戦時は相手プレイヤーの状態なので通常のbuildMainDeckにフォールバック
+function buildAIMainDeck() {
+  if (typeof NET_MODE !== 'undefined' && NET_MODE === 'local' &&
+      typeof AI_DECK_COUNTS !== 'undefined' && AI_DECK_COUNTS) {
+    const arr = [];
+    Object.entries(AI_DECK_COUNTS).forEach(([cid,n]) => { for (let k=0;k<n;k++) arr.push(cid); });
+    if (arr.length === 40) return shuffle(arr);
+  }
+  return buildMainDeck();
+}
 function buildLandDeck() {
   try {
     const saved = localStorage.getItem('dcg_deck');
@@ -1708,7 +1719,7 @@ function initGame() {
       },
       {
         life: 20,
-        deck: buildMainDeck(),
+        deck: buildAIMainDeck(),
         landDeck: buildLandDeck(),
         hand: [],
         field: [],
@@ -4477,6 +4488,10 @@ document.addEventListener('contextmenu', function(e) {
 // ============================================================
 
 const AI_WEIGHTS_VERSION = 3;
+// 学習対象のメインデッキカードプール（カード追加時はここに追記）
+const AI_CARD_POOL = ['shinmai_heishi','ten_kara_shisha','eiyuu_kouho',
+  'serashia_heishi','serashia_junhei','serashia_souryo',
+  'bastian','arestia','junigeki','kaizen'];
 const AI_WEIGHTS_DEFAULT = {
   _version: 3,
   life: 2.0, fieldPower: 0.8, fieldToughness: 0.3, fieldCount: 1.2,
@@ -4486,8 +4501,12 @@ const AI_WEIGHTS_DEFAULT = {
   earlyFieldBonus: 0.4, // #7: extra field weight in turns 1-6
   attackBias: 0.2,      // #2: bias toward attacking
 };
+// カード個別のプレイ優先度（遺伝的アルゴリズムの学習対象、負値=使わない方が良い）
+AI_CARD_POOL.forEach(id => { AI_WEIGHTS_DEFAULT['card_' + id] = 0; });
 let AI_WEIGHTS = JSON.parse(JSON.stringify(AI_WEIGHTS_DEFAULT));
 let AI_TRAIN_STATS = { games: 0, wins: 0, epoch: 0 };
+let CARD_STATS = {};       // バランス統計 {cardId: {played, wins}} シミュレーション対戦から収集
+let AI_DECK_COUNTS = null; // AI自動構築デッキ {cardId: 枚数} null=デフォルト(全カード4枚)
 // 前回localStorageに保存した学習データがあれば自動復元
 try {
   const saved = localStorage.getItem('dcg_ai_weights');
@@ -4496,6 +4515,8 @@ try {
     if (data.weights && data._version === AI_WEIGHTS_VERSION) {
       AI_WEIGHTS = { ...AI_WEIGHTS, ...data.weights };
       if (data.stats) AI_TRAIN_STATS = { ...AI_TRAIN_STATS, ...data.stats };
+      if (data.cardStats) CARD_STATS = data.cardStats;
+      if (data.aiDeck) AI_DECK_COUNTS = data.aiDeck;
     }
   }
 } catch(e) {}
@@ -4533,7 +4554,8 @@ function aiPickBestCard(handItems) {
       + AI_WEIGHTS.fieldPower * basePow
       + AI_WEIGHTS.fieldToughness * baseTou
       + AI_WEIGHTS.fieldCount
-      + cost * 0.1;
+      + cost * 0.1
+      + (AI_WEIGHTS['card_' + card.id] || 0);
     if (value > bestScore) { bestScore = value; best = item; }
   }
   return best;
@@ -4559,18 +4581,24 @@ function aiShouldBlock(atkInst, blkInst, atkPlayer) {
 // ============================================================
 
 class SimGame {
-  constructor(w0, w1) {
+  constructor(w0, w1, d0, d1) {
     this.w = [w0||AI_WEIGHTS, w1||AI_WEIGHTS];
+    this.decks = [d0||null, d1||null]; // デッキ構成 {cardId: 枚数} or null=デフォルト
     this.nid = 1;
     this.maxTurns = 50;
     this.tdScores = [[], []]; // #10: intermediate eval scores per player
+    this.playedCards = [new Set(), new Set()]; // バランス統計用: 各プレイヤーがプレイしたカード
     this.state = this.initState();
   }
 
-  mkDeck() {
-    return shuffle(['shinmai_heishi','ten_kara_shisha','eiyuu_kouho',
-      'serashia_heishi','serashia_junhei','serashia_souryo',
-      'bastian','arestia','junigeki','kaizen'].flatMap(c=>[c,c,c,c]));
+  mkDeck(idx) {
+    const counts = this.decks[idx];
+    if (counts) {
+      const arr = [];
+      Object.entries(counts).forEach(([cid,n]) => { for (let k=0;k<n;k++) arr.push(cid); });
+      if (arr.length === 40) return shuffle(arr);
+    }
+    return shuffle(AI_CARD_POOL.flatMap(c=>[c,c,c,c]));
   }
   mkLandDeck() {
     return shuffle(['hito_heichi','wasure_heichi','shigen_heichi',
@@ -4578,13 +4606,13 @@ class SimGame {
   }
 
   initState() {
-    const mk = () => {
-      const deck = this.mkDeck();
+    const mk = (idx) => {
+      const deck = this.mkDeck(idx);
       const hand = deck.splice(0,7);
       return { life:20, deck, landDeck:this.mkLandDeck(), hand,
                field:[], lands:[], mana:{W:0,C:0}, graveyard:[], mulliganUsed:false };
     };
-    return { players:[mk(),mk()], turn:0, activePlayer:0 };
+    return { players:[mk(0),mk(1)], turn:0, activePlayer:0 };
   }
 
   run() {
@@ -4599,9 +4627,19 @@ class SimGame {
       }
     }
     const [p0,p1] = this.state.players;
-    if (p0.life<=0 && p1.life>0) return { winner:1, tdScores:this.tdScores };
-    if (p1.life<=0 && p0.life>0) return { winner:0, tdScores:this.tdScores };
-    return { winner: p0.life>=p1.life?0:1, tdScores:this.tdScores };
+    let winner;
+    if (p0.life<=0 && p1.life>0) winner = 1;
+    else if (p1.life<=0 && p0.life>0) winner = 0;
+    else winner = p0.life>=p1.life?0:1;
+    // バランス統計: プレイされたカードの勝敗を記録
+    for (let p=0; p<2; p++) {
+      this.playedCards[p].forEach(cid => {
+        const st = CARD_STATS[cid] || (CARD_STATS[cid] = {played:0, wins:0});
+        st.played++;
+        if (p === winner) st.wins++;
+      });
+    }
+    return { winner, tdScores:this.tdScores };
   }
 
   simMulligan(player) {
@@ -4745,16 +4783,17 @@ class SimGame {
           p.field.push(inst);
           this.simETB(ap,inst);
           this.simCheckDeath(0); this.simCheckDeath(1);
-          const gain=this.simEval(ap)-scoreBefore;
+          const gain=this.simEval(ap)-scoreBefore + (this.w[ap]['card_'+cid]||0);
           this.restore(snap);
           if (gain>bestGain){bestGain=gain;bestOption={type:'creature',i,cid,card};}
         }
         if (card.type==='spell' && this.canAfford(p,card.cost)) {
-          const gain=this.evalSpellGain(ap,card);
+          const gain=this.evalSpellGain(ap,card) + (this.w[ap]['card_'+cid]||0);
           if (gain>bestGain){bestGain=gain;bestOption={type:'spell',i,cid,card};}
         }
       });
       if (!bestOption) break;
+      this.playedCards[ap].add(bestOption.cid);
       if (bestOption.type==='creature') {
         this.payMana(p,bestOption.card.cost);
         p.hand.splice(bestOption.i,1);
@@ -4994,7 +5033,9 @@ function adaptiveMutate(w) {
   const n = Math.ceil(Math.random()*3);
   for (let i=0;i<n;i++) {
     const k=keys[Math.floor(Math.random()*keys.length)];
-    m[k]=Math.max(0.01, m[k]+(Math.random()-0.5)*2*_mutationSigma);
+    const v=(m[k]||0)+(Math.random()-0.5)*2*_mutationSigma;
+    // カード個別重みは負値も許可(-3〜3)、戦略重みは正値のみ
+    m[k]=k.startsWith('card_') ? Math.max(-3, Math.min(3, v)) : Math.max(0.01, v);
   }
   return m;
 }
@@ -5037,10 +5078,10 @@ function runPopulationGeneration(batchPerMatch) {
 }
 
 // #10: Run batch with TD accuracy tracking
-function runTrainingBatch(w0, w1, n) {
+function runTrainingBatch(w0, w1, n, d0, d1) {
   let wins0=0, tdCorrect=0;
   for (let i=0;i<n;i++) {
-    const g=new SimGame(w0,w1);
+    const g=new SimGame(w0,w1,d0,d1);
     const result=g.run();
     if (result.winner===0) wins0++;
     // #10: check if last intermediate eval predicted the winner
@@ -5088,17 +5129,50 @@ async function startTraining(limitMode, limitValue, gamesPerBatch, onProgress) {
     if (improved) { _consecutiveNoImprove=0; _mutationSigma=Math.max(0.05,_mutationSigma*0.95); }
     else { _consecutiveNoImprove++; if(_consecutiveNoImprove>5){ _mutationSigma=Math.min(0.6,_mutationSigma*1.2); _consecutiveNoImprove=0; } }
 
+    // デッキ自動構築: 現デッキから1枚入替えた候補を対戦させ、勝率が上回れば採用
+    if (_trainDeckEvolve && AI_CARD_POOL.length*4 > 40) {
+      const curDeck = AI_DECK_COUNTS || defaultDeckCounts();
+      const candDeck = mutateDeckCounts(curDeck);
+      const deckWr = await new Promise(resolve=>setTimeout(()=>resolve(
+        runTrainingBatch(currentWeights, currentWeights, Math.max(8, Math.floor(BATCH/2)), candDeck, curDeck)
+      ),0));
+      if (deckWr > 0.55) AI_DECK_COUNTS = candDeck;
+    }
+
     AI_WEIGHTS = {...currentWeights, _version:AI_WEIGHTS_VERSION};
     AI_TRAIN_STATS.games+=BATCH;
     const elapsed = limitMode==='time' ? Math.min(Date.now()-(deadline-limitValue*1000),limitValue*1000) : null;
     if (onProgress) onProgress(totalPlayed, limitMode==='games'?totalGames:null, (totalWins/totalPlayed*100).toFixed(1), elapsed, limitMode==='time'?limitValue*1000:null);
   }
   AI_TRAIN_STATS.epoch++;
+  // 学習終了時にlocalStorageへ自動保存（統計・デッキ込み）
+  try {
+    localStorage.setItem('dcg_ai_weights', JSON.stringify(
+      {_version:AI_WEIGHTS_VERSION, weights:AI_WEIGHTS, stats:AI_TRAIN_STATS, cardStats:CARD_STATS, aiDeck:AI_DECK_COUNTS}));
+  } catch(e) {}
   return currentWeights;
 }
 
+// ── デッキ自動構築ヘルパー ──
+let _trainDeckEvolve = false;
+function defaultDeckCounts() {
+  const d = {};
+  AI_CARD_POOL.forEach(c => d[c] = 4);
+  return d;
+}
+function mutateDeckCounts(d) {
+  // 1枚抜いて別カードを1枚足す（各カード0〜4枚、合計40枚を維持）
+  const m = {...d};
+  for (let tries=0; tries<30; tries++) {
+    const a = AI_CARD_POOL[Math.floor(Math.random()*AI_CARD_POOL.length)];
+    const b = AI_CARD_POOL[Math.floor(Math.random()*AI_CARD_POOL.length)];
+    if (a!==b && (m[a]||0)>0 && (m[b]||0)<4) { m[a]--; m[b]++; return m; }
+  }
+  return m;
+}
+
 function saveWeightsToFile() {
-  const data={_version:AI_WEIGHTS_VERSION, weights:AI_WEIGHTS, stats:AI_TRAIN_STATS};
+  const data={_version:AI_WEIGHTS_VERSION, weights:AI_WEIGHTS, stats:AI_TRAIN_STATS, cardStats:CARD_STATS, aiDeck:AI_DECK_COUNTS};
   const json=JSON.stringify(data,null,2);
   // 常にlocalStorageにも保存（ブラウザ内バックアップ）
   try { localStorage.setItem('dcg_ai_weights', json); } catch(e) {}
@@ -5164,6 +5238,8 @@ function loadWeightsFromFile(file) {
       merged._version=AI_WEIGHTS_VERSION;
       AI_WEIGHTS=merged;
       if (data.stats) AI_TRAIN_STATS={...AI_TRAIN_STATS,...data.stats};
+      if (data.cardStats) CARD_STATS=data.cardStats;
+      if (data.aiDeck) AI_DECK_COUNTS=data.aiDeck;
       document.getElementById('train-status').textContent=`✅ 読込完了 (${AI_TRAIN_STATS.games}戦)`;
     } catch(err) {
       document.getElementById('train-status').textContent=`❌ 読込失敗: ${err.message}`;
@@ -5198,6 +5274,10 @@ function showTrainingPanel() {
           <option value="5000">5000戦</option>
         </select>
       </div>
+      <label style="display:flex;align-items:center;gap:5px;cursor:pointer;color:#aaa;">
+        <input type="checkbox" id="train-deck-evolve" ${_trainDeckEvolve?'checked':''}>
+        🃏 デッキ構築も学習する${AI_CARD_POOL.length*4 <= 40 ? '<span style="color:#666;">（カードプールが40枚分しかないため現在は無効。カード追加後に有効化）</span>' : ''}
+      </label>
       <div style="display:flex;gap:8px;">
         <button id="btn-train-start" onclick="uiStartTraining()" style="padding:6px 14px;background:#1a3a1a;border:1px solid #44aa44;color:#aaffaa;border-radius:4px;cursor:pointer;">▶ 開始</button>
         <button onclick="uiStopTraining()" style="padding:6px 10px;background:#3a1a1a;border:1px solid #aa4444;color:#ffaaaa;border-radius:4px;cursor:pointer;">■ 停止</button>
@@ -5212,11 +5292,97 @@ function showTrainingPanel() {
         <label style="padding:6px 12px;background:#2a1a1a;border:1px solid #774444;color:#ffaaaa;border-radius:4px;cursor:pointer;">
           📂 読込<input type="file" accept=".json" style="display:none;" onchange="loadWeightsFromFile(this.files[0])">
         </label>
+        <button onclick="closeModal();showBalancePanel()" style="padding:6px 12px;background:#1a2a2a;border:1px solid #447777;color:#aaffff;border-radius:4px;cursor:pointer;">📊 バランス分析</button>
+        <button onclick="closeModal();showAIDeckPanel()" style="padding:6px 12px;background:#2a2a1a;border:1px solid #777744;color:#ffffaa;border-radius:4px;cursor:pointer;">🃏 AIデッキ</button>
         <button onclick="AI_WEIGHTS={...AI_WEIGHTS_DEFAULT};AI_TRAIN_STATS={games:0,wins:0,epoch:0};_mutationSigma=0.2;document.getElementById('train-status').textContent='リセット済';" style="padding:6px 10px;background:#1a1a1a;border:1px solid #555;color:#888;border-radius:4px;cursor:pointer;">↺ リセット</button>
       </div>
-      <div style="color:#666;font-size:10px;">v${AI_WEIGHTS_VERSION}互換 | 遺伝的アルゴリズム+適応変異+交叉</div>
+      <div style="color:#666;font-size:10px;">v${AI_WEIGHTS_VERSION}互換 | 遺伝的アルゴリズム+適応変異+交叉+カード別重み学習</div>
     </div>`;
   showModal('🧠 AI学習モード', html);
+}
+
+// ── カードバランス分析パネル ──
+// シミュレーション対戦で集めた「カードをプレイしたゲームの勝率」から
+// ナーフ/アッパー候補を提示する（実際の調整はユーザーが判断）
+function showBalancePanel() {
+  const entries = Object.entries(CARD_STATS).filter(([cid]) => CARD_DB[cid]);
+  if (!entries.length) {
+    showModal('📊 カードバランス分析', '<p style="color:#888;">データがありません。AI学習を実行するとシミュレーション対戦から統計が集まります。</p>');
+    return;
+  }
+  const totalPlayed = entries.reduce((s,[,v]) => s+v.played, 0);
+  const totalWins   = entries.reduce((s,[,v]) => s+v.wins, 0);
+  const avgWr = totalWins / Math.max(1, totalPlayed);
+  const MIN_SAMPLE = 100;
+  const rows = entries
+    .map(([cid,v]) => ({ cid, card:CARD_DB[cid], played:v.played, wr:v.wins/Math.max(1,v.played) }))
+    .sort((a,b) => b.wr - a.wr)
+    .map(r => {
+      const diff = (r.wr - avgWr) * 100;
+      let verdict, color;
+      if (r.played < MIN_SAMPLE)      { verdict = `サンプル不足(${r.played})`; color = '#666'; }
+      else if (diff >= 5)             { verdict = '⚠️ ナーフ候補';   color = '#ff8866'; }
+      else if (diff <= -5)            { verdict = '💪 アッパー候補'; color = '#66aaff'; }
+      else                            { verdict = '─ 適正';          color = '#88cc88'; }
+      return `<tr style="border-bottom:1px solid #222;">
+        <td style="padding:5px 8px;font-size:13px;white-space:nowrap;">${r.card.icon} ${r.card.name}</td>
+        <td style="padding:5px 8px;font-size:12px;text-align:right;color:#aaa;">${r.played}</td>
+        <td style="padding:5px 8px;font-size:13px;text-align:right;font-weight:700;">${(r.wr*100).toFixed(1)}%</td>
+        <td style="padding:5px 8px;font-size:12px;text-align:right;color:${diff>=0?'#ffaa88':'#88aaff'};">${diff>=0?'+':''}${diff.toFixed(1)}pt</td>
+        <td style="padding:5px 8px;font-size:12px;color:${color};white-space:nowrap;">${verdict}</td>
+      </tr>`;
+    }).join('');
+  const html = `
+    <div style="color:#aaa;font-size:12px;margin-bottom:10px;">
+      シミュレーション${AI_TRAIN_STATS.games}戦の統計 | 全体平均勝率: ${(avgWr*100).toFixed(1)}%<br>
+      <span style="color:#666;">「そのカードをプレイしたゲーム」の勝率。平均+5pt以上=ナーフ候補、-5pt以下=アッパー候補（${MIN_SAMPLE}回以上プレイで判定）</span>
+    </div>
+    <table style="width:100%;border-collapse:collapse;background:#0a0a14;">
+      <thead><tr style="border-bottom:1px solid #444;color:#666;font-size:11px;">
+        <th style="padding:4px 8px;text-align:left;">カード</th>
+        <th style="padding:4px 8px;text-align:right;">プレイ数</th>
+        <th style="padding:4px 8px;text-align:right;">勝率</th>
+        <th style="padding:4px 8px;text-align:right;">平均差</th>
+        <th style="padding:4px 8px;text-align:left;">判定</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+    <div style="display:flex;gap:8px;margin-top:12px;">
+      <button onclick="CARD_STATS={};closeModal();" style="padding:6px 12px;background:#1a1a1a;border:1px solid #555;color:#888;border-radius:4px;cursor:pointer;">↺ 統計リセット</button>
+      <button onclick="closeModal();showTrainingPanel();" style="padding:6px 12px;background:#1a2a1a;border:1px solid #446644;color:#aaffaa;border-radius:4px;cursor:pointer;">← 学習パネルへ</button>
+    </div>`;
+  showModal('📊 カードバランス分析', html);
+}
+
+// ── AIデッキ確認パネル ──
+function showAIDeckPanel() {
+  const counts = AI_DECK_COUNTS || defaultDeckCounts();
+  const learnedRows = AI_CARD_POOL
+    .map(cid => ({ cid, card:CARD_DB[cid], n:counts[cid]||0, w:AI_WEIGHTS['card_'+cid]||0 }))
+    .sort((a,b) => b.w - a.w)
+    .map(r => `<tr style="border-bottom:1px solid #222;">
+      <td style="padding:5px 8px;font-size:13px;">${r.card.icon} ${r.card.name}</td>
+      <td style="padding:5px 8px;font-size:13px;text-align:right;">${r.n}枚</td>
+      <td style="padding:5px 8px;font-size:12px;text-align:right;color:${r.w>=0?'#88ff88':'#ff8888'};">${r.w>=0?'+':''}${r.w.toFixed(2)}</td>
+    </tr>`).join('');
+  const html = `
+    <div style="color:#aaa;font-size:12px;margin-bottom:10px;">
+      AIが対戦で使うデッキ構成と、学習で得たカード別評価（高いほどAIが優先的にプレイ）<br>
+      <span style="color:#666;">${AI_DECK_COUNTS?'🃏 学習で進化したデッキを使用中':'デフォルトデッキ（全カード4枚）を使用中'}</span>
+    </div>
+    <table style="width:100%;border-collapse:collapse;background:#0a0a14;">
+      <thead><tr style="border-bottom:1px solid #444;color:#666;font-size:11px;">
+        <th style="padding:4px 8px;text-align:left;">カード</th>
+        <th style="padding:4px 8px;text-align:right;">枚数</th>
+        <th style="padding:4px 8px;text-align:right;">学習評価</th>
+      </tr></thead>
+      <tbody>${learnedRows}</tbody>
+    </table>
+    <div style="display:flex;gap:8px;margin-top:12px;">
+      <button onclick="AI_DECK_COUNTS=null;closeModal();" style="padding:6px 12px;background:#1a1a1a;border:1px solid #555;color:#888;border-radius:4px;cursor:pointer;">↺ デフォルトに戻す</button>
+      <button onclick="closeModal();showTrainingPanel();" style="padding:6px 12px;background:#1a2a1a;border:1px solid #446644;color:#aaffaa;border-radius:4px;cursor:pointer;">← 学習パネルへ</button>
+    </div>`;
+  showModal('🃏 AIデッキ構成', html);
 }
 
 function uiTrainModeChange() {
@@ -5230,6 +5396,7 @@ async function uiStartTraining() {
   const limit=mode==='time'
     ? parseInt(document.getElementById('train-time').value)||60
     : parseInt(document.getElementById('train-games').value)||100;
+  _trainDeckEvolve = document.getElementById('train-deck-evolve')?.checked || false;
   document.getElementById('btn-train-start').disabled=true;
   document.getElementById('train-status').textContent='学習中...';
   await startTraining(mode, limit, 20, (done,total,wr,elapsed,totalMs)=>{
