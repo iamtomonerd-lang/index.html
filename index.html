@@ -6156,35 +6156,122 @@ function runCardTests() {
     assert('格闘: 強いクリーチャーがダメージを受ける', pInst && pInst.damage===1);
   });
 
-  // 13. Arestiaバフ: AI攻撃時、プレイヤー側Arestiaが自分クリーチャーにtempBuff
+  // 13. Arestiaバフ: 攻撃時、Arestia側の全クリーチャーに永続+1/+1
   withState(()=>{
     const arst = _testAddCreature(0,'arestia');       // プレイヤー側
     const ally = _testAddCreature(0,'shinmai_heishi'); // プレイヤー側の味方
-    const aiAtk = _testAddCreature(1,'shinmai_heishi');// AI攻撃クリーチャー
     G.arestiaBuffActive = false;
-    // AI攻撃時のArestia発動をシミュレート
+    // 攻撃時のArestia発動をシミュレート（永続バフ）
     if (!G.arestiaBuffActive) {
-      G.players[0].field.forEach(c => addTempBuff(0, c.instanceId, 1, 1));
+      G.players[0].field.forEach(c => addPermanentBuff(0, c.instanceId, 1, 1));
       G.arestiaBuffActive = true;
     }
-    const arstInst = G.players[0].field.find(x=>x.instanceId===arst.instanceId);
-    const allyInst = G.players[0].field.find(x=>x.instanceId===ally.instanceId);
-    assert('Arestiaバフ: Arestia自身にtempPower+1', arstInst && arstInst.tempPower===1);
-    assert('Arestiaバフ: 味方にも+1/+1', allyInst && allyInst.tempPower===1 && allyInst.tempToughness===1);
-    assert('Arestiaバフ: 2回目は発動しない', G.arestiaBuffActive===true);
+    const pbArst = getPermanentBuff(arst.instanceId);
+    const pbAlly = getPermanentBuff(ally.instanceId);
+    assert('Arestiaバフ: Arestia自身に永続+1/+1', pbArst.power===1 && pbArst.toughness===1);
+    assert('Arestiaバフ: 味方にも永続+1/+1', pbAlly.power===1 && pbAlly.toughness===1);
+    assert('Arestiaバフ: 発動フラグが立つ(同ターン重複防止)', G.arestiaBuffActive===true);
   });
 
-  // 14. Arestiaバフ: バフはターン終了時にリセットされる（一時バフ）
+  // 14. Arestiaバフ: 永続バフはターン終了相当の処理後も残る
   withState(()=>{
     const arst = _testAddCreature(0,'arestia');
-    addTempBuff(0, arst.instanceId, 1, 1);
-    const before = G.players[0].field[0].tempPower;
-    assert('Arestiaバフ: 付与直後はtempPower=1', before===1);
-    // tempBuffをクリア（endTurnの処理を模倣）
+    addPermanentBuff(0, arst.instanceId, 1, 1);
+    // endTurn相当: tempPower/tempToughnessとtempBuffsだけクリア
     G.players[0].field.forEach(c=>{ c.tempPower=0; c.tempToughness=0; });
     G.tempBuffs = [];
-    const after = G.players[0].field[0].tempPower;
-    assert('Arestiaバフ: ターン終了後はtempPower=0（一時バフ確認）', after===0);
+    const pb = getPermanentBuff(arst.instanceId);
+    assert('Arestiaバフ: ターン終了後も永続バフが残る', pb.power===1 && pb.toughness===1);
+    const eff = getEffectivePower(0, G.players[0].field[0]);
+    assert('Arestiaバフ: 実効パワーに反映(5+1=6)', eff===6);
+  });
+
+  // 15. 介善(A): スタック解決で2ダメージ + blockDrawTrigger
+  withState(()=>{
+    G.players[0].hand = ['kaizen'];
+    const target = _testAddCreature(1,'arestia'); // 5/5
+    kaizenChoice(0, 0, 'A');
+    assert('介善A: targetModeがセット', G.targetMode && G.targetMode.type==='opponentCreature');
+    G.targetMode.callback({instId: target.instanceId});
+    assert('介善A: スタックに積まれる', G.stack.length===1);
+    G.stack.pop().resolve();
+    const t = G.players[1].field.find(x=>x.instanceId===target.instanceId);
+    assert('介善A: 解決で2ダメージ', t && t.damage===2);
+    assert('介善A: blockDrawTriggerが立つ', G.blockDrawTrigger===true);
+    assert('介善A: 墓地に置かれる', G.players[0].graveyard.includes('kaizen'));
+  });
+
+  // 16. 介善(B): 攻撃強制
+  withState(()=>{
+    G.players[0].hand = ['kaizen'];
+    const target = _testAddCreature(1,'shinmai_heishi');
+    kaizenChoice(0, 0, 'B');
+    G.targetMode.callback({instId: target.instanceId});
+    G.stack.pop().resolve();
+    const t = G.players[1].field.find(x=>x.instanceId===target.instanceId);
+    assert('介善B: 攻撃強制フラグ', t && t.mustAttack===true && G.mustAttackCreatures.has(target.instanceId));
+  });
+
+  // 17. getCXValue: 土地数 + チャージ数
+  withState(()=>{
+    G.players[0].lands = [
+      {instanceId:201, cardId:'hito_heichi', tapped:false, chargeCard:null},
+      {instanceId:202, cardId:'wasure_heichi', tapped:false, chargeCard:'shinmai_heishi'},
+      {instanceId:203, cardId:'shigen_heichi', tapped:false, chargeCard:'kaizen'},
+    ];
+    assert('CX値: 土地3+チャージ2=5', getCXValue(0)===5);
+    assert('OC判定: CX5では未達成', isOCActive(0)===false);
+    // 土地7枚+チャージ3枚=CX10でOC
+    for (let i=0;i<4;i++) G.players[0].lands.push({instanceId:210+i, cardId:'hito_heichi', tapped:false, chargeCard: i===0?'kaizen':null});
+    assert('OC判定: CX10で達成', getCXValue(0)===10 && isOCActive(0)===true);
+  });
+
+  // 18. バスティアンCX8バフ: +3/+3
+  withState(()=>{
+    const bast = _testAddCreature(0,'bastian'); // 3/2
+    // CX8: 土地8枚
+    G.players[0].lands = Array.from({length:8},(_,i)=>({instanceId:300+i, cardId:'hito_heichi', tapped:false, chargeCard:null}));
+    const bonus = getCXBonus(0, bast);
+    assert('バスティアンCX8: +3/+3ボーナス', bonus.power===3 && bonus.toughness===3);
+    assert('バスティアンCX8: 実効パワー3+3=6', getEffectivePower(0, bast)===6);
+    // CX7以下ではボーナスなし
+    G.players[0].lands.pop();
+    const bonus2 = getCXBonus(0, bast);
+    assert('バスティアンCX7: ボーナスなし', bonus2.power===0);
+  });
+
+  // 19. バスティアンETB: 2ダメージ→CX6で追加3ダメージ
+  withState(()=>{
+    const t1 = _testAddCreature(1,'arestia');   // 5/5
+    const t2 = _testAddCreature(1,'serashia_heishi'); // 2/5
+    _testAddCreature(0,'bastian');
+    bastianChooseETB(G.players[0].field[0].instanceId, true); // CX6あり
+    assert('バスティアンETB: 2ダメージの対象選択', G.targetMode && G.targetMode.type==='opponentCreature');
+    G.targetMode.callback({instId: t1.instanceId});
+    const a = G.players[1].field.find(x=>x.instanceId===t1.instanceId);
+    assert('バスティアンETB: 2ダメージ適用', a && a.damage===2);
+    assert('バスティアンETB CX6: 追加3ダメージの対象選択', G.targetMode && G.targetMode.type==='opponentCreature');
+    G.targetMode.callback({instId: t2.instanceId});
+    const b = G.players[1].field.find(x=>x.instanceId===t2.instanceId);
+    assert('バスティアンETB CX6: 3ダメージ適用', b && b.damage===3);
+  });
+
+  // 20. 土地タップでマナ生成
+  withState(()=>{
+    G.players[0].mana = {R:0,U:0,G:0,W:0,B:0,C:0};
+    G.players[0].lands = [
+      {instanceId:401, cardId:'hito_heichi', tapped:false, chargeCard:null},      // W生成
+      {instanceId:402, cardId:'serashia_miyako', tapped:false, chargeCard:null},  // C生成
+    ];
+    tapLandForMana(0, 401);
+    assert('土地タップ: 白マナ+1', G.players[0].mana.W===1);
+    assert('土地タップ: タップ状態になる', G.players[0].lands[0].tapped===true);
+    tapLandForMana(0, 402);
+    assert('土地タップ: 無色マナ+1 (都)', G.players[0].mana.C===1);
+    // タップ済み土地は再タップ不可
+    const wBefore = G.players[0].mana.W;
+    tapLandForMana(0, 401);
+    assert('土地タップ: タップ済みは再生成不可', G.players[0].mana.W===wBefore);
   });
 
   // ─────────────────────────────────────────────
