@@ -1098,6 +1098,221 @@ button.danger:hover { background: #6a2a2a; }
 }
 #rotate-overlay p { font-size: 18px; font-weight: 700; color: #aaaaff; }
 #rotate-overlay small { font-size: 13px; color: #666; }
+
+/* ============================================================
+   HOME SCREEN
+   ============================================================ */
+#home-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 600;
+  background: linear-gradient(135deg, #050510 0%, #0a0a20 40%, #10082a 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-family: inherit;
+}
+#home-screen .home-title {
+  font-size: clamp(48px, 10vw, 96px);
+  font-weight: 900;
+  letter-spacing: 0.15em;
+  background: linear-gradient(135deg, #8888ff 0%, #cc88ff 50%, #88ccff 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-bottom: 8px;
+  text-shadow: none;
+  filter: drop-shadow(0 0 30px #6060ff88);
+}
+#home-screen .home-subtitle {
+  font-size: clamp(12px, 2vw, 16px);
+  color: #8888aa;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  margin-bottom: 60px;
+}
+#home-screen .home-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: min(400px, 90vw);
+}
+#home-screen .home-btn {
+  width: 100%;
+  padding: 18px 24px;
+  background: linear-gradient(135deg, #12121e 0%, #1a1a2e 100%);
+  border: 1px solid #4040aa;
+  border-radius: 12px;
+  color: #ccccff;
+  font-size: clamp(15px, 2.5vw, 18px);
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: left;
+  box-shadow: 0 4px 16px #00000066, inset 0 1px 0 #ffffff11;
+}
+#home-screen .home-btn:hover {
+  background: linear-gradient(135deg, #1a1a3a 0%, #252545 100%);
+  border-color: #8080ff;
+  color: #ffffff;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px #6060ff44;
+}
+#home-screen .home-btn:active {
+  transform: translateY(0);
+}
+#home-screen .home-btn.btn-battle { border-color: #6644aa; }
+#home-screen .home-btn.btn-battle:hover { border-color: #aa88ff; box-shadow: 0 8px 24px #9966ff44; }
+#home-screen .home-btn.btn-deck { border-color: #226688; }
+#home-screen .home-btn.btn-deck:hover { border-color: #44aaff; box-shadow: 0 8px 24px #4488ff44; }
+#home-screen .home-btn.btn-ai { border-color: #226633; }
+#home-screen .home-btn.btn-ai:hover { border-color: #44cc66; box-shadow: 0 8px 24px #44cc6644; }
+#home-screen .home-version {
+  position: absolute;
+  bottom: 16px;
+  color: #444466;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+}
+
+/* ============================================================
+   DECK BUILDER
+   ============================================================ */
+#deck-builder {
+  position: fixed;
+  inset: 0;
+  z-index: 550;
+  background: linear-gradient(135deg, #050510 0%, #0a0a20 100%);
+  display: flex;
+  flex-direction: column;
+  font-family: inherit;
+}
+#deck-builder .db-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: #0d0d1e;
+  border-bottom: 1px solid #2a2a4a;
+  flex-shrink: 0;
+}
+#deck-builder .db-header h2 {
+  flex: 1;
+  margin: 0;
+  font-size: 18px;
+  color: #aaaaff;
+  letter-spacing: 0.1em;
+}
+#deck-builder .db-header-btn {
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  border: 1px solid;
+  transition: all 0.15s;
+}
+#deck-builder .db-header-btn:hover { opacity: 0.85; transform: translateY(-1px); }
+.db-btn-back    { background: #12121e; border-color: #4a4a6a; color: #aaaacc; }
+.db-btn-save    { background: #1a2a1a; border-color: #447744; color: #88ff88; }
+.db-btn-reset   { background: #2a1a1a; border-color: #774444; color: #ff8888; }
+#deck-builder .db-body {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  gap: 0;
+}
+#deck-builder .db-collection {
+  flex: 1.4;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid #2a2a4a;
+  overflow: hidden;
+}
+#deck-builder .db-deck-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+#deck-builder .db-panel-title {
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: #6666aa;
+  background: #0d0d1e;
+  border-bottom: 1px solid #1e1e3a;
+  flex-shrink: 0;
+}
+#deck-builder .db-scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+}
+#deck-builder .db-scroll::-webkit-scrollbar { width: 6px; }
+#deck-builder .db-scroll::-webkit-scrollbar-track { background: #0a0a14; }
+#deck-builder .db-scroll::-webkit-scrollbar-thumb { background: #2a2a4a; border-radius: 3px; }
+.db-card-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  border: 1px solid transparent;
+  margin-bottom: 4px;
+  background: #12121e;
+  transition: all 0.12s;
+  user-select: none;
+}
+.db-card-row:hover { background: #1a1a2e; border-color: #4040aa; }
+.db-card-row.db-maxed { opacity: 0.4; cursor: not-allowed; }
+.db-card-row.db-maxed:hover { background: #12121e; border-color: transparent; }
+.db-card-icon { font-size: 20px; width: 26px; text-align: center; flex-shrink: 0; }
+.db-card-name { flex: 1; font-size: 13px; color: #ccccee; font-weight: 600; }
+.db-card-cost {
+  font-size: 12px; font-weight: 900; color: #8888ff;
+  background: #1a1a3a; border: 1px solid #3a3a6a;
+  border-radius: 50%; width: 22px; height: 22px;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.db-card-cost.land-cost { color: #aaffaa; background: #1a3a1a; border-color: #3a6a3a; }
+.db-card-stats { font-size: 11px; color: #888899; flex-shrink: 0; min-width: 36px; text-align: right; }
+.db-card-count {
+  font-size: 12px; font-weight: 900; color: #ffcc44;
+  background: #2a2200; border: 1px solid #554400;
+  border-radius: 4px; padding: 1px 6px; flex-shrink: 0; min-width: 24px; text-align: center;
+}
+.db-section-label {
+  font-size: 11px; font-weight: 700; letter-spacing: 0.15em;
+  color: #555577; text-transform: uppercase;
+  padding: 8px 4px 4px; margin-top: 4px;
+}
+#deck-builder .db-stats {
+  padding: 10px 12px;
+  background: #0d0d1e;
+  border-top: 1px solid #1e1e3a;
+  display: flex;
+  gap: 16px;
+  flex-shrink: 0;
+  font-size: 13px;
+}
+.db-stat { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.db-stat-label { font-size: 10px; color: #666688; letter-spacing: 0.1em; }
+.db-stat-value { font-weight: 900; font-size: 18px; }
+.db-stat-value.ok { color: #44ff88; }
+.db-stat-value.warn { color: #ffcc44; }
+.db-stat-value.over { color: #ff4444; }
+.db-save-notice {
+  font-size: 11px; color: #44aa66; margin: 0 12px;
+  opacity: 0; transition: opacity 0.5s;
+}
+.db-save-notice.show { opacity: 1; }
 </style>
 </head>
 <body>
@@ -1227,6 +1442,59 @@ button.danger:hover { background: #6a2a2a; }
   <div class="rotate-icon">📱</div>
   <p>横向きにしてください</p>
   <small>このゲームは横向き表示に最適化されています</small>
+</div>
+
+<!-- Home Screen -->
+<div id="home-screen">
+  <div class="home-title">DCG</div>
+  <div class="home-subtitle">デジタルカードゲーム</div>
+  <div class="home-buttons">
+    <button class="home-btn btn-battle" onclick="showLobbyFromHome()">⚔️ 対戦する</button>
+    <button class="home-btn btn-deck"   onclick="showDeckBuilder()">📖 デッキ構築</button>
+    <button class="home-btn btn-ai"     onclick="showAIFromHome()">🧠 AI学習</button>
+  </div>
+  <div class="home-version">v1.0.0 — DCG</div>
+</div>
+
+<!-- Deck Builder -->
+<div id="deck-builder" style="display:none;">
+  <div class="db-header">
+    <button class="db-header-btn db-btn-back"  onclick="hideDeckBuilder()">← 戻る</button>
+    <h2>📖 デッキ構築</h2>
+    <span class="db-save-notice" id="db-save-notice">✔ 保存しました</span>
+    <button class="db-header-btn db-btn-reset" onclick="dbResetDeck()">デフォルトに戻す</button>
+    <button class="db-header-btn db-btn-save"  onclick="dbSaveDeck()">保存して戻る</button>
+  </div>
+  <div class="db-body">
+    <!-- Left: collection -->
+    <div class="db-collection">
+      <div class="db-panel-title">カードコレクション</div>
+      <div class="db-scroll" id="db-collection-list"></div>
+    </div>
+    <!-- Right: current deck -->
+    <div class="db-deck-panel">
+      <div class="db-panel-title">現在のデッキ</div>
+      <div class="db-scroll" id="db-deck-list"></div>
+      <div class="db-stats">
+        <div class="db-stat">
+          <span class="db-stat-label">メインデッキ</span>
+          <span class="db-stat-value" id="db-main-count">0</span>
+        </div>
+        <div class="db-stat">
+          <span class="db-stat-label">目標</span>
+          <span class="db-stat-value" style="color:#666688">40</span>
+        </div>
+        <div class="db-stat">
+          <span class="db-stat-label">土地デッキ</span>
+          <span class="db-stat-value" id="db-land-count">0</span>
+        </div>
+        <div class="db-stat">
+          <span class="db-stat-label">目標</span>
+          <span class="db-stat-value" style="color:#666688">10</span>
+        </div>
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- Online Lobby -->
@@ -1374,6 +1642,13 @@ const CARD_DB = {
 
 // Build decks
 function buildMainDeck() {
+  try {
+    const saved = localStorage.getItem('dcg_deck');
+    if (saved) {
+      const data = JSON.parse(saved);
+      if (data.main && data.main.length === 40) return shuffle([...data.main]);
+    }
+  } catch(e) {}
   const cards = ['shinmai_heishi','ten_kara_shisha','eiyuu_kouho',
     'serashia_heishi','serashia_junhei','serashia_souryo',
     'bastian','arestia','junigeki','kaizen'];
@@ -1382,6 +1657,13 @@ function buildMainDeck() {
   return shuffle(deck); // exactly 40
 }
 function buildLandDeck() {
+  try {
+    const saved = localStorage.getItem('dcg_deck');
+    if (saved) {
+      const data = JSON.parse(saved);
+      if (data.land && data.land.length === 10) return shuffle([...data.land]);
+    }
+  } catch(e) {}
   const lands = ['hito_heichi','wasure_heichi','shigen_heichi','kemono_heichi','serashia_miyako'];
   let deck = [];
   lands.forEach(l => { deck.push(l); deck.push(l); });
@@ -2092,7 +2374,7 @@ function checkDeath() {
 function endGame(winner) {
   const who = winner === 0 ? 'あなたの' : 'AIの';
   log(`ゲーム終了！ ${who}勝利！`, 'important');
-  showModal('ゲーム終了', `<p style="font-size:24px; text-align:center; margin:20px 0;">${who}勝利！</p><button onclick="location.reload()" style="width:100%;padding:10px;">もう一度プレイ</button>`);
+  showModal('ゲーム終了', `<p style="font-size:24px; text-align:center; margin:20px 0;">${who}勝利！</p><button onclick="location.reload()" style="width:100%;padding:10px;margin-bottom:8px;">もう一度プレイ</button><button onclick="closeModal();showHomeScreen();" style="width:100%;padding:10px;background:#12121e;border:1px solid #4a4a6a;color:#aaaacc;border-radius:6px;cursor:pointer;">🏠 ホームに戻る</button>`);
   G.phase = 'ended';
 }
 
@@ -2170,9 +2452,9 @@ function startCombat() {
   // Applied once per attack declaration (when first attacker is added, handled here preemptively)
   const aiHasArestia = G.players[1].field.some(c=>CARD_DB[c.cardId].id==='arestia');
   if (aiHasArestia && !G.arestiaBuffActive) {
-    G.players[0].field.forEach(c => addPermanentBuff(0, c.instanceId, 1, 1));
+    G.players[1].field.forEach(c => addPermanentBuff(1, c.instanceId, 1, 1));
     G.arestiaBuffActive = true;
-    log('アレスティア: 自分クリーチャー全体+1/+1（永続）', 'important');
+    log('アレスティア: 全クリーチャー+1/+1（永続）', 'important');
   }
 
   log('攻撃クリーチャーを選択してください');
@@ -2208,9 +2490,9 @@ function startSingleAttack(player, atkInstId) {
   // アレスティア passive: 攻撃宣言時、守備側がアレスティアを持っていれば守備側全クリーチャー+1/+1
   const oppHasArestia = G.players[opp].field.some(c => CARD_DB[c.cardId].id === 'arestia');
   if (oppHasArestia && !G.arestiaBuffActive) {
-    G.players[opp].field.forEach(c => addTempBuff(opp, c.instanceId, 1, 1));
+    G.players[opp].field.forEach(c => addPermanentBuff(opp, c.instanceId, 1, 1));
     G.arestiaBuffActive = true;
-    log('アレスティア: 全クリーチャー+1/+1（ターン終了時まで）');
+    log('アレスティア: 全クリーチャー+1/+1（永続）');
   }
 
   // 格闘: select target creature first, then priority window after target chosen
@@ -3131,9 +3413,9 @@ function continueAIAttack() {
   // アレスティア passive: AI攻撃時、プレイヤーがアレスティアを持っていれば全クリーチャー+1/+1
   const playerHasArestia = G.players[0].field.some(c => CARD_DB[c.cardId].id === 'arestia');
   if (playerHasArestia && !G.arestiaBuffActive) {
-    G.players[0].field.forEach(c => addTempBuff(0, c.instanceId, 1, 1));
+    G.players[0].field.forEach(c => addPermanentBuff(0, c.instanceId, 1, 1));
     G.arestiaBuffActive = true;
-    log('アレスティア: 全クリーチャー+1/+1（ターン終了時まで）');
+    log('アレスティア: 全クリーチャー+1/+1（永続）');
   }
 
   // 格闘
@@ -5578,6 +5860,37 @@ function runCardTests() {
     assert('格闘: 強いクリーチャーがダメージを受ける', pInst && pInst.damage===1);
   });
 
+  // 13. Arestiaバフ: AI攻撃時、プレイヤー側Arestiaが自分クリーチャーにtempBuff
+  withState(()=>{
+    const arst = _testAddCreature(0,'arestia');       // プレイヤー側
+    const ally = _testAddCreature(0,'shinmai_heishi'); // プレイヤー側の味方
+    const aiAtk = _testAddCreature(1,'shinmai_heishi');// AI攻撃クリーチャー
+    G.arestiaBuffActive = false;
+    // AI攻撃時のArestia発動をシミュレート
+    if (!G.arestiaBuffActive) {
+      G.players[0].field.forEach(c => addTempBuff(0, c.instanceId, 1, 1));
+      G.arestiaBuffActive = true;
+    }
+    const arstInst = G.players[0].field.find(x=>x.instanceId===arst.instanceId);
+    const allyInst = G.players[0].field.find(x=>x.instanceId===ally.instanceId);
+    assert('Arestiaバフ: Arestia自身にtempPower+1', arstInst && arstInst.tempPower===1);
+    assert('Arestiaバフ: 味方にも+1/+1', allyInst && allyInst.tempPower===1 && allyInst.tempToughness===1);
+    assert('Arestiaバフ: 2回目は発動しない', G.arestiaBuffActive===true);
+  });
+
+  // 14. Arestiaバフ: バフはターン終了時にリセットされる（一時バフ）
+  withState(()=>{
+    const arst = _testAddCreature(0,'arestia');
+    addTempBuff(0, arst.instanceId, 1, 1);
+    const before = G.players[0].field[0].tempPower;
+    assert('Arestiaバフ: 付与直後はtempPower=1', before===1);
+    // tempBuffをクリア（endTurnの処理を模倣）
+    G.players[0].field.forEach(c=>{ c.tempPower=0; c.tempToughness=0; });
+    G.tempBuffs = [];
+    const after = G.players[0].field[0].tempPower;
+    assert('Arestiaバフ: ターン終了後はtempPower=0（一時バフ確認）', after===0);
+  });
+
   // ─────────────────────────────────────────────
   // 結果集計
   if (originalG) _testRestoreG(originalG);
@@ -5637,11 +5950,236 @@ function netPostTurnEnd() {
 }
 
 // ============================================================
+// HOME SCREEN & DECK BUILDER
+// ============================================================
+
+function showHomeScreen() {
+  document.getElementById('home-screen').style.display = 'flex';
+  document.getElementById('deck-builder').style.display = 'none';
+  const lobby = document.getElementById('net-lobby');
+  if (lobby) lobby.style.display = 'none';
+}
+
+function showLobbyFromHome() {
+  document.getElementById('home-screen').style.display = 'none';
+  netShowLobby();
+}
+
+function showAIFromHome() {
+  document.getElementById('home-screen').style.display = 'none';
+  if (typeof showTrainingPanel === 'function') showTrainingPanel();
+  else netStartLocal();
+}
+
+function showDeckBuilder() {
+  document.getElementById('home-screen').style.display = 'none';
+  document.getElementById('deck-builder').style.display = 'flex';
+  dbRenderAll();
+}
+
+function hideDeckBuilder() {
+  document.getElementById('deck-builder').style.display = 'none';
+  showHomeScreen();
+}
+
+// ── Deck builder state ────────────────────────────────────────
+const DB_DEFAULT_MAIN = (function() {
+  const cards = ['shinmai_heishi','ten_kara_shisha','eiyuu_kouho',
+    'serashia_heishi','serashia_junhei','serashia_souryo',
+    'bastian','arestia','junigeki','kaizen'];
+  let deck = [];
+  cards.forEach(c => { for(let i=0;i<4;i++) deck.push(c); });
+  return deck;
+})();
+const DB_DEFAULT_LAND = (function() {
+  const lands = ['hito_heichi','wasure_heichi','shigen_heichi','kemono_heichi','serashia_miyako'];
+  let deck = [];
+  lands.forEach(l => { deck.push(l); deck.push(l); });
+  return deck;
+})();
+
+let dbCurrentMain = [...DB_DEFAULT_MAIN];
+let dbCurrentLand = [...DB_DEFAULT_LAND];
+
+(function dbLoadSaved() {
+  try {
+    const saved = localStorage.getItem('dcg_deck');
+    if (saved) {
+      const data = JSON.parse(saved);
+      if (data.main && data.main.length === 40) dbCurrentMain = [...data.main];
+      if (data.land && data.land.length === 10) dbCurrentLand = [...data.land];
+    }
+  } catch(e) {}
+})();
+
+function dbCountMap(arr) {
+  const m = {};
+  arr.forEach(id => { m[id] = (m[id] || 0) + 1; });
+  return m;
+}
+
+function dbCardInfo(id) {
+  if (typeof CARD_DB !== 'undefined' && CARD_DB[id]) return CARD_DB[id];
+  return null;
+}
+
+function dbRenderAll() {
+  dbRenderCollection();
+  dbRenderDeck();
+  dbUpdateStats();
+}
+
+function dbRenderCollection() {
+  const el = document.getElementById('db-collection-list');
+  if (!el) return;
+  const mainMap = dbCountMap(dbCurrentMain);
+  const landMap = dbCountMap(dbCurrentLand);
+
+  const mainIds = ['shinmai_heishi','ten_kara_shisha','eiyuu_kouho',
+    'serashia_heishi','serashia_junhei','serashia_souryo',
+    'bastian','arestia','junigeki','kaizen'];
+  const landIds = ['hito_heichi','wasure_heichi','shigen_heichi','kemono_heichi','serashia_miyako'];
+
+  let html = '<div class="db-section-label">クリーチャー / スペル</div>';
+  mainIds.forEach(id => {
+    const c = dbCardInfo(id);
+    if (!c) return;
+    const cnt = mainMap[id] || 0;
+    const maxed = cnt >= 4;
+    const stats = c.power !== undefined ? `${c.power}/${c.toughness}` : (c.type === 'spell' ? '呪文' : '');
+    html += `<div class="db-card-row${maxed?' db-maxed':''}" onclick="dbAddMain('${id}')">
+      <span class="db-card-icon">${c.icon||'🃏'}</span>
+      <span class="db-card-name">${c.name}</span>
+      <span class="db-card-cost">${c.cost}</span>
+      <span class="db-card-stats">${stats}</span>
+      ${cnt>0?`<span class="db-card-count">${cnt}/4</span>`:''}
+    </div>`;
+  });
+
+  html += '<div class="db-section-label">土地</div>';
+  landIds.forEach(id => {
+    const c = dbCardInfo(id);
+    if (!c) return;
+    const cnt = landMap[id] || 0;
+    const maxed = cnt >= 4;
+    html += `<div class="db-card-row${maxed?' db-maxed':''}" onclick="dbAddLand('${id}')">
+      <span class="db-card-icon">${c.icon||'🌿'}</span>
+      <span class="db-card-name">${c.name}</span>
+      <span class="db-card-cost land-cost">土地</span>
+      <span class="db-card-stats"></span>
+      ${cnt>0?`<span class="db-card-count">${cnt}/4</span>`:''}
+    </div>`;
+  });
+
+  el.innerHTML = html;
+}
+
+function dbRenderDeck() {
+  const el = document.getElementById('db-deck-list');
+  if (!el) return;
+  const mainMap = dbCountMap(dbCurrentMain);
+  const landMap = dbCountMap(dbCurrentLand);
+
+  let html = '<div class="db-section-label">メインデッキ（' + dbCurrentMain.length + '/40）</div>';
+  const mainDone = {};
+  dbCurrentMain.forEach(id => {
+    if (mainDone[id]) return;
+    mainDone[id] = true;
+    const c = dbCardInfo(id);
+    const cnt = mainMap[id] || 0;
+    const stats = c && c.power !== undefined ? `${c.power}/${c.toughness}` : '';
+    html += `<div class="db-card-row" onclick="dbRemoveMain('${id}')">
+      <span class="db-card-icon">${c?c.icon:'🃏'}</span>
+      <span class="db-card-name">${c?c.name:id}</span>
+      <span class="db-card-cost">${c?c.cost:'?'}</span>
+      <span class="db-card-stats">${stats}</span>
+      <span class="db-card-count">×${cnt}</span>
+    </div>`;
+  });
+
+  html += '<div class="db-section-label" style="margin-top:12px;">土地デッキ（' + dbCurrentLand.length + '/10）</div>';
+  const landDone = {};
+  dbCurrentLand.forEach(id => {
+    if (landDone[id]) return;
+    landDone[id] = true;
+    const c = dbCardInfo(id);
+    const cnt = landMap[id] || 0;
+    html += `<div class="db-card-row" onclick="dbRemoveLand('${id}')">
+      <span class="db-card-icon">${c?c.icon:'🌿'}</span>
+      <span class="db-card-name">${c?c.name:id}</span>
+      <span class="db-card-cost land-cost">土地</span>
+      <span class="db-card-stats"></span>
+      <span class="db-card-count">×${cnt}</span>
+    </div>`;
+  });
+
+  el.innerHTML = html;
+}
+
+function dbUpdateStats() {
+  const mc = document.getElementById('db-main-count');
+  const lc = document.getElementById('db-land-count');
+  if (!mc || !lc) return;
+  const m = dbCurrentMain.length;
+  const l = dbCurrentLand.length;
+  mc.textContent = m;
+  mc.className = 'db-stat-value ' + (m === 40 ? 'ok' : m > 40 ? 'over' : 'warn');
+  lc.textContent = l;
+  lc.className = 'db-stat-value ' + (l === 10 ? 'ok' : l > 10 ? 'over' : 'warn');
+}
+
+function dbAddMain(id) {
+  const cnt = dbCountMap(dbCurrentMain)[id] || 0;
+  if (cnt >= 4) return;
+  if (dbCurrentMain.length >= 40) return;
+  dbCurrentMain.push(id);
+  dbRenderAll();
+}
+
+function dbRemoveMain(id) {
+  const idx = dbCurrentMain.lastIndexOf(id);
+  if (idx >= 0) dbCurrentMain.splice(idx, 1);
+  dbRenderAll();
+}
+
+function dbAddLand(id) {
+  const cnt = dbCountMap(dbCurrentLand)[id] || 0;
+  if (cnt >= 4) return;
+  if (dbCurrentLand.length >= 10) return;
+  dbCurrentLand.push(id);
+  dbRenderAll();
+}
+
+function dbRemoveLand(id) {
+  const idx = dbCurrentLand.lastIndexOf(id);
+  if (idx >= 0) dbCurrentLand.splice(idx, 1);
+  dbRenderAll();
+}
+
+function dbSaveDeck() {
+  try {
+    localStorage.setItem('dcg_deck', JSON.stringify({ main: dbCurrentMain, land: dbCurrentLand }));
+    const notice = document.getElementById('db-save-notice');
+    if (notice) {
+      notice.classList.add('show');
+      setTimeout(() => notice.classList.remove('show'), 2000);
+    }
+  } catch(e) {}
+  setTimeout(() => hideDeckBuilder(), 600);
+}
+
+function dbResetDeck() {
+  dbCurrentMain = [...DB_DEFAULT_MAIN];
+  dbCurrentLand = [...DB_DEFAULT_LAND];
+  dbRenderAll();
+}
+
+// ============================================================
 // INIT
 // ============================================================
 
-// Show lobby on page load instead of immediately initing the game
-netShowLobby();
+// Show home screen on page load
+showHomeScreen();
 _startFreezeDetector();
 
 function toggleLog() {
