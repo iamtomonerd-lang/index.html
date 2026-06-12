@@ -1344,6 +1344,111 @@ button.danger:hover { background: #6a2a2a; }
   opacity: 0; transition: opacity 0.5s;
 }
 .db-save-notice.show { opacity: 1; }
+/* ── Home record & tutorial button ── */
+#home-record {
+  margin-top: 14px;
+  font-size: 13px;
+  color: #8888aa;
+  text-align: center;
+}
+#home-screen .home-btn.btn-tutorial {
+  border-color: #3a3a4e;
+  color: #aaaacc;
+}
+#home-screen .home-btn.btn-tutorial:hover { border-color: #6a6a8a; box-shadow: 0 8px 24px #66668844; }
+
+/* ── Deck slot tabs ── */
+#db-slot-tabs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: #0e0e1a;
+  border-bottom: 1px solid #2a2a4a;
+}
+.db-slot-tab {
+  padding: 6px 14px;
+  background: #12121e;
+  border: 1px solid #2a2a4a;
+  border-radius: 6px;
+  color: #8888aa;
+  cursor: pointer;
+  font-size: 13px;
+}
+.db-slot-tab.active {
+  border-color: #6060ff;
+  color: #ddddff;
+  background: #1a1a32;
+}
+#db-deck-name {
+  margin-left: auto;
+  background: #12121e;
+  border: 1px solid #2a2a4a;
+  border-radius: 6px;
+  color: #ccccee;
+  padding: 6px 10px;
+  font-size: 13px;
+  width: 160px;
+}
+
+/* ── Tutorial overlay ── */
+#tutorial-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 650;
+  background: rgba(5,5,12,0.85);
+  align-items: center;
+  justify-content: center;
+}
+#tutorial-box {
+  width: min(560px, 92vw);
+  max-height: 86vh;
+  overflow-y: auto;
+  background: #12121e;
+  border: 1px solid #3a3a5e;
+  border-radius: 12px;
+  padding: 20px 22px;
+  color: #ccccdd;
+}
+#tutorial-box h3 {
+  margin: 0 0 12px;
+  color: #aaaaff;
+  font-size: 18px;
+  text-align: center;
+}
+#tutorial-content { font-size: 14px; line-height: 1.8; min-height: 140px; }
+#tutorial-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 16px;
+  gap: 8px;
+}
+#tutorial-nav button {
+  padding: 8px 14px;
+  background: #1a1a32;
+  border: 1px solid #3a3a5e;
+  border-radius: 6px;
+  color: #ccccee;
+  cursor: pointer;
+  font-size: 13px;
+}
+#tutorial-nav button:disabled { opacity: 0.35; cursor: default; }
+#tutorial-dots { display: flex; gap: 6px; }
+.tut-dot { width: 8px; height: 8px; border-radius: 50%; background: #3a3a5e; }
+.tut-dot.active { background: #6060ff; }
+#tutorial-close-btn {
+  display: block;
+  width: 100%;
+  margin-top: 14px;
+  padding: 9px;
+  background: #12121e;
+  border: 1px solid #4a4a6a;
+  border-radius: 6px;
+  color: #aaaacc;
+  cursor: pointer;
+}
 </style>
 </head>
 <body>
@@ -1486,8 +1591,24 @@ button.danger:hover { background: #6a2a2a; }
     <button class="home-btn btn-battle" onclick="showLobbyFromHome()">⚔️ 対戦する</button>
     <button class="home-btn btn-deck"   onclick="showDeckBuilder()">📖 デッキ構築</button>
     <button class="home-btn btn-ai"     onclick="showAIFromHome()">🧠 AI学習</button>
+    <button class="home-btn btn-tutorial" onclick="showTutorial()">❓ 遊び方</button>
   </div>
+  <div id="home-record"></div>
   <div class="home-version">v1.0.0 — DCG</div>
+</div>
+
+<!-- Tutorial Overlay -->
+<div id="tutorial-overlay">
+  <div id="tutorial-box">
+    <h3 id="tutorial-title"></h3>
+    <div id="tutorial-content"></div>
+    <div id="tutorial-nav">
+      <button id="tut-prev" onclick="tutNav(-1)">◀ 前へ</button>
+      <div id="tutorial-dots"></div>
+      <button id="tut-next" onclick="tutNav(1)">次へ ▶</button>
+    </div>
+    <button id="tutorial-close-btn" onclick="closeTutorial()">閉じる</button>
+  </div>
 </div>
 
 <!-- Deck Builder -->
@@ -1499,6 +1620,7 @@ button.danger:hover { background: #6a2a2a; }
     <button class="db-header-btn db-btn-reset" onclick="dbResetDeck()">デフォルトに戻す</button>
     <button class="db-header-btn db-btn-save"  onclick="dbSaveDeck()">保存して戻る</button>
   </div>
+  <div id="db-slot-tabs"></div>
   <div class="db-body">
     <!-- Left: collection -->
     <div class="db-collection">
@@ -2478,6 +2600,14 @@ function checkDeath() {
 }
 
 function endGame(winner) {
+  if (G.phase !== 'ended' && typeof NET_MODE !== 'undefined' && NET_MODE === 'local') {
+    try {
+      const rec = JSON.parse(localStorage.getItem('dcg_record') || '{"wins":0,"losses":0}');
+      if (winner === 0) rec.wins = (rec.wins || 0) + 1;
+      else rec.losses = (rec.losses || 0) + 1;
+      localStorage.setItem('dcg_record', JSON.stringify(rec));
+    } catch(e) {}
+  }
   const who = winner === 0 ? 'あなたの' : 'AIの';
   log(`ゲーム終了！ ${who}勝利！`, 'important');
   showModal('ゲーム終了', `<p style="font-size:24px; text-align:center; margin:20px 0;">${who}勝利！</p><button onclick="location.reload()" style="width:100%;padding:10px;margin-bottom:8px;">もう一度プレイ</button><button onclick="closeModal();showHomeScreen();" style="width:100%;padding:10px;background:#12121e;border:1px solid #4a4a6a;color:#aaaacc;border-radius:6px;cursor:pointer;">🏠 ホームに戻る</button>`);
@@ -6426,6 +6556,53 @@ function showHomeScreen() {
   document.getElementById('deck-builder').style.display = 'none';
   const lobby = document.getElementById('net-lobby');
   if (lobby) lobby.style.display = 'none';
+  updateHomeRecord();
+}
+
+// ── 戦績表示 ──────────────────────────────────────────────────
+function updateHomeRecord() {
+  const el = document.getElementById('home-record');
+  if (!el) return;
+  let rec = { wins: 0, losses: 0 };
+  try { rec = JSON.parse(localStorage.getItem('dcg_record') || '{"wins":0,"losses":0}'); } catch(e) {}
+  const w = rec.wins || 0, l = rec.losses || 0;
+  const total = w + l;
+  const rate = total > 0 ? Math.round(w / total * 100) : 0;
+  el.textContent = `戦績: ${w}勝 ${l}敗 (勝率${rate}%)`;
+}
+
+// ── チュートリアル ────────────────────────────────────────────
+const TUTORIAL_PAGES = [
+  { title: 'ゲームの目的', body: '相手のライフを<b style="color:#aaaaff">20から0</b>にすれば勝利です。<br>毎ターン土地が2枚自動で置かれます。<br>土地をタップしてマナを出し、手札のカードをプレイしましょう。' },
+  { title: '戦闘', body: 'メインフェイズに自分の<b style="color:#aaaaff">クリーチャーをクリック</b>して攻撃宣言します。<br>相手は<b style="color:#aaaaff">ブロック</b>で防御できます。<br>カードの<b style="color:#aaaaff">パワー/タフネス</b>で戦闘の結果が決まります。' },
+  { title: '特殊ルール', body: '<b style="color:#aaaaff">チャージ</b>: 手札を土地に置いてCX値をアップできます。<br><b style="color:#aaaaff">CX6/CX8/OC</b>に到達すると強力な効果が解放されます。<br><b style="color:#aaaaff">優先権</b>により、クイック呪文(盾撃)は相手ターンでも使えます。' },
+  { title: '画面の見方', body: '<b style="color:#aaaaff">上部バナー</b>: 現在の処理が表示されます。<br><b style="color:#aaaaff">中央バー</b>: CXゲージとスタックを確認できます。<br>カードを<b style="color:#aaaaff">長押し(スマホ)</b>または<b style="color:#aaaaff">右クリック(PC)</b>すると効果が表示されます。' },
+];
+let tutCurrentPage = 0;
+
+function showTutorial() {
+  tutCurrentPage = 0;
+  document.getElementById('tutorial-overlay').style.display = 'flex';
+  tutRender();
+}
+
+function closeTutorial() {
+  document.getElementById('tutorial-overlay').style.display = 'none';
+}
+
+function tutNav(dir) {
+  tutCurrentPage = Math.max(0, Math.min(TUTORIAL_PAGES.length - 1, tutCurrentPage + dir));
+  tutRender();
+}
+
+function tutRender() {
+  const p = TUTORIAL_PAGES[tutCurrentPage];
+  document.getElementById('tutorial-title').textContent = `${tutCurrentPage + 1}. ${p.title}`;
+  document.getElementById('tutorial-content').innerHTML = p.body;
+  document.getElementById('tut-prev').disabled = tutCurrentPage === 0;
+  document.getElementById('tut-next').disabled = tutCurrentPage === TUTORIAL_PAGES.length - 1;
+  document.getElementById('tutorial-dots').innerHTML = TUTORIAL_PAGES
+    .map((_, i) => `<span class="tut-dot${i === tutCurrentPage ? ' active' : ''}"></span>`).join('');
 }
 
 function showLobbyFromHome() {
@@ -6469,15 +6646,91 @@ const DB_DEFAULT_LAND = (function() {
 let dbCurrentMain = [...DB_DEFAULT_MAIN];
 let dbCurrentLand = [...DB_DEFAULT_LAND];
 
-(function dbLoadSaved() {
+// ── 複数デッキスロット (dcg_decks_v2) ──────────────────────────
+let dbSlots = null;       // {slots:[{name,main,land}x3], active:0}
+let dbActiveSlot = 0;
+
+function dbDefaultSlot(i) {
+  return { name: 'デッキ' + (i + 1), main: [...DB_DEFAULT_MAIN], land: [...DB_DEFAULT_LAND] };
+}
+
+function dbLoadSlots() {
   try {
-    const saved = localStorage.getItem('dcg_deck');
-    if (saved) {
-      const data = JSON.parse(saved);
-      if (data.main && data.main.length === 40) dbCurrentMain = [...data.main];
-      if (data.land && data.land.length === 10) dbCurrentLand = [...data.land];
+    const raw = localStorage.getItem('dcg_decks_v2');
+    if (raw) {
+      const data = JSON.parse(raw);
+      if (data && Array.isArray(data.slots)) {
+        dbSlots = data;
+        while (dbSlots.slots.length < 3) dbSlots.slots.push(dbDefaultSlot(dbSlots.slots.length));
+        dbActiveSlot = (data.active >= 0 && data.active < 3) ? data.active : 0;
+        return;
+      }
     }
   } catch(e) {}
+  // 移行: 旧 'dcg_deck' があればスロット0へコピー
+  dbSlots = { slots: [dbDefaultSlot(0), dbDefaultSlot(1), dbDefaultSlot(2)], active: 0 };
+  try {
+    const legacy = localStorage.getItem('dcg_deck');
+    if (legacy) {
+      const d = JSON.parse(legacy);
+      if (d.main && d.main.length === 40) dbSlots.slots[0].main = [...d.main];
+      if (d.land && d.land.length === 10) dbSlots.slots[0].land = [...d.land];
+    }
+  } catch(e) {}
+  dbActiveSlot = 0;
+  dbPersistSlots();
+}
+
+function dbPersistSlots() {
+  try {
+    dbSlots.active = dbActiveSlot;
+    localStorage.setItem('dcg_decks_v2', JSON.stringify(dbSlots));
+  } catch(e) {}
+}
+
+function dbStoreCurrentToSlot() {
+  const s = dbSlots.slots[dbActiveSlot];
+  s.main = [...dbCurrentMain];
+  s.land = [...dbCurrentLand];
+  const nameEl = document.getElementById('db-deck-name');
+  if (nameEl && nameEl.value.trim()) s.name = nameEl.value.trim().slice(0, 20);
+}
+
+function dbApplySlot(i) {
+  dbActiveSlot = i;
+  const s = dbSlots.slots[i];
+  dbCurrentMain = [...s.main];
+  dbCurrentLand = [...s.land];
+}
+
+function dbSwitchSlot(i) {
+  if (i === dbActiveSlot) return;
+  dbStoreCurrentToSlot();
+  dbApplySlot(i);
+  dbPersistSlots();
+  dbRenderAll();
+}
+
+function dbDeckNameChanged() {
+  dbStoreCurrentToSlot();
+  dbPersistSlots();
+  dbRenderSlotTabs();
+}
+
+function dbRenderSlotTabs() {
+  const el = document.getElementById('db-slot-tabs');
+  if (!el) return;
+  let html = '';
+  dbSlots.slots.forEach((s, i) => {
+    html += `<button class="db-slot-tab${i === dbActiveSlot ? ' active' : ''}" onclick="dbSwitchSlot(${i})">${s.name}</button>`;
+  });
+  html += `<input id="db-deck-name" type="text" maxlength="20" placeholder="デッキ名" value="${dbSlots.slots[dbActiveSlot].name.replace(/"/g, '&quot;')}" onchange="dbDeckNameChanged()">`;
+  el.innerHTML = html;
+}
+
+(function dbLoadSaved() {
+  dbLoadSlots();
+  dbApplySlot(dbActiveSlot);
 })();
 
 function dbCountMap(arr) {
@@ -6492,6 +6745,7 @@ function dbCardInfo(id) {
 }
 
 function dbRenderAll() {
+  dbRenderSlotTabs();
   dbRenderCollection();
   dbRenderDeck();
   dbUpdateStats();
@@ -6626,6 +6880,9 @@ function dbRemoveLand(id) {
 
 function dbSaveDeck() {
   try {
+    dbStoreCurrentToSlot();
+    dbPersistSlots();
+    // 互換のため旧キーにもアクティブスロットの内容を書き込む
     localStorage.setItem('dcg_deck', JSON.stringify({ main: dbCurrentMain, land: dbCurrentLand }));
     const notice = document.getElementById('db-save-notice');
     if (notice) {
