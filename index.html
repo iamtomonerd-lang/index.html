@@ -3910,23 +3910,15 @@ function aiHandlePriority() {
   const quickSpells = ai.hand.map((cid, i) => ({ cid, i, card: CARD_DB[cid] }))
     .filter(({ card }) => card.keywords && card.keywords.includes('Quick') && canAfford(1, card.cost));
 
-  let chosen = null;
-  for (const item of quickSpells) {
-    const { card } = item;
-    let worthPlaying = false;
-    if (card.effect === 'junigeki') {
-      // Worth it if opponent has a creature we can damage meaningfully
-      worthPlaying = player.field.some(c => {
-        const tou = getEffectiveToughness(0, c);
-        return (tou - c.damage) <= 2; // would kill it
-      }) || (ai.life < player.life && player.field.length > 0);
-    } else if (card.effect === 'kaizen') {
-      worthPlaying = player.field.length > 0;
-    } else {
-      worthPlaying = true; // unknown Quick spell: play it
-    }
-    if (worthPlaying) { chosen = item; break; }
-  }
+  // MCTSで「各Quickスペルを使う vs パス」の勝率を比較して最善手を選択
+  const options = [{type:'pass'}, ...quickSpells.map(item => ({type:'play', item}))];
+  const best = mctsPickOption(options, (sim, opt) => {
+    if (opt.type === 'pass') return;
+    const p1 = sim.state.players[1];
+    sim.payMana(p1, opt.item.card.cost);
+    sim.simSpellEffect(1, opt.item.card);
+  });
+  let chosen = (best && best.type === 'play') ? best.item : null;
 
   if (chosen) {
     const { cid, i, card } = chosen;
@@ -4137,9 +4129,17 @@ function aiPlaySpellEffect(card) {
   if (card.effect === 'junigeki') {
     const targets = player.field;
     if (targets.length > 0) {
-      // Prefer creatures that would die (lethal first), then strongest
-      const lethalTgt = targets.find(c => (getEffectiveToughness(0,c) - c.damage) <= 2);
-      const tgt = lethalTgt || targets.reduce((a,b) => getEffectivePower(0,b) > getEffectivePower(0,a) ? b : a);
+      // MCTSで対象を選択
+      const tgt = mctsPickOption(targets, (sim, t) => {
+        const p0 = sim.state.players[0], p1 = sim.state.players[1];
+        const simTgt = p0.field.find(c => c.id === t.instanceId);
+        if (simTgt) simTgt.damage += 2;
+        else p0.life -= 2;
+        if (p1.field.length > 0) {
+          const ally = p1.field.reduce((a,b) => sim.hp(a) < sim.hp(b) ? a : b);
+          ally.tempToughness = (ally.tempToughness||0)+1;
+        }
+      }) || targets[0];
       applyDamageToCreature(0, tgt.instanceId, 2, 1);
       log(`AI: ${card.name} でプレイヤークリーチャーに2ダメージ`, 'damage');
       // Buff own weakest (most in danger) creature +0/+1
@@ -4163,17 +4163,38 @@ function aiKaizenEffects() {
   const player = G.players[0];
   const ocAtCast = isOCActive(1);
   const total = ocAtCast ? 4 : 3;
-  // 効果1: 最強クリーチャーに5ダメージ
+  // 効果1: MCTSで最善クリーチャーに5ダメージ
   if (player.field.length > 0) {
-    const tgt = player.field.reduce((a,b)=>getEffectivePower(0,b)>getEffectivePower(0,a)?b:a);
+    const tgt = mctsPickOption(player.field, (sim, t) => {
+      const p0 = sim.state.players[0];
+      const simTgt = p0.field.find(c => c.id === t.instanceId);
+      if (simTgt) { simTgt.damage += 5; sim.simCheckDeath(0); }
+      else p0.life -= 5;
+    }) || player.field[0];
     showEffectStep('AI 介善', 1, total, `5ダメージ → ${CARD_DB[tgt.cardId].name}`);
     applyDamageToCreature(0, tgt.instanceId, 5, 1);
   } else {
     log(`AI 介善 効果1/${total}: 対象なしのためスキップ`);
   }
-  // 効果2: 残った最弱クリーチャーに攻撃強制
+  // 効果2: MCTSで攻撃強制対象を選択（生存クリーチャーから）
   if (player.field.length > 0) {
-    const tgt2 = player.field.reduce((a,b)=>getEffectivePower(0,b)<getEffectivePower(0,a)?b:a);
+    const tgt2 = mctsPickOption(player.field, (sim, t) => {
+      // 攻撃強制でそのクリーチャーが攻撃してくる想定でシミュレート
+      const p0 = sim.state.players[0], p1 = sim.state.players[1];
+      const simAtk = p0.field.find(c => c.id === t.instanceId);
+      if (simAtk) {
+        const atkPow = (CARD_DB[simAtk.cardId].power||0)+(simAtk.tempPower||0);
+        // 最善ブロッカーに当てる（ブロック可能なら）
+        const blk = p1.field.find(b => !b.tapped && sim._canFlyBlock(simAtk, b));
+        if (blk) {
+          const blkPow = (CARD_DB[blk.cardId].power||0)+(blk.tempPower||0);
+          blk.damage += atkPow; simAtk.damage += blkPow;
+          sim.simCheckDeath(0); sim.simCheckDeath(1);
+        } else {
+          p1.life -= atkPow;
+        }
+      }
+    }) || player.field[0];
     showEffectStep('AI 介善', 2, total, `攻撃強制 → ${CARD_DB[tgt2.cardId].name}`);
     tgt2.mustAttack = true; G.mustAttackCreatures.add(tgt2.instanceId);
   } else {
@@ -6430,6 +6451,45 @@ SimGame.prototype._canFlyBlock = function(atk, blk) {
   if (ac.flying && !bc.flying) return false;
   return true;
 };
+
+// ── 汎用MCTSオプション選択 ──────────────────────────────────────────
+// options: 選択肢の配列, applyToSim(sim, option): シム状態に選択を適用する関数
+// 各選択肢をrolloutで評価し、P1の勝率が最高のものを返す
+function mctsPickOption(options, applyToSim) {
+  if (options.length === 0) return null;
+  if (options.length === 1) return options[0];
+  const budget = Math.min(mctsTimeBudget(), 250);
+  const deadline = Date.now() + budget;
+  const baseState = mctsStateFromG();
+  const wins = new Array(options.length).fill(0);
+  const trials = new Array(options.length).fill(0);
+  let ci = 0;
+  while (Date.now() < deadline) {
+    const idx = ci % options.length;
+    ci++;
+    const sim = new SimGame();
+    sim.state = JSON.parse(JSON.stringify(baseState));
+    applyToSim(sim, options[idx]);
+    sim.simCheckDeath(0); sim.simCheckDeath(1);
+    let g = 0;
+    const s = sim.state;
+    while (g++ < MCTS_ROLLOUT_DEPTH * 2 && s.players[0].life > 0 && s.players[1].life > 0) {
+      if (sim.simTurn(s.activePlayer)) break;
+    }
+    const [p0, p1] = s.players;
+    const result = p1.life <= 0 ? 0 : p0.life <= 0 ? 1
+      : 1 / (1 + Math.exp(-sim.simEval(1) * 0.02));
+    wins[idx] += result;
+    trials[idx]++;
+  }
+  let bestIdx = 0, bestRate = -1;
+  for (let i = 0; i < options.length; i++) {
+    if (trials[i] === 0) continue;
+    const rate = wins[i] / trials[i];
+    if (rate > bestRate) { bestRate = rate; bestIdx = i; }
+  }
+  return options[bestIdx];
+}
 
 function getEffectivePowerSim(inst) {
   return (CARD_DB[inst.cardId].power||0)+(inst.tempPower||0);
