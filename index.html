@@ -7344,19 +7344,20 @@ function showBalancePanel() {
       else if (diff <= -8)            { verdict = '💪 アッパー候補'; vcolor = '#4488ff'; }
       else if (diff <= -4)            { verdict = '↓ やや弱い';      vcolor = '#88aaff'; }
       else                            { verdict = '✓ 適正';           vcolor = '#66cc88'; }
-      // CSS バーチャート
-      const barPct = Math.round(r.wr * 100);
-      const barColor = diff >= 8 ? '#ff6644' : diff >= 4 ? '#ffaa44' : diff <= -8 ? '#4488ff' : diff <= -4 ? '#88aaff' : '#44aa66';
+      // CSS バーチャート（サンプル不足はグレー半透明で表示）
+      const barPct = r.played < MIN_SAMPLE ? Math.round(r.wr * 100) : Math.round(r.wr * 100);
+      const barColor = r.played < MIN_SAMPLE ? '#444' : diff >= 8 ? '#ff6644' : diff >= 4 ? '#ffaa44' : diff <= -8 ? '#4488ff' : diff <= -4 ? '#88aaff' : '#44aa66';
+      const barOpacity = r.played < MIN_SAMPLE ? 0.35 : 1.0;
       const costTot = Object.values(r.card.cost||{}).reduce((a,b)=>a+b,0);
       return `<tr style="border-bottom:1px solid #1a1a2a;">
         <td style="padding:5px 6px;font-size:12px;white-space:nowrap;">${r.card.icon} ${r.card.name}</td>
         <td style="padding:5px 6px;font-size:11px;text-align:center;color:#888;">${costTot}</td>
         <td style="padding:5px 6px;">
           <div style="display:flex;align-items:center;gap:6px;">
-            <div style="flex:1;height:8px;background:#111;border-radius:4px;overflow:hidden;min-width:60px;">
+            <div style="flex:1;height:8px;background:#111;border-radius:4px;overflow:hidden;min-width:60px;opacity:${barOpacity};">
               <div style="width:${barPct}%;height:100%;background:${barColor};border-radius:4px;transition:width 0.3s;"></div>
             </div>
-            <span style="font-size:12px;font-weight:700;min-width:38px;text-align:right;">${barPct}%</span>
+            <span style="font-size:12px;font-weight:700;min-width:38px;text-align:right;opacity:${barOpacity};">${barPct}%</span>
           </div>
         </td>
         <td style="padding:5px 6px;font-size:11px;text-align:right;color:${diff>=0?'#ffaa77':'#88aaff'};">${diff>=0?'+':''}${diff.toFixed(1)}</td>
