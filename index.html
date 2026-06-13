@@ -2341,6 +2341,7 @@ function costToString(cost) {
 
 function playCardFromHand(player, handIndex) {
   const p = G.players[player];
+  if (handIndex < 0 || handIndex >= p.hand.length) { log('カードインデックスが無効です'); return; }
   const cardId = p.hand[handIndex];
   const card = CARD_DB[cardId];
   if (!card) return;
@@ -2467,6 +2468,7 @@ function showEffectStep(cardName, step, total, desc) {
 
 function playKaizen(player, handIndex) {
   const p = G.players[player];
+  if (handIndex < 0 || handIndex >= p.hand.length) { log('カードインデックスが無効です'); return; }
   const cardId = p.hand[handIndex];
   const card = CARD_DB[cardId];
   if (!canAfford(player, card.cost)) { log('マナが足りません'); return; }
@@ -3614,6 +3616,7 @@ function startCharge() {
 function doCharge(handIndex) {
   const charger = NET_MODE === 'local' ? 0 : G.activePlayer;
   const p = G.players[charger];
+  if (handIndex < 0 || handIndex >= p.hand.length) { log('カードインデックスが無効です'); return; }
   const cardId = p.hand[handIndex];
   // Now need to pick a land
   G.chargingMode = 'pick_land';
@@ -3633,7 +3636,9 @@ function chargeToLand(landInstId) {
     render(); updateHints();
     return;
   }
+  if (!G.selectedCard) { log('チャージするカードが選択されていません'); return; }
   const hi = G.selectedCard.index;
+  if (hi < 0 || hi >= p.hand.length) { log('カードインデックスが無効です'); return; }
   const cardId = p.hand[hi];
   p.hand.splice(hi, 1);
   land.chargeCard = cardId;
@@ -5294,11 +5299,14 @@ function handleLandClick(player, instId) {
 }
 
 // Direct damage target on life display
-document.getElementById('ai-life').addEventListener('click', () => {
-  if (G.targetMode && G.targetMode.type === 'any') {
-    G.targetMode.callback({type:'player', player: 1 - NET_MY_IDX});
-  }
-});
+const aiLifeEl = document.getElementById('ai-life');
+if (aiLifeEl) {
+  aiLifeEl.addEventListener('click', () => {
+    if (G.targetMode && G.targetMode.type === 'any') {
+      G.targetMode.callback({type:'player', player: 1 - NET_MY_IDX});
+    }
+  });
+}
 
 // ============================================================
 // FLOATING DAMAGE
