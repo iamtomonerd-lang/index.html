@@ -7431,22 +7431,40 @@ function showBalancePanel() {
         wr = symWr; delta = (wr - 0.5) * 100; games = soloGames;
         modeLabel = `${soloGames}排他`;
       } else {
-        // データ不足: グレー表示
-        wr = 0.5; delta = 0; games = soloGames;
-        modeLabel = `▪${soloGames}`;
+        // フォールバック: 排他データ不足 → 全試合勝率を平均との差分で表示
+        // 全カードの平均勝率を計算（50%に近いはずだが正確に計算）
+        const _totP = entries.reduce((s,[,vv])=>s+(vv.played||0),0);
+        const _totW = entries.reduce((s,[,vv])=>s+(vv.wins||0),0);
+        const _avgWr = _totP > 0 ? _totW/_totP : 0.5;
+        const legacyWr = (v.played||0) > 0 ? (v.wins||0)/v.played : 0.5;
+        // 平均との差を50%基準に変換して表示（バイアスあり参考値）
+        wr = 0.5 + (legacyWr - _avgWr); delta = (wr - 0.5) * 100; games = v.played||0;
+        modeLabel = `参考${games}`;
       }
 
       let verdict, vcolor;
-      if (!hasSolo)          { verdict = `▪ ${soloGames}/${MIN_SOLO}戦`; vcolor = '#555'; }
-      else if (delta >= 10)  { verdict = '⚠️ ナーフ候補';   vcolor = '#ff6644'; }
-      else if (delta >= 5)   { verdict = '↑ やや強い';      vcolor = '#ffaa44'; }
-      else if (delta <= -10) { verdict = '💪 アッパー候補'; vcolor = '#4488ff'; }
-      else if (delta <= -5)  { verdict = '↓ やや弱い';      vcolor = '#88aaff'; }
-      else                   { verdict = '✓ 適正';           vcolor = '#66cc88'; }
+      const MIN_LEGACY = 50; // フォールバック用最低サンプル
+      if (hasSolo) {
+        if (delta >= 10)       { verdict = '⚠️ ナーフ候補';   vcolor = '#ff6644'; }
+        else if (delta >= 5)   { verdict = '↑ やや強い';      vcolor = '#ffaa44'; }
+        else if (delta <= -10) { verdict = '💪 アッパー候補'; vcolor = '#4488ff'; }
+        else if (delta <= -5)  { verdict = '↓ やや弱い';      vcolor = '#88aaff'; }
+        else                   { verdict = '✓ 適正';           vcolor = '#66cc88'; }
+      } else if (games >= MIN_LEGACY) {
+        // フォールバック判定（閾値を広めにして誤判定を抑制）
+        if (delta >= 15)       { verdict = '⚠️ 強い?';   vcolor = '#cc5533'; }
+        else if (delta >= 8)   { verdict = '↑ やや強い?'; vcolor = '#cc8833'; }
+        else if (delta <= -15) { verdict = '💪 弱い?';    vcolor = '#3366cc'; }
+        else if (delta <= -8)  { verdict = '↓ やや弱い?'; vcolor = '#6688cc'; }
+        else                   { verdict = '〜 参考';      vcolor = '#556655'; }
+      } else {
+        verdict = `▪ ${soloGames}/${MIN_SOLO}`; vcolor = '#555';
+      }
 
-      const barPct = Math.min(100, Math.round(wr * 100));
-      const barColor = !hasSolo ? '#444' : delta >= 10 ? '#ff6644' : delta >= 5 ? '#ffaa44' : delta <= -10 ? '#4488ff' : delta <= -5 ? '#88aaff' : '#44aa66';
-      const barOpacity = hasSolo ? 1.0 : 0.35;
+      const barPct = Math.min(100, Math.max(0, Math.round(wr * 100)));
+      const _bcFn = (d, strong) => d >= (strong?10:15) ? (strong?'#ff6644':'#cc5533') : d >= (strong?5:8) ? (strong?'#ffaa44':'#cc8833') : d <= -(strong?10:15) ? (strong?'#4488ff':'#3366cc') : d <= -(strong?5:8) ? (strong?'#88aaff':'#6688cc') : (strong?'#44aa66':'#446644');
+      const barColor = games < (hasSolo ? 1 : MIN_LEGACY) ? '#333' : _bcFn(delta, hasSolo);
+      const barOpacity = hasSolo ? 1.0 : games >= MIN_LEGACY ? 0.55 : 0.25;
 
       // 改善3: 加重勝率の補足表示
       const wtStr = (wtWr !== null && (v.wt_played||0) >= 20)
@@ -7454,8 +7472,11 @@ function showBalancePanel() {
       // 改善5: 平均ターンの補足表示（早いほど中立、遅いほど盤面依存）
       const turnStr = avgTurn !== null
         ? `<span style="color:#666;font-size:10px;">T${avgTurn.toFixed(1)}</span>` : '';
+      // フォールバック中かどうかの表示ラベル
+      const fallbackTag = !hasSolo && games >= MIN_LEGACY
+        ? `<span style="color:#554433;font-size:9px;margin-left:2px;">参考</span>` : '';
 
-      return { cid, card, costTot, aiW, wr, delta, verdict, vcolor, barPct, barColor, barOpacity, games, wtStr, turnStr };
+      return { cid, card, costTot, aiW, wr, delta, verdict, vcolor, barPct, barColor, barOpacity, games, wtStr, turnStr, fallbackTag };
     })
     .sort((a,b) => b.delta - a.delta)
     .map(r => `<tr style="border-bottom:1px solid #1a1a2a;">
@@ -7468,7 +7489,7 @@ function showBalancePanel() {
             <div style="width:${r.barPct}%;height:100%;background:${r.barColor};border-radius:4px;transition:width 0.3s;"></div>
           </div>
           <span style="font-size:12px;font-weight:700;min-width:34px;text-align:right;opacity:${r.barOpacity};">${r.barPct}%</span>
-          ${r.wtStr}
+          ${r.wtStr}${r.fallbackTag}
         </div>
       </td>
       <td style="padding:5px 6px;font-size:11px;text-align:right;color:${r.delta>=0?'#ffaa77':'#88aaff'};">${r.delta>=0?'+':''}${r.delta.toFixed(1)}</td>
