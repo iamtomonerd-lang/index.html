@@ -5265,9 +5265,10 @@ function handleLandClick(player, instId) {
     return;
   }
   if (G.targetMode) return;
-  if (player !== lp) return;
+  // 相手のターン中は自分の土地のみ操作可能（チャージ能力起動のため）
+  if (player !== lp && !land) return; // landはまだ定義されてないので先に player === lp 制限を緩和
 
-  const p = G.players[lp];
+  const p = G.players[player]; // 常に player の土地を操作
   const land = p.lands.find(l=>l.instanceId===instId);
   if (!land) return;
 
