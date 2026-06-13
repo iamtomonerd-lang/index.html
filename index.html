@@ -7284,6 +7284,60 @@ function showTrainingPanel() {
 
 // ── クイックシミュレーション（バランスデータ収集用） ──
 let _quickSimRunning = false;
+
+// カード強さA/Bテスト: カードあり(P0) vs なし(P1) の対戦 + 逆パターンも測定
+// returns: {wins, games} where wins = player WITH card winning
+let CARD_IMPACT = {}; // {cardId: {wins, games}}
+
+async function runCardImpactTests(nPerCard, onProgress, onDone) {
+  if (_quickSimRunning) return;
+  _quickSimRunning = true;
+  _trainStop = false;
+  const allCards = [...AI_CARD_POOL, ...AI_LAND_POOL];
+  const w = AI_WEIGHTS;
+  const baseLand = AI_LAND_COUNTS || defaultLandCounts();
+  const baseDeck = AI_DECK_COUNTS || defaultDeckCounts();
+  let ci = 0;
+
+  function step() {
+    if (ci >= allCards.length || _trainStop) { _quickSimRunning = false; onDone(); return; }
+    const cardId = allCards[ci++];
+    const card = CARD_DB[cardId];
+    if (!card) { setTimeout(step, 0); return; }
+    const st = CARD_IMPACT[cardId] = { wins: 0, games: 0 };
+
+    if (card.type === 'land') {
+      // 土地: あり(2枚) vs なし(0枚)
+      const withCard = { ...baseLand, [cardId]: 2 };
+      const withoutCard = { ...baseLand, [cardId]: 0 };
+      for (let i = 0; i < nPerCard; i++) {
+        // P0 has card, P1 doesn't
+        const g1 = new SimGame(w, w, baseDeck, baseDeck, withCard, withoutCard);
+        const r1 = g1.run();
+        st.games++; if (r1.winner === 0) st.wins++;
+        // P1 has card, P0 doesn't
+        const g2 = new SimGame(w, w, baseDeck, baseDeck, withoutCard, withCard);
+        const r2 = g2.run();
+        st.games++; if (r2.winner === 1) st.wins++;
+      }
+    } else {
+      // メインデッキカード: あり(4枚) vs なし(0枚)
+      const withCard = { ...baseDeck, [cardId]: 4 };
+      const withoutCard = { ...baseDeck, [cardId]: 0 };
+      for (let i = 0; i < nPerCard; i++) {
+        const g1 = new SimGame(w, w, withCard, withoutCard, baseLand, baseLand);
+        const r1 = g1.run();
+        st.games++; if (r1.winner === 0) st.wins++;
+        const g2 = new SimGame(w, w, withoutCard, withCard, baseLand, baseLand);
+        const r2 = g2.run();
+        st.games++; if (r2.winner === 1) st.wins++;
+      }
+    }
+    if (onProgress) onProgress(ci, allCards.length);
+    setTimeout(step, 0);
+  }
+  step();
+}
 async function quickSimForBalance(nGames, onDone) {
   if (_quickSimRunning) return;
   _quickSimRunning = true;
@@ -7325,65 +7379,92 @@ function showBalancePanel() {
     showModal('📊 カードバランス分析', noDataHtml);
     return;
   }
-  const totalPlayed = entries.reduce((s,[,v]) => s+v.played, 0);
-  const totalWins   = entries.reduce((s,[,v]) => s+v.wins, 0);
-  const avgWr = totalWins / Math.max(1, totalPlayed);
-  const MIN_SAMPLE = 50;
-  const rows = entries
-    .map(([cid,v]) => ({
-      cid, card:CARD_DB[cid], played:v.played, wr:v.wins/Math.max(1,v.played),
-      w: AI_WEIGHTS['card_'+cid] || 0
-    }))
-    .sort((a,b) => b.wr - a.wr)
-    .map(r => {
-      const diff = (r.wr - avgWr) * 100;
-      let verdict, vcolor;
-      if (r.played < MIN_SAMPLE)      { verdict = `▪ ${r.played}戦`; vcolor = '#555'; }
-      else if (diff >= 8)             { verdict = '⚠️ ナーフ候補';   vcolor = '#ff6644'; }
-      else if (diff >= 4)             { verdict = '↑ やや強い';      vcolor = '#ffaa44'; }
-      else if (diff <= -8)            { verdict = '💪 アッパー候補'; vcolor = '#4488ff'; }
-      else if (diff <= -4)            { verdict = '↓ やや弱い';      vcolor = '#88aaff'; }
-      else                            { verdict = '✓ 適正';           vcolor = '#66cc88'; }
-      // CSS バーチャート（サンプル不足はグレー半透明で表示）
-      const barPct = r.played < MIN_SAMPLE ? Math.round(r.wr * 100) : Math.round(r.wr * 100);
-      const barColor = r.played < MIN_SAMPLE ? '#444' : diff >= 8 ? '#ff6644' : diff >= 4 ? '#ffaa44' : diff <= -8 ? '#4488ff' : diff <= -4 ? '#88aaff' : '#44aa66';
-      const barOpacity = r.played < MIN_SAMPLE ? 0.35 : 1.0;
-      const costTot = Object.values(r.card.cost||{}).reduce((a,b)=>a+b,0);
-      return `<tr style="border-bottom:1px solid #1a1a2a;">
-        <td style="padding:5px 6px;font-size:12px;white-space:nowrap;">${r.card.icon} ${r.card.name}</td>
-        <td style="padding:5px 6px;font-size:11px;text-align:center;color:#888;">${costTot}</td>
-        <td style="padding:5px 6px;">
-          <div style="display:flex;align-items:center;gap:6px;">
-            <div style="flex:1;height:8px;background:#111;border-radius:4px;overflow:hidden;min-width:60px;opacity:${barOpacity};">
-              <div style="width:${barPct}%;height:100%;background:${barColor};border-radius:4px;transition:width 0.3s;"></div>
-            </div>
-            <span style="font-size:12px;font-weight:700;min-width:38px;text-align:right;opacity:${barOpacity};">${barPct}%</span>
-          </div>
-        </td>
-        <td style="padding:5px 6px;font-size:11px;text-align:right;color:${diff>=0?'#ffaa77':'#88aaff'};">${diff>=0?'+':''}${diff.toFixed(1)}</td>
-        <td style="padding:5px 6px;font-size:11px;color:${vcolor};white-space:nowrap;">${verdict}</td>
-        <td style="padding:5px 6px;font-size:11px;text-align:right;color:${r.w>=0?'#66cc66':'#cc6666'};">${r.w>=0?'+':''}${r.w.toFixed(2)}</td>
-      </tr>`;
-    }).join('');
+  // A/Bテスト結果があればそれを主指標に使う
+  const hasImpact = Object.keys(CARD_IMPACT).length > 0;
+  const MIN_SAMPLE_AB = 20; // A/Bテストは各カード20試合ずつ(計40回)
+  const MIN_SAMPLE_LEGACY = 50;
 
-  // サマリーチップ
-  const nerfs  = entries.filter(([cid,v]) => v.played>=MIN_SAMPLE && (v.wins/v.played - avgWr)*100 >= 8);
-  const uppers = entries.filter(([cid,v]) => v.played>=MIN_SAMPLE && (v.wins/v.played - avgWr)*100 <= -8);
+  const rows = entries
+    .map(([cid, v]) => {
+      const card = CARD_DB[cid];
+      const ab = CARD_IMPACT[cid];
+      const costTot = Object.values(card.cost||{}).reduce((a,b)=>a+b,0);
+      const aiW = AI_WEIGHTS['card_'+cid] || 0;
+
+      if (hasImpact && ab && ab.games >= MIN_SAMPLE_AB) {
+        // A/Bテスト主指標: 「カードあり側の勝率」50%=均衡, 60%=強い
+        const wr = ab.wins / ab.games;
+        const delta = (wr - 0.5) * 100; // -50〜+50pt
+        let verdict, vcolor;
+        if (delta >= 12)       { verdict = '⚠️ ナーフ候補';   vcolor = '#ff6644'; }
+        else if (delta >= 6)   { verdict = '↑ やや強い';      vcolor = '#ffaa44'; }
+        else if (delta <= -12) { verdict = '💪 アッパー候補'; vcolor = '#4488ff'; }
+        else if (delta <= -6)  { verdict = '↓ やや弱い';      vcolor = '#88aaff'; }
+        else                   { verdict = '✓ 適正';           vcolor = '#66cc88'; }
+        // バーは50%中心で表示（width=wr*100, 50%が中立）
+        const barPct = Math.round(wr * 100);
+        const barColor = delta >= 12 ? '#ff6644' : delta >= 6 ? '#ffaa44' : delta <= -12 ? '#4488ff' : delta <= -6 ? '#88aaff' : '#44aa66';
+        return { cid, card, costTot, aiW, wr, delta, verdict, vcolor, barPct, barColor, barOpacity:1.0, games:ab.games, mode:'ab' };
+      } else if (!hasImpact) {
+        // フォールバック: 旧来の「プレイした試合の勝率」を表示（参考値）
+        const totalPlayed2 = entries.reduce((s,[,vv]) => s+vv.played, 0);
+        const totalWins2   = entries.reduce((s,[,vv]) => s+vv.wins, 0);
+        const avgWr2 = totalWins2 / Math.max(1, totalPlayed2);
+        const wr = v.wins / Math.max(1, v.played);
+        const diff = (wr - avgWr2) * 100;
+        let verdict, vcolor;
+        if (v.played < MIN_SAMPLE_LEGACY) { verdict = `▪ ${v.played}戦`; vcolor = '#555'; }
+        else if (diff >= 8)  { verdict = '⚠️ ナーフ候補?';  vcolor = '#ff6644'; }
+        else if (diff >= 4)  { verdict = '↑ やや強い?';     vcolor = '#ffaa44'; }
+        else if (diff <= -8) { verdict = '💪 アッパー候補?'; vcolor = '#4488ff'; }
+        else if (diff <= -4) { verdict = '↓ やや弱い?';     vcolor = '#88aaff'; }
+        else                 { verdict = '✓ 適正?';          vcolor = '#66cc88'; }
+        const barPct = Math.round(wr * 100);
+        const barColor = v.played < MIN_SAMPLE_LEGACY ? '#444' : diff >= 8 ? '#ff6644' : diff >= 4 ? '#ffaa44' : diff <= -8 ? '#4488ff' : diff <= -4 ? '#88aaff' : '#44aa66';
+        const barOpacity = v.played < MIN_SAMPLE_LEGACY ? 0.35 : 0.7; // 旧指標は少し暗め
+        return { cid, card, costTot, aiW, wr, delta:diff, verdict, vcolor, barPct, barColor, barOpacity, games:v.played, mode:'legacy' };
+      } else {
+        // A/Bテスト実行中 or このカードのデータ未収集
+        return { cid, card, costTot, aiW, wr:0.5, delta:0, verdict:'▪ 未テスト', vcolor:'#555', barPct:50, barColor:'#444', barOpacity:0.3, games:0, mode:'pending' };
+      }
+    })
+    .sort((a,b) => b.delta - a.delta)
+    .map(r => `<tr style="border-bottom:1px solid #1a1a2a;">
+      <td style="padding:5px 6px;font-size:12px;white-space:nowrap;">${r.card.icon} ${r.card.name}</td>
+      <td style="padding:5px 6px;font-size:11px;text-align:center;color:#888;">${r.costTot||'土地'}</td>
+      <td style="padding:5px 6px;">
+        <div style="display:flex;align-items:center;gap:6px;">
+          <div style="position:relative;flex:1;height:8px;background:#111;border-radius:4px;overflow:hidden;min-width:60px;opacity:${r.barOpacity};">
+            <div style="position:absolute;left:50%;top:0;width:1px;height:100%;background:#333;"></div>
+            <div style="width:${r.barPct}%;height:100%;background:${r.barColor};border-radius:4px;transition:width 0.3s;"></div>
+          </div>
+          <span style="font-size:12px;font-weight:700;min-width:38px;text-align:right;opacity:${r.barOpacity};">${r.barPct}%</span>
+        </div>
+      </td>
+      <td style="padding:5px 6px;font-size:11px;text-align:right;color:${r.delta>=0?'#ffaa77':'#88aaff'};">${r.delta>=0?'+':''}${r.delta.toFixed(1)}</td>
+      <td style="padding:5px 6px;font-size:11px;color:${r.vcolor};white-space:nowrap;">${r.verdict}</td>
+      <td style="padding:5px 6px;font-size:11px;text-align:right;color:${r.aiW>=0?'#66cc66':'#cc6666'};">${r.aiW>=0?'+':''}${r.aiW.toFixed(2)}</td>
+    </tr>`).join('');
+
+  const nerfs  = entries.filter(([cid]) => { const ab=CARD_IMPACT[cid]; return ab&&ab.games>=MIN_SAMPLE_AB&&(ab.wins/ab.games-0.5)*100>=12; });
+  const uppers = entries.filter(([cid]) => { const ab=CARD_IMPACT[cid]; return ab&&ab.games>=MIN_SAMPLE_AB&&(ab.wins/ab.games-0.5)*100<=-12; });
   const summaryChips = [
     nerfs.length  ? `<span style="background:#2a1a14;border:1px solid #ff6644;color:#ff9977;padding:3px 8px;border-radius:4px;font-size:11px;">⚠️ ナーフ候補 ${nerfs.length}枚</span>` : '',
     uppers.length ? `<span style="background:#14182a;border:1px solid #4488ff;color:#88aaff;padding:3px 8px;border-radius:4px;font-size:11px;">💪 アッパー候補 ${uppers.length}枚</span>` : '',
   ].filter(Boolean).join(' ');
+  const modeNote = hasImpact
+    ? `<span style="font-size:11px;color:#557755;padding:2px 6px;background:#0a1a0a;border-radius:3px;">A/Bテスト結果 (50%=均衡)</span>`
+    : `<span style="font-size:11px;color:#775544;padding:2px 6px;background:#1a0a0a;border-radius:3px;">参考値（高コストカードは過大評価）→ A/Bテスト推奨</span>`;
 
   const html = `
     <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:10px;">
-      <span style="font-size:12px;color:#888;">${AI_TRAIN_STATS.games}戦 | 平均勝率 ${(avgWr*100).toFixed(1)}%</span>
-      ${summaryChips}
+      ${modeNote} ${summaryChips}
     </div>
     <table style="width:100%;border-collapse:collapse;background:#0a0a14;">
       <thead><tr style="border-bottom:1px solid #333;color:#555;font-size:10px;">
         <th style="padding:4px 6px;text-align:left;">カード</th>
         <th style="padding:4px 6px;text-align:center;">コスト</th>
-        <th style="padding:4px 6px;text-align:left;">勝率バー</th>
+        <th style="padding:4px 6px;text-align:left;">強さバー (50%中立)</th>
         <th style="padding:4px 6px;text-align:right;">差分</th>
         <th style="padding:4px 6px;text-align:left;">判定</th>
         <th style="padding:4px 6px;text-align:right;">AI重み</th>
@@ -7391,14 +7472,14 @@ function showBalancePanel() {
       <tbody>${rows}</tbody>
     </table>
     <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">
-      <button onclick="(()=>{ const b=document.getElementById('qs-btn'); if(b){b.textContent='実行中...';b.disabled=true;} quickSimForBalance(200,()=>{closeModal();setTimeout(showBalancePanel,50);}); })()"
-        id="qs-btn" style="padding:8px 16px;background:#1a2a1a;border:1px solid #447744;color:#88ff88;border-radius:4px;cursor:pointer;font-size:13px;">⚡ +200戦シミュ</button>
-      <button onclick="(()=>{ const b=document.getElementById('qs500-btn'); if(b){b.textContent='実行中...';b.disabled=true;} quickSimForBalance(500,()=>{closeModal();setTimeout(showBalancePanel,50);}); })()"
-        id="qs500-btn" style="padding:8px 16px;background:#1a2a1a;border:1px solid #447744;color:#aaffaa;border-radius:4px;cursor:pointer;font-size:13px;">⚡ +500戦シミュ</button>
-      <button onclick="CARD_STATS={};closeModal();showBalancePanel();" style="padding:8px 14px;background:#1a1a1a;border:1px solid #444;color:#888;border-radius:4px;cursor:pointer;font-size:12px;">↺ リセット</button>
+      <button onclick="(()=>{ const b=document.getElementById('ab-btn'); if(b){b.textContent='実行中...';b.disabled=true;} CARD_IMPACT={}; const total=${[...AI_CARD_POOL,...AI_LAND_POOL].length}; runCardImpactTests(30,(done,all)=>{b&&(b.textContent='A/Bテスト '+done+'/'+all);},()=>{closeModal();setTimeout(showBalancePanel,50);}); })()"
+        id="ab-btn" style="padding:8px 16px;background:#1a2a1a;border:1px solid #44aa44;color:#88ff88;border-radius:4px;cursor:pointer;font-size:13px;">🧪 A/Bテスト実行（正確）</button>
+      <button onclick="(()=>{ const b=document.getElementById('qs200-btn'); if(b){b.textContent='実行中...';b.disabled=true;} quickSimForBalance(200,()=>{closeModal();setTimeout(showBalancePanel,50);}); })()"
+        id="qs200-btn" style="padding:8px 14px;background:#1a2a1a;border:1px solid #447744;color:#aaffaa;border-radius:4px;cursor:pointer;font-size:12px;">⚡ +200戦（参考統計）</button>
+      <button onclick="CARD_STATS={};CARD_IMPACT={};closeModal();showBalancePanel();" style="padding:8px 14px;background:#1a1a1a;border:1px solid #444;color:#888;border-radius:4px;cursor:pointer;font-size:12px;">↺ リセット</button>
       <button onclick="closeModal();showTrainingPanel();" style="padding:8px 14px;background:#1a2a1a;border:1px solid #446644;color:#aaffaa;border-radius:4px;cursor:pointer;font-size:12px;">← 学習へ</button>
     </div>
-    <div style="margin-top:8px;font-size:10px;color:#444;">差分±4pt=やや強/弱、±8pt=ナーフ/アッパー候補（${MIN_SAMPLE}戦以上で判定）　AI重み=学習後のカード評価値</div>`;
+    <div style="margin-top:8px;font-size:10px;color:#444;">A/Bテスト: 差分±6pt=やや強/弱、±12pt=ナーフ/アッパー候補　AI重み=学習後のカード評価値</div>`;
   showModal('📊 カードバランス分析', html);
 }
 
