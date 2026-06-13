@@ -260,16 +260,49 @@ body {
 .card.attackable { box-shadow: 0 0 10px #ff8800; border-color: #ff8800; cursor: crosshair; }
 .card.blockable { box-shadow: 0 0 10px #ff4488; border-color: #ff4488; cursor: crosshair; }
 .card.targetable { box-shadow: 0 0 10px #ff44ff; border-color: #ff44ff; cursor: crosshair; }
-.card.damaged { animation: shake 0.3s; }
+.card.damaged { animation: shake 0.35s; }
 .card.dying { animation: die 0.5s forwards; }
-@keyframes shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-5px)} 75%{transform:translateX(5px)} }
+/* ダメージフラッシュ: 赤くフラッシュ */
+.card.hit-flash { animation: hitFlash 0.4s ease-out; }
+@keyframes hitFlash {
+  0%   { filter: brightness(1); }
+  20%  { filter: brightness(2.2) saturate(0.2) sepia(1) hue-rotate(-20deg); box-shadow: 0 0 20px #ff3300, 0 0 40px #ff330066; }
+  60%  { filter: brightness(1.4); }
+  100% { filter: brightness(1); }
+}
+@keyframes shake { 0%,100%{transform:translateX(0)} 20%{transform:translateX(-6px) rotate(-1deg)} 50%{transform:translateX(5px) rotate(1deg)} 80%{transform:translateX(-3px)} }
 @keyframes die { to { transform: scale(0) rotate(180deg); opacity: 0; } }
 @keyframes slideIn { from { transform: translateY(30px); opacity: 0; } to { transform: none; opacity: 1; } }
-@keyframes cardEnter { 0%{transform:scale(0.4) translateY(20px);opacity:0;} 60%{transform:scale(1.1) translateY(-4px);opacity:1;} 100%{transform:scale(1) translateY(0);opacity:1;} }
-@keyframes cardAttack { 0%{transform:translateY(0);} 40%{transform:translateY(-18px) scale(1.06);} 100%{transform:translateY(0) scale(1);} }
-@keyframes attackShimmer { 0%{box-shadow:0 0 10px #ff8800;} 50%{box-shadow:0 0 24px #ffcc00,0 0 40px #ff880066;} 100%{box-shadow:0 0 10px #ff8800;} }
-.card.entering { animation: cardEnter 0.35s ease-out forwards; }
-.card.attacking-anim { animation: cardAttack 0.35s ease-out, attackShimmer 0.35s ease-out; }
+/* 登場: 手札から場に出るときのスケールアップ */
+@keyframes cardEnter {
+  0%   { transform: scale(0.3) translateY(40px); opacity: 0; filter: brightness(2); }
+  50%  { transform: scale(1.12) translateY(-6px); opacity: 1; filter: brightness(1.5); }
+  75%  { transform: scale(0.97) translateY(2px); }
+  100% { transform: scale(1) translateY(0); opacity: 1; filter: brightness(1); }
+}
+/* 攻撃: P0（下側）は上へ突進・P1（上側）は下へ突進 */
+@keyframes cardAttackUp   { 0%{transform:translateY(0) scale(1);} 40%{transform:translateY(-22px) scale(1.08);} 100%{transform:translateY(0) scale(1);} }
+@keyframes cardAttackDown { 0%{transform:translateY(0) scale(1);} 40%{transform:translateY(22px) scale(1.08);}  100%{transform:translateY(0) scale(1);} }
+@keyframes attackShimmer  { 0%{box-shadow:0 0 10px #ff8800;} 50%{box-shadow:0 0 28px #ffcc00,0 0 50px #ff880077;} 100%{box-shadow:0 0 10px #ff8800;} }
+.card.entering { animation: cardEnter 0.45s cubic-bezier(.2,1.4,.5,1) forwards; }
+.card.attacking-up   { animation: cardAttackUp   0.4s ease-out, attackShimmer 0.4s ease-out; }
+.card.attacking-down { animation: cardAttackDown 0.4s ease-out, attackShimmer 0.4s ease-out; }
+/* ライフフラッシュ */
+.life-display.life-hit  { animation: lifeHit  0.6s ease-out; }
+.life-display.life-heal { animation: lifeHeal 0.6s ease-out; }
+@keyframes lifeHit  { 0%{filter:brightness(1)} 20%{filter:brightness(2.5) hue-rotate(-30deg); transform:scale(1.25);} 100%{filter:brightness(1); transform:scale(1);} }
+@keyframes lifeHeal { 0%{filter:brightness(1)} 20%{filter:brightness(2) hue-rotate(90deg); transform:scale(1.25); color:#44ff88;} 100%{filter:brightness(1); transform:scale(1);} }
+/* ライフ上下数値ポップ */
+.life-float {
+  position: fixed;
+  font-size: 28px;
+  font-weight: 900;
+  pointer-events: none;
+  z-index: 200;
+  animation: lifeFloat 1.4s forwards;
+  text-shadow: 0 0 12px currentColor;
+}
+@keyframes lifeFloat { 0%{opacity:1;transform:translateY(0) scale(1.2)} 30%{opacity:1;transform:translateY(-20px) scale(1)} 100%{opacity:0;transform:translateY(-60px) scale(0.8)} }
 
 .card-art {
   flex: 1;
@@ -857,27 +890,38 @@ button.danger:hover { background: #6a2a2a; }
   animation: phaseFlashAnim 2s forwards;
 }
 #phase-flash .pf-main {
-  font-size: 52px;
+  font-size: 58px;
   font-weight: 900;
   color: var(--gold);
-  text-shadow: 0 0 40px #ccaa33, 0 2px 12px #000;
+  text-shadow: 0 0 60px #ccaa33, 0 0 20px #ffee88, 0 2px 12px #000;
   display: block;
   line-height: 1.1;
+  letter-spacing: 2px;
 }
 #phase-flash .pf-sub {
-  font-size: 18px;
+  font-size: 20px;
   font-weight: 700;
-  color: #aaaaff;
+  color: #ccccff;
   display: block;
-  margin-top: 4px;
-  text-shadow: 0 0 12px #6060ff, 0 2px 6px #000;
+  margin-top: 6px;
+  text-shadow: 0 0 18px #8888ff, 0 2px 6px #000;
+}
+/* フェイズフラッシュ背景スクリーン */
+#phase-flash::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: radial-gradient(ellipse at center, rgba(80,60,0,0.18) 0%, transparent 70%);
+  pointer-events: none;
+  animation: inherit;
+  z-index: -1;
 }
 @keyframes phaseFlashAnim {
-  0%   { opacity: 0; transform: translate(-50%, -50%) scale(0.7); }
-  12%  { opacity: 1; transform: translate(-50%, -50%) scale(1.08); }
-  25%  { opacity: 1; transform: translate(-50%, -50%) scale(1.0); }
-  75%  { opacity: 1; transform: translate(-50%, -50%) scale(1.0); }
-  100% { opacity: 0; transform: translate(-50%, -50%) scale(1.0); }
+  0%   { opacity: 0; transform: translate(-50%, -50%) scale(0.6); filter: blur(6px); }
+  10%  { opacity: 1; transform: translate(-50%, -50%) scale(1.1); filter: blur(0); }
+  20%  { transform: translate(-50%, -50%) scale(1.0); }
+  70%  { opacity: 1; transform: translate(-50%, -50%) scale(1.0); }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(1.05); filter: blur(3px); }
 }
 
 /* ── ホットシートパス画面 ── */
@@ -2769,24 +2813,50 @@ function applyDamageToCreature(player, instId, amount, sourcePlayer) {
   checkCreatureDeath(player, instId, sourcePlayer);
 }
 
-// クリーチャーの上にダメージ数字をポップ表示
+// クリーチャーの上にダメージ数字をポップ表示 + ヒットフラッシュ
 function showCreatureDamage(instId, amount) {
   try {
     const cardEl = document.querySelector(`[data-inst="${instId}"]`);
     if (!cardEl) return;
     const rect = cardEl.getBoundingClientRect();
+    // 浮かび上がるダメージ数字
     const el = document.createElement('div');
     el.className = 'float-damage';
-    el.style.color = '#ff5544';
-    el.style.fontSize = '22px';
+    el.style.color = '#ff4422';
     el.textContent = `-${amount}`;
-    el.style.left = (rect.left + rect.width/2 - 10) + 'px';
-    el.style.top = (rect.top + rect.height/3) + 'px';
+    el.style.left = (rect.left + rect.width/2 - 14) + 'px';
+    el.style.top  = (rect.top + rect.height / 4) + 'px';
     document.body.appendChild(el);
-    setTimeout(() => el.remove(), 1200);
-    // カードを揺らす
-    cardEl.style.animation = 'shake 0.3s';
-    setTimeout(() => { if (cardEl.isConnected) cardEl.style.animation = ''; }, 350);
+    setTimeout(() => el.remove(), 1400);
+    // カードを赤くフラッシュ + 揺らす
+    cardEl.classList.remove('hit-flash', 'damaged');
+    void cardEl.offsetWidth;
+    cardEl.classList.add('hit-flash', 'damaged');
+    setTimeout(() => { if (cardEl.isConnected) { cardEl.classList.remove('hit-flash', 'damaged'); } }, 450);
+  } catch(e) {}
+}
+
+// ライフ増減フラッシュ + 数字ポップ
+function showLifeChange(playerIdx, delta) {
+  try {
+    const elId = playerIdx === NET_MY_IDX ? 'player-life' : 'ai-life';
+    const el = document.getElementById(elId);
+    if (!el) return;
+    const isHit = delta < 0;
+    el.classList.remove('life-hit', 'life-heal');
+    void el.offsetWidth;
+    el.classList.add(isHit ? 'life-hit' : 'life-heal');
+    setTimeout(() => el.classList.remove('life-hit', 'life-heal'), 700);
+    // 浮かび上がる数字
+    const rect = el.getBoundingClientRect();
+    const floatEl = document.createElement('div');
+    floatEl.className = 'life-float';
+    floatEl.style.color = isHit ? '#ff4422' : '#44ff88';
+    floatEl.textContent = (isHit ? '' : '+') + delta;
+    floatEl.style.left = (rect.left + rect.width/2 - 20) + 'px';
+    floatEl.style.top  = (rect.top - 10) + 'px';
+    document.body.appendChild(floatEl);
+    setTimeout(() => floatEl.remove(), 1500);
   } catch(e) {}
 }
 
@@ -3080,11 +3150,14 @@ function startSingleAttack(player, atkInstId) {
   if (!inst) return;
   const card = CARD_DB[inst.cardId];
 
-  // 攻撃アニメーション
+  // 攻撃アニメーション: viewer目線でP0(下)は上へ・P1(上)は下へ
   const atkEl = document.querySelector(`[data-inst="${atkInstId}"]`);
   if (atkEl) {
-    atkEl.classList.add('attacking-anim');
-    setTimeout(() => atkEl.classList.remove('attacking-anim'), 400);
+    const atkClass = player === NET_MY_IDX ? 'attacking-up' : 'attacking-down';
+    atkEl.classList.remove('attacking-up', 'attacking-down');
+    void atkEl.offsetWidth;
+    atkEl.classList.add(atkClass);
+    setTimeout(() => atkEl.classList.remove(atkClass), 450);
   }
 
   // Tap attacker (vigilance stays untapped)
@@ -3233,7 +3306,7 @@ function resolveSingleCombat(atkPlayer, atkInstId, kakutouTargetId, blockerInstI
         }
       }
       if (blkCard.onBlock === 'draw1') { drawCard(opp); log(`${blkCard.name}: 1ドロー`); }
-      if (blkCard.onBlock === 'gain3life') { G.players[opp].life += 3; log(`${blkCard.name}: ライフ+3`); }
+      if (blkCard.onBlock === 'gain3life') { G.players[opp].life += 3; showLifeChange(opp, +3); log(`${blkCard.name}: ライフ+3`); }
       // 介善: ブロック側のブロック時ドローが有効なら1枚引く
       if (G.blockDrawActive && G.blockDrawActive[opp]) {
         drawCard(opp);
@@ -3671,6 +3744,7 @@ function resolveCombat() {
         // serashia_souryo on block: gain 3 life
         if (blkCard.onBlock === 'gain3life') {
           ai.life += 3;
+          showLifeChange(1, +3);
           log(`AI ${blkCard.name} ブロック: ライフ3回復`, 'heal');
         }
         // CX8 souryo block: buff ally
@@ -4289,7 +4363,7 @@ function render() {
   if (_enteringInstIds.size > 0) {
     _enteringInstIds.forEach(id => {
       const el = document.querySelector(`[data-inst="${id}"]`);
-      if (el) { el.classList.add('entering'); setTimeout(() => el.classList.remove('entering'), 400); }
+      if (el) { el.classList.add('entering'); setTimeout(() => { if(el.isConnected) el.classList.remove('entering'); }, 500); }
     });
     _enteringInstIds.clear();
   }
@@ -4806,16 +4880,9 @@ document.getElementById('ai-life').addEventListener('click', () => {
 // FLOATING DAMAGE
 // ============================================================
 function showFloatDamage(amount, target) {
-  const el = document.createElement('div');
-  el.className = 'float-damage';
-  el.style.color = '#ff4444';
-  el.textContent = `-${amount}`;
-  const zone = document.getElementById(target === 'player' ? 'player-field' : 'ai-field');
-  const rect = zone.getBoundingClientRect();
-  el.style.left = (rect.left + rect.width/2) + 'px';
-  el.style.top = (rect.top + rect.height/2) + 'px';
-  document.body.appendChild(el);
-  setTimeout(() => el.remove(), 1200);
+  // ライフフラッシュ: targetは 'player'(P0) or 'ai'(P1)
+  const playerIdx = target === 'player' ? 0 : 1;
+  showLifeChange(playerIdx, -amount);
 }
 
 // ============================================================
