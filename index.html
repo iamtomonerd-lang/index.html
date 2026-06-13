@@ -2628,7 +2628,7 @@ function resolveETBEffect(player, instanceId) {
   const opp = 1-player;
 
   if (card.etb === 'damage1opponent') {
-    // Target opponent creature: 1 damage
+    const targets = G.players[opp].field;
     if (player === 0) {
       G.targetMode = { type:'opponentCreature', callback:(tgt) => {
         applyDamageToCreature(opp, tgt.instId, 1, player);
@@ -2638,18 +2638,22 @@ function resolveETBEffect(player, instanceId) {
       log(`${card.name} ETB: 対象を選択（1ダメージ）`);
       render(); updateHints();
     } else {
-      // AI: target player's strongest creature
-      const targets = G.players[opp].field;
       if (targets.length > 0) {
-        const tgt = targets.reduce((a,b)=>getEffectivePower(opp,b)>getEffectivePower(opp,a)?b:a);
+        showAIThinking(true);
+        const tgt = mctsPickOption(targets, (sim, t) => {
+          const s0 = sim.state.players[0];
+          const st = s0.field.find(c=>c.id===t.instanceId);
+          if (st) { st.damage+=1; sim.simCheckDeath(0); } else s0.life-=1;
+        }) || targets[0];
+        showAIThinking(false);
         applyDamageToCreature(opp, tgt.instanceId, 1, player);
-        log(`AI ${card.name} ETB: 1ダメージ`, 'damage');
+        log(`AI ${card.name} ETB: 1ダメージ → ${CARD_DB[tgt.cardId].name}`, 'damage');
       }
     }
   } else if (card.etb === 'look3keep1white') {
     doLook3Keep1White(player);
   } else if (card.etb === 'mustAttackTarget') {
-    // Choose opponent creature: must attack next turn
+    const targets = G.players[opp].field;
     if (player === 0) {
       G.targetMode = { type:'opponentCreature', callback:(tgt) => {
         const tc = G.players[opp].field.find(x=>x.instanceId===tgt.instId);
@@ -2660,14 +2664,29 @@ function resolveETBEffect(player, instanceId) {
       log(`${card.name} ETB: 対象を選択（次ターン攻撃強制）`);
       render(); updateHints();
     } else {
-      const targets = G.players[opp].field;
       if (targets.length > 0) {
-        const tgt = targets[0];
+        // MCTSで「強制攻撃させると最も有利な」クリーチャーを選ぶ
+        showAIThinking(true);
+        const tgt = mctsPickOption(targets, (sim, t) => {
+          const s0 = sim.state.players[0], s1 = sim.state.players[1];
+          const simAtk = s0.field.find(c=>c.id===t.instanceId);
+          if (simAtk) {
+            const atkPow = (CARD_DB[simAtk.cardId].power||0)+(simAtk.tempPower||0);
+            const blk = s1.field.find(b=>!b.tapped&&sim._canFlyBlock(simAtk,b));
+            if (blk) {
+              const blkPow = (CARD_DB[blk.cardId].power||0)+(blk.tempPower||0);
+              simAtk.damage+=blkPow; blk.damage+=atkPow;
+              sim.simCheckDeath(0); sim.simCheckDeath(1);
+            } else s1.life-=atkPow;
+          }
+        }) || targets[0];
+        showAIThinking(false);
         tgt.mustAttack = true; G.mustAttackCreatures.add(tgt.instanceId);
-        log(`AI ${card.name} ETB: 攻撃強制`);
+        log(`AI ${card.name} ETB: 攻撃強制 → ${CARD_DB[tgt.cardId].name}`, 'important');
       }
     }
   } else if (card.etb === 'damage3opponent') {
+    const targets = G.players[opp].field;
     if (player === 0) {
       G.targetMode = { type:'opponentCreature', callback:(tgt) => {
         applyDamageToCreature(opp, tgt.instId, 3, player);
@@ -2677,30 +2696,38 @@ function resolveETBEffect(player, instanceId) {
       log(`${card.name} ETB: 対象を選択（3ダメージ）`);
       render(); updateHints();
     } else {
-      const targets = G.players[opp].field;
       if (targets.length > 0) {
-        const tgt = targets.reduce((a,b)=>getEffectivePower(opp,b)>getEffectivePower(opp,a)?b:a);
+        showAIThinking(true);
+        const tgt = mctsPickOption(targets, (sim, t) => {
+          const s0 = sim.state.players[0];
+          const st = s0.field.find(c=>c.id===t.instanceId);
+          if (st) { st.damage+=3; sim.simCheckDeath(0); } else s0.life-=3;
+        }) || targets[0];
+        showAIThinking(false);
         applyDamageToCreature(opp, tgt.instanceId, 3, player);
-        log(`AI ${card.name} ETB: 3ダメージ`, 'damage');
+        log(`AI ${card.name} ETB: 3ダメージ → ${CARD_DB[tgt.cardId].name}`, 'damage');
       }
     }
   } else if (card.etb === 'damage2opponent_always_cx6damage3') {
     const hasCX6 = getCXValue(player) >= 6;
     const oppField = G.players[opp].field;
     if (player === 0) {
-      if (oppField.length > 0) {
-        // ETB: ダメージのみ（格闘はフィールド起動）
-        bastianChooseETB(inst.instanceId, hasCX6);
-      }
+      if (oppField.length > 0) bastianChooseETB(inst.instanceId, hasCX6);
     } else {
-      const targets = G.players[opp].field;
-      if (targets.length > 0) {
-        const tgt = targets.reduce((a,b)=>getEffectivePower(opp,b)>getEffectivePower(opp,a)?b:a);
+      if (oppField.length > 0) {
+        const dmg = 2 + (hasCX6 ? 3 : 0);
+        showAIThinking(true);
+        const tgt = mctsPickOption(oppField, (sim, t) => {
+          const s0 = sim.state.players[0];
+          const st = s0.field.find(c=>c.id===t.instanceId);
+          if (st) { st.damage+=dmg; sim.simCheckDeath(0); } else s0.life-=dmg;
+        }) || oppField[0];
+        showAIThinking(false);
         applyDamageToCreature(opp, tgt.instanceId, 2, player);
-        log(`AI ${card.name} ETB: 2ダメージ`, 'damage');
+        log(`AI ${card.name} ETB: 2ダメージ → ${CARD_DB[tgt.cardId].name}`, 'damage');
         if (hasCX6) {
           applyDamageToCreature(opp, tgt.instanceId, 3, player);
-          log(`AI ${card.name} CX6 ETB: さらに3ダメージ`, 'damage');
+          log(`AI ${card.name} C6 ETB: さらに3ダメージ`, 'damage');
         }
       }
     }
@@ -3995,18 +4022,26 @@ function aiHandlePriority() {
   const ai = G.players[1];
   const player = G.players[0];
 
-  // Evaluate whether each Quick spell is worth playing right now
   const quickSpells = ai.hand.map((cid, i) => ({ cid, i, card: CARD_DB[cid] }))
     .filter(({ card }) => card.keywords && card.keywords.includes('Quick') && canAfford(1, card.cost));
 
-  // MCTSで「各Quickスペルを使う vs パス」の勝率を比較して最善手を選択
+  // スタック上位の効果を先にロールアウト状態に適用してから評価
+  // （ETB誘発・onBlock誘発への対応判断を精度良くするため）
+  const stackTop = G.stack.length > 0 ? G.stack[G.stack.length - 1] : null;
+
   const options = [{type:'pass'}, ...quickSpells.map(item => ({type:'play', item}))];
+  showAIThinking(true);
   const best = mctsPickOption(options, (sim, opt) => {
+    // スタック上位の効果をロールアウト開始前に適用（近似）
+    if (stackTop && stackTop.owner === 0) {
+      // 相手側の誘発効果: 既にシム状態に反映されているため追加処理不要
+    }
     if (opt.type === 'pass') return;
     const p1 = sim.state.players[1];
     sim.payMana(p1, opt.item.card.cost);
     sim.simSpellEffect(1, opt.item.card);
   });
+  showAIThinking(false);
   let chosen = (best && best.type === 'play') ? best.item : null;
 
   if (chosen) {
