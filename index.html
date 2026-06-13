@@ -1577,6 +1577,7 @@ button.danger:hover { background: #6a2a2a; }
       <span class="info-count">山札 <span id="ai-deck-count">40</span></span>
       <span class="info-count">土地 <span id="ai-land-deck-count">10</span></span>
       <button onclick="showGraveyard(1)" style="font-size:9px;padding:2px 6px;background:#2a0a0a;border-color:#663333;">墓地: <span id="ai-grave-count">0</span>枚</button>
+      <span id="ai-thinking" style="display:none;font-size:9px;color:#aaf;animation:pulse 1s infinite;">⚙ 考え中...</span>
     </div>
 
     <!-- AI 手札 -->
@@ -3716,7 +3717,9 @@ function aiDeclareBlockers() {
   if (attackerInsts.length === 0) return;
 
   // MCTSで最善のブロック割り当てを決定
+  showAIThinking(true);
   const assignment = mctsPickBlockers(attackerInsts); // {atkInstId: blkInstId}
+  showAIThinking(false);
   const usedBlockers = new Set();
   for (const [atkId, blkId] of Object.entries(assignment)) {
     if (usedBlockers.has(blkId)) continue;
@@ -4038,8 +4041,41 @@ function aiTurn() {
     if (!land.tapped) tapLandForMana(1, land.instanceId);
   });
 
+  // チャージ決定: MCTSで評価
+  if (!G.chargeUsedThisTurn) {
+    const validLands = ai.lands.filter(l => !l.chargeCard);
+    if (validLands.length > 0 && ai.hand.length > 0) {
+      const chargeOptions = [{type:'noCharge'}];
+      ai.hand.forEach((cid, hi) => {
+        validLands.slice(0,2).forEach(land => {
+          chargeOptions.push({type:'charge', handIdx:hi, cardId:cid, landInstId:land.instanceId});
+        });
+      });
+      showAIThinking(true);
+      const bestCharge = mctsPickOption(chargeOptions, (sim, opt) => {
+        if (opt.type === 'noCharge') return;
+        const p1 = sim.state.players[1];
+        const simLand = p1.lands.find(l => l.instanceId === opt.landInstId);
+        if (!simLand) return;
+        const hi = p1.hand.indexOf(opt.cardId);
+        if (hi === -1) return;
+        p1.hand.splice(hi, 1);
+        simLand.chargeCard = opt.cardId;
+        const lc = CARD_DB[simLand.cardId];
+        if (lc.chargeDrawTrigger && p1.deck.length) p1.hand.push(p1.deck.shift());
+      });
+      showAIThinking(false);
+      if (bestCharge && bestCharge.type === 'charge') {
+        const hi = ai.hand.indexOf(bestCharge.cardId);
+        if (hi !== -1) aiDoCharge(hi, bestCharge.landInstId);
+      }
+    }
+  }
+
   // 改善8: 局面に応じた時間でMCTS実行
+  showAIThinking(true);
   const mctsPlays = mctsSearch(mctsTimeBudget());
+  showAIThinking(false);
   let aiPlayedCard = false;
 
   // MCTSが推奨するカードを順に試みる
@@ -4115,6 +4151,22 @@ function aiTurn() {
   } else {
     setTimeout(() => { aiAttack(); }, 600);
   }
+}
+
+function aiDoCharge(handIdx, landInstId) {
+  const ai = G.players[1];
+  const land = ai.lands.find(l => l.instanceId === landInstId);
+  if (!land || land.chargeCard) return;
+  if (handIdx < 0 || handIdx >= ai.hand.length) return;
+  const cardId = ai.hand[handIdx];
+  ai.hand.splice(handIdx, 1);
+  land.chargeCard = cardId;
+  land.tapped = false;
+  G.chargeUsedThisTurn = true;
+  const landCard = CARD_DB[land.cardId];
+  if (landCard.chargeDrawTrigger) { drawCard(1); log('忘れ去られし平地: カードを1枚引く'); }
+  log(`AI チャージ: ${CARD_DB[cardId].name} を ${landCard.name} に置いた`);
+  showAIBalloon(`⚡ チャージ: ${CARD_DB[cardId].name}`);
 }
 
 function totalCost(cost) {
@@ -4304,7 +4356,9 @@ function aiAttack() {
     const mustAtk = candidates.filter(c => c.mustAttack);
     const optional = candidates.filter(c => !c.mustAttack);
     // MCTSで最善の攻撃者セットを決定（mustAttackは強制含む）
+    showAIThinking(true);
     const mctsSet = mctsPickAttackers(optional);
+    showAIThinking(false);
     attackerInsts = [...mustAtk, ...optional.filter(c => mctsSet.has(c.instanceId))];
   }
 
@@ -5366,6 +5420,11 @@ function updateManaDisplay() {
 // 9. AI BALLOON
 // ============================================================
 let _aiBalloonTimer = null;
+function showAIThinking(active) {
+  const el = document.getElementById('ai-thinking');
+  if (el) el.style.display = active ? 'inline' : 'none';
+}
+
 function showAIBalloon(text) {
   const el = document.getElementById('ai-balloon');
   if (!el) return;
@@ -5758,19 +5817,20 @@ class SimGame {
   simChargeLands(ap) {
     const p = this.state.players[ap];
     const uncharged = p.lands.filter(l=>!l.chargeCard);
-    if (!uncharged.length) return;
-    // Use an extra land card in hand as charge material
-    const idx = p.hand.findIndex(cid=>CARD_DB[cid].type==='land');
-    if (idx===-1) return;
-    // Only charge if it would be beneficial (we have enough lands already or have charged abilities)
-    const chargeCard = p.hand[idx];
+    if (!uncharged.length || !p.hand.length) return;
+    const cxVal = p.lands.length + p.lands.filter(l=>l.chargeCard).length;
     const tgt = uncharged[0];
     const tgtCard = CARD_DB[tgt.cardId];
-    if (tgtCard.chargedAbility || tgtCard.chargeDrawTrigger) {
-      p.hand.splice(idx,1);
-      tgt.chargeCard = chargeCard;
-      if (tgtCard.chargeDrawTrigger && p.deck.length) p.hand.push(p.deck.shift());
-    }
+    // Charge if: land has special ability, draw trigger, or pushing toward OC
+    if (!tgtCard.chargedAbility && !tgtCard.chargeDrawTrigger && cxVal >= 10) return;
+    // Prefer land cards as charge material, then low-cost cards
+    let idx = p.hand.findIndex(cid=>CARD_DB[cid].type==='land');
+    if (idx===-1) idx = p.hand.findIndex(cid=>{ const c=CARD_DB[cid]; return c.type!=='land'&&totalCost(c.cost||{})<=2; });
+    if (idx===-1) return;
+    const chargeCard = p.hand[idx];
+    p.hand.splice(idx,1);
+    tgt.chargeCard = chargeCard;
+    if (tgtCard.chargeDrawTrigger && p.deck.length) p.hand.push(p.deck.shift());
   }
 
   simUseLandAbilities(ap) {
@@ -5929,7 +5989,12 @@ class SimGame {
     else if (card.etb==='damage2opponent_always_cx6damage3') dealDmg(2);
     else if (card.etb==='damage3opponent') dealDmg(3);
     else if (card.etb==='look3keep1white' && me.deck.length) me.hand.push(me.deck.shift());
-    else if (card.etb==='mustAttackTarget') { /* simplified no-op */ }
+    else if (card.etb==='mustAttackTarget') {
+      if (opp.field.length) {
+        const weakest=opp.field.reduce((a,b)=>(CARD_DB[a.cardId].power||0)<=(CARD_DB[b.cardId].power||0)?a:b);
+        weakest.mustAttack=true;
+      }
+    }
   }
 
   simCheckDeath(p) {
@@ -5978,7 +6043,7 @@ class SimGame {
       } else {
         attackValue=w.life*atkPow*0.8;
       }
-      if (!lethal && attackValue+w.attackBias<=0) continue; // #2: skip bad attacks (リーサル時は強行)
+      if (!lethal && !atk.mustAttack && attackValue+w.attackBias<=0) continue; // #2: skip bad attacks (リーサル時は強行)
       if (!atkCard.vigilance) atk.tapped=true;
       // kakutou: pick best target (#8)
       if (atkCard.kakutou&&atk.entryTurn===s.turn) {
@@ -6046,7 +6111,7 @@ class SimGame {
     return (cd.toughness||0)+(inst.tempToughness||0)-inst.damage;
   }
 
-  simIsOC(p) { return (p.graveyard||[]).length >= 10; }
+  simIsOC(p) { const ls=p.lands||[]; return ls.length + ls.filter(l=>l.chargeCard).length >= 10; }
 
   canAfford(p,cost) {
     if (!cost) return false;
