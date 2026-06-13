@@ -1935,9 +1935,49 @@ function buildMainDeck() {
   cards.forEach(c => { for(let i=0;i<4;i++) deck.push(c); });
   return shuffle(deck); // exactly 40
 }
+// 自分のデッキデータを取得 (dcg_decks_v2 優先、なければ dcg_deck、それもなければデフォルト)
+function getMyDeckData() {
+  try {
+    const v2 = localStorage.getItem('dcg_decks_v2');
+    if (v2) {
+      const data = JSON.parse(v2);
+      if (data && Array.isArray(data.slots) && typeof data.active === 'number') {
+        const slot = data.slots[data.active];
+        if (slot && Array.isArray(slot.main) && slot.main.length === 40 &&
+            Array.isArray(slot.land) && slot.land.length === 10) {
+          return { main: slot.main.slice(), land: slot.land.slice() };
+        }
+      }
+    }
+  } catch(e) {}
+  try {
+    const saved = localStorage.getItem('dcg_deck');
+    if (saved) {
+      const data = JSON.parse(saved);
+      if (data && Array.isArray(data.main) && data.main.length === 40 &&
+          Array.isArray(data.land) && data.land.length === 10) {
+        return { main: data.main.slice(), land: data.land.slice() };
+      }
+    }
+  } catch(e) {}
+  // Default fallback
+  const defaultLands = ['hito_heichi','wasure_heichi','shigen_heichi','kemono_heichi','serashia_miyako'];
+  const land = defaultLands.flatMap(l=>[l,l]);
+  const mainCards = Object.keys(typeof CARD_DB !== 'undefined' ? CARD_DB : {}).filter(id => {
+    const c = CARD_DB[id]; return c && c.type !== 'land';
+  }).slice(0, 10);
+  const main = [];
+  for (let i = 0; i < 4 && main.length < 40; i++) mainCards.forEach(id => { if (main.length < 40) main.push(id); });
+  return { main, land };
+}
+
 // AI用デッキ: ローカル対戦では学習で進化したデッキ(AI_DECK_COUNTS)を使う
 // オンライン対戦時は相手プレイヤーの状態なので通常のbuildMainDeckにフォールバック
 function buildAIMainDeck() {
+  if (typeof NET_MODE !== 'undefined' && NET_MODE === 'host' && NET_GUEST_DECK &&
+      Array.isArray(NET_GUEST_DECK.main) && NET_GUEST_DECK.main.length === 40) {
+    return shuffle(NET_GUEST_DECK.main.slice());
+  }
   if (typeof NET_MODE !== 'undefined' && NET_MODE === 'local' &&
       typeof AI_DECK_COUNTS !== 'undefined' && AI_DECK_COUNTS) {
     const arr = [];
@@ -1949,6 +1989,10 @@ function buildAIMainDeck() {
 // AI用土地デッキ: ローカル対戦では学習で進化した土地構成(AI_LAND_COUNTS)を使う
 // プレイヤーがデッキ構築した土地をAIが共用しないようデフォルト構成にフォールバック
 function buildAILandDeck() {
+  if (typeof NET_MODE !== 'undefined' && NET_MODE === 'host' && NET_GUEST_DECK &&
+      Array.isArray(NET_GUEST_DECK.land) && NET_GUEST_DECK.land.length === 10) {
+    return shuffle(NET_GUEST_DECK.land.slice());
+  }
   if (typeof NET_MODE !== 'undefined' && NET_MODE === 'local') {
     if (typeof AI_LAND_COUNTS !== 'undefined' && AI_LAND_COUNTS) {
       const arr = [];
@@ -3863,16 +3907,36 @@ function closePriorityAndResolve() {
 function aiHandlePriority() {
   if (!G.awaitingPriority || G.priorityFor !== 1) return;
   const ai = G.players[1];
-  // Find a Quick spell AI can play
-  const response = ai.hand.map((cid, i) => ({ cid, i, card: CARD_DB[cid] }))
-    .find(({ card }) => card.keywords && card.keywords.includes('Quick') && canAfford(1, card.cost));
-  if (response) {
-    const { cid, i, card } = response;
+  const player = G.players[0];
+
+  // Evaluate whether each Quick spell is worth playing right now
+  const quickSpells = ai.hand.map((cid, i) => ({ cid, i, card: CARD_DB[cid] }))
+    .filter(({ card }) => card.keywords && card.keywords.includes('Quick') && canAfford(1, card.cost));
+
+  let chosen = null;
+  for (const item of quickSpells) {
+    const { card } = item;
+    let worthPlaying = false;
+    if (card.effect === 'junigeki') {
+      // Worth it if opponent has a creature we can damage meaningfully
+      worthPlaying = player.field.some(c => {
+        const tou = getEffectiveToughness(0, c);
+        return (tou - c.damage) <= 2; // would kill it
+      }) || (ai.life < player.life && player.field.length > 0);
+    } else if (card.effect === 'kaizen') {
+      worthPlaying = player.field.length > 0;
+    } else {
+      worthPlaying = true; // unknown Quick spell: play it
+    }
+    if (worthPlaying) { chosen = item; break; }
+  }
+
+  if (chosen) {
+    const { cid, i, card } = chosen;
     log(`AI: ${card.name} を対応で使用 (Quick)`, 'important');
     showAIBalloon(`⚡ ${card.icon} ${card.name} 対応！`);
     payMana(1, card.cost);
     ai.hand.splice(i, 1);
-    // スタックゾーンに置く（解決時に墓地へ）
     G.stack.push({ name: card.name, icon: card.icon || '✨', owner: 1, resolve: () => {
       ai.graveyard.push(cid);
       aiPlaySpellEffect(card);
@@ -4055,11 +4119,14 @@ function aiPlaySpellEffect(card) {
   if (card.effect === 'junigeki') {
     const targets = player.field;
     if (targets.length > 0) {
-      const tgt = targets.reduce((a,b)=>getEffectivePower(0,b)>getEffectivePower(0,a)?b:a);
+      // Prefer creatures that would die (lethal first), then strongest
+      const lethalTgt = targets.find(c => (getEffectiveToughness(0,c) - c.damage) <= 2);
+      const tgt = lethalTgt || targets.reduce((a,b) => getEffectivePower(0,b) > getEffectivePower(0,a) ? b : a);
       applyDamageToCreature(0, tgt.instanceId, 2, 1);
       log(`AI: ${card.name} でプレイヤークリーチャーに2ダメージ`, 'damage');
+      // Buff own weakest (most in danger) creature +0/+1
       if (ai.field.length > 0) {
-        const ally = ai.field[0];
+        const ally = ai.field.reduce((a,b) => getEffectiveToughness(1,b) < getEffectiveToughness(1,a) ? b : a);
         ally.tempToughness = (ally.tempToughness||0)+1;
         G.tempBuffs.push({instanceId:ally.instanceId,power:0,toughness:1});
       }
@@ -5436,19 +5503,43 @@ function evalBoardScore(player) {
 }
 
 function aiPickBestCard(handItems) {
-  // #1: evaluate each card using eval diff
+  const ai = G.players[1];
+  const player = G.players[0];
+  const myLife = ai.life, oppLife = player.life;
+  const myField = ai.field.length, oppField = player.field.length;
+
   let best = null, bestScore = -Infinity;
   for (const item of handItems) {
-    const card = item.card;
-    const basePow = card.power||0, baseTou = card.toughness||0;
-    const cost = totalCost(card.cost||{});
-    const value = evalBoardScore(1)
-      + AI_WEIGHTS.fieldPower * basePow
-      + AI_WEIGHTS.fieldToughness * baseTou
-      + AI_WEIGHTS.fieldCount
-      + cost * 0.1
-      + (AI_WEIGHTS['card_' + card.id] || 0);
-    if (value > bestScore) { bestScore = value; best = item; }
+    const { card } = item;
+    const cost = totalCost(card.cost || {});
+    let score = AI_WEIGHTS['card_' + card.id] || 0;
+
+    if (card.type === 'creature') {
+      const pow = card.power || 0, tou = card.toughness || 0;
+      score += AI_WEIGHTS.fieldPower * pow + AI_WEIGHTS.fieldToughness * tou + AI_WEIGHTS.fieldCount;
+      // Prefer creatures when we have fewer on field
+      if (myField < oppField) score += 1.5;
+      // Prefer big creatures when losing on life
+      if (myLife < oppLife) score += pow * 0.5;
+      // Don't play creatures if field is already dominant
+      if (myField >= 4 && myField > oppField) score -= 1.0;
+    } else if (card.type === 'spell') {
+      // Evaluate spell based on board state
+      if (card.effect === 'junigeki') {
+        // Good when opponent has creatures to damage
+        score += oppField > 0 ? 2.5 : 0.5;
+        // Better when we have a creature to buff
+        score += myField > 0 ? 0.5 : 0;
+      } else if (card.effect === 'kaizen') {
+        // Very strong when opponent has creatures
+        score += oppField > 0 ? 4.0 : 1.5;
+        // Better when losing (disrupts opponent's big creature)
+        score += myLife < oppLife ? 1.5 : 0;
+      }
+      score += cost * 0.05; // slight preference for expensive (powerful) spells
+    }
+
+    if (score > bestScore) { bestScore = score; best = item; }
   }
   return best;
 }
@@ -6495,6 +6586,7 @@ let NET_PEER    = null;        // PeerJS Peer instance
 let NET_CONN    = null;        // DataConnection
 let NET_MY_IDX  = 0;          // which G.players[] index is "me" (guest=1)
 let NET_ROOM_ID = null;        // 6-char room code (host's peer id)
+let NET_GUEST_DECK = null;     // guest's deck data sent on connect {main:[...], land:[...]}
 
 // ── ロビー表示／非表示 ──────────────────────────────────────
 function netShowLobby() {
@@ -6561,7 +6653,11 @@ function netHost() {
     netSetStatus('接続しました！ ゲームを開始します...');
     conn.on('open', () => {
       netHideLobby();
-      initGame();
+      // Wait for deckShare from guest (with 1500ms timeout fallback)
+      const deckWaitTimer = setTimeout(() => {
+        if (!NET_GUEST_DECK) initGame();
+      }, 1500);
+      conn._deckWaitTimer = deckWaitTimer;
     });
     conn.on('data', netOnHostReceive);
     conn.on('close', netOnDisconnect);
@@ -6585,6 +6681,8 @@ function netJoin() {
       NET_MY_IDX = 1;
       netSetStatus('接続しました！');
       netHideLobby();
+      // Send our deck to host so they can use it for player[1]
+      conn.send({type:'deckShare', deck: getMyDeckData()});
     });
     conn.on('data', netOnGuestReceive);
     conn.on('close', netOnDisconnect);
@@ -6624,7 +6722,15 @@ function netOnDisconnect() {
 // ── ホスト: ゲストからのメッセージ受信 ──────────────────────
 function netOnHostReceive(msg) {
   if (!msg || !msg.type) return;
-  if (msg.type === 'action') {
+  if (msg.type === 'deckShare') {
+    NET_GUEST_DECK = msg.deck;
+    // Cancel the timeout and start game now that we have guest's deck
+    if (NET_CONN && NET_CONN._deckWaitTimer) {
+      clearTimeout(NET_CONN._deckWaitTimer);
+      NET_CONN._deckWaitTimer = null;
+    }
+    if (!G || G.phase === undefined) initGame();
+  } else if (msg.type === 'action') {
     netExecuteGuestAction(msg);
   } else if (msg.type === 'ping') {
     // nothing
