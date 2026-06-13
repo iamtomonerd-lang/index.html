@@ -6037,7 +6037,11 @@ class SimGame {
     // Draw
     if (s.turn > 1 && p.deck.length) p.hand.push(p.deck.shift());
     // Place land
-    if (p.landDeck.length) p.lands.push({ id:this.nid++, cardId:p.landDeck.shift(), tapped:false, chargeCard:null });
+    if (p.landDeck.length) {
+      const landId = p.landDeck.shift();
+      p.lands.push({ id:this.nid++, cardId:landId, tapped:false, chargeCard:null });
+      this.playedCards[ap].add(landId);
+    }
     // Generate mana (tap all lands)
     p.mana={W:0,C:0};
     p.lands.forEach(l=>{ if(!l.tapped){ const lc=CARD_DB[l.cardId]; p.mana[lc.produces]=(p.mana[lc.produces]||0)+1; l.tapped=true; } });
@@ -7305,8 +7309,13 @@ async function quickSimForBalance(nGames, onDone) {
 // シミュレーション対戦で集めた「カードをプレイしたゲームの勝率」から
 // ナーフ/アッパー候補を提示する（実際の調整はユーザーが判断）
 function showBalancePanel() {
-  const entries = Object.entries(CARD_STATS).filter(([cid]) => CARD_DB[cid]);
-  if (!entries.length) {
+  // 全カード（メインデッキ＋土地）を対象に、統計があればそれを使い、なければ0で表示
+  const allPoolIds = [...AI_CARD_POOL, ...AI_LAND_POOL];
+  const entries = allPoolIds
+    .filter(cid => CARD_DB[cid])
+    .map(cid => [cid, CARD_STATS[cid] || {played:0, wins:0}]);
+  const hasData = entries.some(([,v]) => v.played > 0);
+  if (!hasData) {
     const noDataHtml = `
       <p style="color:#888;margin-bottom:16px;">データがありません。AI学習を実行するとシミュレーション対戦から統計が集まります。</p>
       <button id="quick-sim-btn" onclick="quickSimForBalance(200, () => { closeModal(); setTimeout(showBalancePanel, 50); })"
