@@ -3712,25 +3712,22 @@ function aiDeclareBlockers() {
   const ai = G.players[1];
   const player = G.players[0];
   player.blockers = {};
-  // Eligible blockers: untapped AI creatures (or bastian OC: can block while tapped)
-  const eligibleBlockers = ai.field.filter(c => {
-    const card = CARD_DB[c.cardId];
-    if (card.ocBlockWhileTapped && isOCActive(1)) return true;
-    return !c.tapped;
-  });
-  let usedBlockers = new Set();
-  player.attackers.forEach(atkId => {
+  const attackerInsts = player.attackers.map(id => player.field.find(c=>c.instanceId===id)).filter(Boolean);
+  if (attackerInsts.length === 0) return;
+
+  // MCTSで最善のブロック割り当てを決定
+  const assignment = mctsPickBlockers(attackerInsts); // {atkInstId: blkInstId}
+  const usedBlockers = new Set();
+  for (const [atkId, blkId] of Object.entries(assignment)) {
+    if (usedBlockers.has(blkId)) continue;
     const attacker = player.field.find(c=>c.instanceId===atkId);
-    if (!attacker) return;
-    const blocker = eligibleBlockers.find(b => !usedBlockers.has(b.instanceId) && canFlyBlock(attacker, b));
-    if (blocker) {
-      usedBlockers.add(blocker.instanceId);
-      player.blockers[atkId] = [blocker.instanceId];
-      const atkCard = CARD_DB[attacker.cardId];
-      const blkCard = CARD_DB[blocker.cardId];
-      log(`AIブロック: ${blkCard.name} が ${atkCard.name} をブロック`);
-    }
-  });
+    const blocker = ai.field.find(c=>c.instanceId===blkId);
+    if (!attacker || !blocker) continue;
+    if (!canFlyBlock(attacker, blocker)) continue;
+    player.blockers[atkId] = [blkId];
+    usedBlockers.add(blkId);
+    log(`AIブロック(MCTS): ${CARD_DB[blocker.cardId].name} が ${CARD_DB[attacker.cardId].name} をブロック`);
+  }
 }
 
 function resolveCombat() {
@@ -4049,8 +4046,8 @@ function aiTurn() {
     if (!land.tapped) tapLandForMana(1, land.instanceId);
   });
 
-  // MCTSで最善カードプレイ順序を決定
-  const mctsPlays = mctsSearch(MCTS_TIME_BUDGET_MS);
+  // 改善8: 局面に応じた時間でMCTS実行
+  const mctsPlays = mctsSearch(mctsTimeBudget());
   let aiPlayedCard = false;
 
   // MCTSが推奨するカードを順に試みる
@@ -4278,9 +4275,17 @@ function aiAttack() {
   const blockedPow = sorted.slice(0, untappedBlockers).reduce((s,c)=>s+getEffectivePower(1,c),0);
   const isLethal = (totalPow - blockedPow) >= player.life;
 
-  // リーサルなら全員攻撃、そうでなければ損得判断で選抜
-  const attackerInsts = isLethal ? candidates
-    : candidates.filter(c => c.mustAttack || aiShouldAttack(c));
+  // リーサルなら全員攻撃、そうでなければMCTSで攻撃者を選択
+  let attackerInsts;
+  if (isLethal) {
+    attackerInsts = candidates;
+  } else {
+    const mustAtk = candidates.filter(c => c.mustAttack);
+    const optional = candidates.filter(c => !c.mustAttack);
+    // MCTSで最善の攻撃者セットを決定（mustAttackは強制含む）
+    const mctsSet = mctsPickAttackers(optional);
+    attackerInsts = [...mustAtk, ...optional.filter(c => mctsSet.has(c.instanceId))];
+  }
 
   if (attackerInsts.length === 0) { setTimeout(() => endTurnAfterMainPhase(), 300); return; }
 
@@ -6036,8 +6041,22 @@ class SimGame {
 
 // ── MCTS (Monte Carlo Tree Search) ──────────────────────────────────
 const MCTS_EXPLORATION = 1.414; // UCB1 exploration constant
-const MCTS_ROLLOUT_DEPTH = 20;  // max turns per rollout
-const MCTS_TIME_BUDGET_MS = 450; // time budget per AI decision
+const MCTS_ROLLOUT_DEPTH = 22;  // max turns per rollout
+// 改善8: 局面に応じた時間予算（通常/終盤/クリティカル）
+const MCTS_TIME_NORMAL    = 380; // ms - 通常
+const MCTS_TIME_LATE      = 600; // ms - 終盤（どちらかのライフ<=10）
+const MCTS_TIME_CRITICAL  = 800; // ms - 超終盤（ライフ<=5 or OC条件付近）
+const MCTS_TIME_BUDGET_MS = MCTS_TIME_NORMAL; // backward compat
+
+function mctsTimeBudget() {
+  if (!G) return MCTS_TIME_NORMAL;
+  const p0 = G.players[0], p1 = G.players[1];
+  const minLife = Math.min(p0.life, p1.life);
+  const graveTotal = p0.graveyard.length + p1.graveyard.length;
+  if (minLife <= 5 || graveTotal >= 18) return MCTS_TIME_CRITICAL;
+  if (minLife <= 10 || G.turn >= 8) return MCTS_TIME_LATE;
+  return MCTS_TIME_NORMAL;
+}
 
 class MCTSNode {
   constructor(state, parent, action, simNid) {
@@ -6153,11 +6172,13 @@ function mctsApplyAction(simState, action, nid) {
 }
 
 // Rollout: play game to completion from simState, return 1 if P1 wins, 0 otherwise
+// 改善7: P0もheuristic（SimGame.simPlayCards＋simAttack）でプレイ → ランダムより精度高
 function mctsRollout(simState, nid) {
   const sim = new SimGame();
   sim.state = JSON.parse(JSON.stringify(simState));
   sim.nid = nid;
   sim.maxTurns = MCTS_ROLLOUT_DEPTH;
+  // both players use SimGame's heuristic (not random)
   let guard = 0;
   while (guard++ < MCTS_ROLLOUT_DEPTH * 2) {
     const ap = sim.state.activePlayer;
@@ -6166,13 +6187,18 @@ function mctsRollout(simState, nid) {
   const [p0, p1] = sim.state.players;
   if (p1.life <= 0) return 0;
   if (p0.life <= 0) return 1;
-  return sim.simEval(1) > 0 ? 1 : 0;
+  // ライフ差・盤面差の両方を考慮したソフト評価（0〜1）
+  const eval1 = sim.simEval(1);
+  if (eval1 > 500) return 1;
+  if (eval1 < -500) return 0;
+  // 中間的な局面はスコアをシグモイドで0〜1に変換
+  return 1 / (1 + Math.exp(-eval1 * 0.02));
 }
 
 // MCTS search: find best sequence of card plays for AI (player 1)
 // Returns array of cardIds to play in order
 function mctsSearch(timeMs) {
-  const deadline = Date.now() + (timeMs || MCTS_TIME_BUDGET_MS);
+  const deadline = Date.now() + (timeMs || mctsTimeBudget());
   const rootState = mctsStateFromG();
   const root = new MCTSNode(rootState, null, null, 1);
   root.untriedActions = mctsEnumerateActions(rootState, 1);
@@ -6228,6 +6254,182 @@ function mctsSearch(timeMs) {
   }
   return plays;
 }
+
+// ── 改善5: 攻撃者選択MCTS ──────────────────────────────────────────
+// AI(P1)の攻撃フェーズで「どのクリーチャーで攻撃するか」をMCTSで決定
+// candidates: real G field instances of player 1
+// Returns Set of instanceIds to attack with
+function mctsPickAttackers(candidates) {
+  if (candidates.length === 0) return new Set();
+  if (candidates.length === 1) return new Set([candidates[0].instanceId]);
+
+  const budget = Math.min(mctsTimeBudget(), 350); // 攻撃選択は少し短め
+  const deadline = Date.now() + budget;
+  const baseState = mctsStateFromG();
+
+  // 攻撃者の組み合わせを列挙（最大15通り）
+  const atkCombos = [];
+  const n = candidates.length;
+  // 全組み合わせ（2^n通り、ただし最大6体なので最大64）
+  const limit = Math.min(1 << n, 32);
+  for (let mask = 1; mask < limit; mask++) {
+    const combo = [];
+    for (let i = 0; i < n; i++) {
+      if (mask & (1 << i)) combo.push(candidates[i].instanceId);
+    }
+    atkCombos.push(combo);
+  }
+
+  // 各組み合わせのシミュレーション結果を集計
+  const wins = new Array(atkCombos.length).fill(0);
+  const trials = new Array(atkCombos.length).fill(0);
+  let ci = 0;
+
+  while (Date.now() < deadline) {
+    const idx = ci % atkCombos.length;
+    ci++;
+    const atkIds = atkCombos[idx];
+    const sim = new SimGame();
+    sim.state = JSON.parse(JSON.stringify(baseState));
+    // 選択した攻撃者をシム内でシミュレート
+    const s = sim.state, p1 = s.players[1], p0 = s.players[0];
+    // 各攻撃者でブロッカーを選ばせて戦闘解決
+    for (const instId of atkIds) {
+      const atk = p1.field.find(c => c.id === instId);
+      if (!atk) continue;
+      const atkCard = CARD_DB[atk.cardId];
+      if (!atkCard.vigilance) atk.tapped = true;
+      // ブロッカー選択（SimGame流）
+      const eligible = p0.field.filter(b => !b.tapped && sim._canFlyBlock(atk, b));
+      const blocker = sim.simPickBlocker(0, atk, eligible,
+        (atkCard.power||0)+(atk.tempPower||0));
+      if (blocker) {
+        const atkPow = (atkCard.power||0)+(atk.tempPower||0);
+        const blkPow = (CARD_DB[blocker.cardId].power||0)+(blocker.tempPower||0);
+        blocker.damage += atkPow; atk.damage += blkPow; blocker.tapped = true;
+        sim.simCheckDeath(0); sim.simCheckDeath(1);
+      } else {
+        p0.life -= (atkCard.power||0)+(atk.tempPower||0);
+      }
+    }
+    // 残りのターンをheuristicでシミュレート
+    let g = 0;
+    while (g++ < MCTS_ROLLOUT_DEPTH * 2 && p0.life > 0 && p1.life > 0) {
+      if (sim.simTurn(sim.state.activePlayer)) break;
+    }
+    const result = p1.life > 0 && p0.life <= 0 ? 1
+      : p0.life > 0 && p1.life <= 0 ? 0
+      : 1 / (1 + Math.exp(-sim.simEval(1) * 0.02));
+    wins[idx] += result;
+    trials[idx]++;
+  }
+
+  // 最も勝率の高い組み合わせを返す
+  let bestIdx = 0, bestRate = -1;
+  for (let i = 0; i < atkCombos.length; i++) {
+    if (trials[i] === 0) continue;
+    const rate = wins[i] / trials[i];
+    if (rate > bestRate) { bestRate = rate; bestIdx = i; }
+  }
+  return new Set(atkCombos[bestIdx]);
+}
+
+// ── 改善6: ブロック割り当てMCTS ────────────────────────────────────
+// AI(P1)が守るとき「どのブロッカーをどの攻撃者に当てるか」をMCTSで決定
+// attackerInsts: P0の攻撃クリーチャー配列（real G）
+// Returns {atkInstId: blkInstId} mapping
+function mctsPickBlockers(attackerInsts) {
+  const ai = G.players[1];
+  const eligible = ai.field.filter(c => {
+    const cd = CARD_DB[c.cardId];
+    return (cd.ocBlockWhileTapped && isOCActive(1)) || !c.tapped;
+  });
+  if (eligible.length === 0 || attackerInsts.length === 0) return {};
+
+  const budget = Math.min(mctsTimeBudget(), 300);
+  const deadline = Date.now() + budget;
+  const baseState = mctsStateFromG();
+
+  // 割り当て候補を列挙（各攻撃者に「誰をあてるか or なし」）
+  // 単純化: 攻撃者を強い順に並べ、ブロッカーを順次割り当てる全順列
+  const sortedAtk = [...attackerInsts].sort(
+    (a,b) => getEffectivePower(0,b) - getEffectivePower(0,a));
+  const sortedBlk = [...eligible].filter(b =>
+    attackerInsts.some(a => canFlyBlock(a, b)));
+
+  // 割り当てパターン生成（最大8パターン）
+  const assignments = [{}]; // まず「全部ブロックしない」
+  // 1対1の最有力割り当てパターンをいくつか追加
+  for (let ai2 = 0; ai2 < Math.min(sortedAtk.length, 3); ai2++) {
+    for (let bi = 0; bi < Math.min(sortedBlk.length, 3); bi++) {
+      if (!canFlyBlock(sortedAtk[ai2], sortedBlk[bi])) continue;
+      const a = {}; a[sortedAtk[ai2].instanceId] = sortedBlk[bi].instanceId;
+      assignments.push(a);
+    }
+  }
+  // 貪欲な全ブロック割り当て（強い攻撃者→最善ブロッカー）
+  const greedyA = {};
+  const usedBlk = new Set();
+  for (const atk of sortedAtk) {
+    const b = sortedBlk.find(bl => !usedBlk.has(bl.instanceId) && canFlyBlock(atk, bl));
+    if (b) { greedyA[atk.instanceId] = b.instanceId; usedBlk.add(b.instanceId); }
+  }
+  if (Object.keys(greedyA).length > 0) assignments.push(greedyA);
+
+  const wins = new Array(assignments.length).fill(0);
+  const trials = new Array(assignments.length).fill(0);
+  let ci = 0;
+
+  while (Date.now() < deadline) {
+    const idx = ci % assignments.length;
+    ci++;
+    const assign = assignments[idx];
+    const sim = new SimGame();
+    sim.state = JSON.parse(JSON.stringify(baseState));
+    const s = sim.state, p0 = s.players[0], p1 = s.players[1];
+    // 割り当て通りに戦闘解決
+    for (const atk of sortedAtk) {
+      const atkInst = p0.field.find(c => c.id === atk.instanceId);
+      if (!atkInst) continue;
+      const atkPow = getEffectivePower(0, atk);
+      const blkInstId = assign[atk.instanceId];
+      const blkInst = blkInstId ? p1.field.find(c => c.id === blkInstId) : null;
+      if (blkInst) {
+        const blkPow = getEffectivePower(1, ai.field.find(c=>c.instanceId===blkInstId)||atk);
+        blkInst.damage += atkPow;
+        atkInst.damage += blkPow;
+        sim.simCheckDeath(0); sim.simCheckDeath(1);
+      } else {
+        p1.life -= atkPow;
+      }
+    }
+    // 残りのターンをheuristicでシミュレート
+    let g = 0;
+    while (g++ < MCTS_ROLLOUT_DEPTH * 2 && p0.life > 0 && p1.life > 0) {
+      if (sim.simTurn(sim.state.activePlayer)) break;
+    }
+    const result = p1.life > 0 && p0.life <= 0 ? 1
+      : p0.life > 0 && p1.life <= 0 ? 0
+      : 1 / (1 + Math.exp(-sim.simEval(1) * 0.02));
+    wins[idx] += result;
+    trials[idx]++;
+  }
+
+  let bestIdx = 0, bestRate = -1;
+  for (let i = 0; i < assignments.length; i++) {
+    if (trials[i] === 0) continue;
+    const rate = wins[i] / trials[i];
+    if (rate > bestRate) { bestRate = rate; bestIdx = i; }
+  }
+  return assignments[bestIdx];
+}
+
+// SimGame内部メソッド _canFlyBlock（外部から呼べるように追加）
+SimGame.prototype._canFlyBlock = function(atk, blk) {
+  const ac = CARD_DB[atk.cardId], bc = CARD_DB[blk.cardId];
+  if (ac.flying && !bc.flying) return false;
+  return true;
+};
 
 function getEffectivePowerSim(inst) {
   return (CARD_DB[inst.cardId].power||0)+(inst.tempPower||0);
