@@ -5942,7 +5942,7 @@ class SimGame {
     this.nid = 1;
     this.maxTurns = 50;
     this.tdScores = [[], []]; // #10: intermediate eval scores per player
-    this.playedCards = [new Set(), new Set()]; // バランス統計用: 各プレイヤーがプレイしたカード
+    this.playedCards = [new Map(), new Map()]; // {cardId → {count, turns[]}} バランス統計用
     this.state = this.initState();
   }
 
@@ -5995,13 +5995,30 @@ class SimGame {
     if (p0.life<=0 && p1.life>0) winner = 1;
     else if (p1.life<=0 && p0.life>0) winner = 0;
     else winner = p0.life>=p1.life?0:1;
-    // バランス統計: プレイされたカードの勝敗を記録
-    for (let p=0; p<2; p++) {
-      this.playedCards[p].forEach(cid => {
-        const st = CARD_STATS[cid] || (CARD_STATS[cid] = {played:0, wins:0});
-        st.played++;
-        if (p === winner) st.wins++;
-      });
+    // バランス統計: 全5改善対応の詳細記録
+    for (let p = 0; p < 2; p++) {
+      for (const [cid, info] of this.playedCards[p]) {
+        const st = CARD_STATS[cid] || (CARD_STATS[cid] = {
+          played:0, wins:0,             // 旧来（互換）
+          p0_solo:0, p0_solo_wins:0,    // 改善1+2: P0が単独プレイ
+          p1_solo:0, p1_solo_wins:0,    // 改善1+2: P1が単独プレイ
+          wt_played:0, wt_wins:0,       // 改善3: プレイ枚数加重
+          turn_sum:0, turn_count:0      // 改善5: ターン別補正用
+        });
+        const oppPlayed = this.playedCards[1-p].has(cid);
+        const won = (p === winner);
+        // 旧来
+        st.played++; if (won) st.wins++;
+        // 改善1+2: 排他プレイ（相手がプレイしていない場合のみ）
+        if (!oppPlayed) {
+          if (p === 0) { st.p0_solo++; if (won) st.p0_solo_wins++; }
+          else         { st.p1_solo++; if (won) st.p1_solo_wins++; }
+        }
+        // 改善3: プレイ回数加重
+        st.wt_played += info.count; if (won) st.wt_wins += info.count;
+        // 改善5: ターン記録
+        info.turns.forEach(t => { st.turn_sum += t; st.turn_count++; });
+      }
     }
     return { winner, tdScores:this.tdScores };
   }
@@ -6040,7 +6057,8 @@ class SimGame {
     if (p.landDeck.length) {
       const landId = p.landDeck.shift();
       p.lands.push({ id:this.nid++, cardId:landId, tapped:false, chargeCard:null });
-      this.playedCards[ap].add(landId);
+      if (!this.playedCards[ap].has(landId)) this.playedCards[ap].set(landId, {count:0, turns:[]});
+      const _lpc = this.playedCards[ap].get(landId); _lpc.count++; _lpc.turns.push(s.turn);
     }
     // Generate mana (tap all lands)
     p.mana={W:0,C:0};
@@ -6174,7 +6192,8 @@ class SimGame {
         }
       });
       if (!bestOption) break;
-      this.playedCards[ap].add(bestOption.cid);
+      if (!this.playedCards[ap].has(bestOption.cid)) this.playedCards[ap].set(bestOption.cid, {count:0, turns:[]});
+      const _pc = this.playedCards[ap].get(bestOption.cid); _pc.count++; _pc.turns.push(s.turn);
       if (bestOption.type==='creature') {
         this.payMana(p,bestOption.card.cost);
         p.hand.splice(bestOption.i,1);
@@ -7391,70 +7410,80 @@ function showBalancePanel() {
       const costTot = Object.values(card.cost||{}).reduce((a,b)=>a+b,0);
       const aiW = AI_WEIGHTS['card_'+cid] || 0;
 
-      if (hasImpact && ab && ab.games >= MIN_SAMPLE_AB) {
-        // A/Bテスト主指標: 「カードあり側の勝率」50%=均衡, 60%=強い
-        const wr = ab.wins / ab.games;
-        const delta = (wr - 0.5) * 100; // -50〜+50pt
-        let verdict, vcolor;
-        if (delta >= 12)       { verdict = '⚠️ ナーフ候補';   vcolor = '#ff6644'; }
-        else if (delta >= 6)   { verdict = '↑ やや強い';      vcolor = '#ffaa44'; }
-        else if (delta <= -12) { verdict = '💪 アッパー候補'; vcolor = '#4488ff'; }
-        else if (delta <= -6)  { verdict = '↓ やや弱い';      vcolor = '#88aaff'; }
-        else                   { verdict = '✓ 適正';           vcolor = '#66cc88'; }
-        // バーは50%中心で表示（width=wr*100, 50%が中立）
-        const barPct = Math.round(wr * 100);
-        const barColor = delta >= 12 ? '#ff6644' : delta >= 6 ? '#ffaa44' : delta <= -12 ? '#4488ff' : delta <= -6 ? '#88aaff' : '#44aa66';
-        return { cid, card, costTot, aiW, wr, delta, verdict, vcolor, barPct, barColor, barOpacity:1.0, games:ab.games, mode:'ab' };
-      } else if (!hasImpact) {
-        // フォールバック: 旧来の「プレイした試合の勝率」を表示（参考値）
-        const totalPlayed2 = entries.reduce((s,[,vv]) => s+vv.played, 0);
-        const totalWins2   = entries.reduce((s,[,vv]) => s+vv.wins, 0);
-        const avgWr2 = totalWins2 / Math.max(1, totalPlayed2);
-        const wr = v.wins / Math.max(1, v.played);
-        const diff = (wr - avgWr2) * 100;
-        let verdict, vcolor;
-        if (v.played < MIN_SAMPLE_LEGACY) { verdict = `▪ ${v.played}戦`; vcolor = '#555'; }
-        else if (diff >= 8)  { verdict = '⚠️ ナーフ候補?';  vcolor = '#ff6644'; }
-        else if (diff >= 4)  { verdict = '↑ やや強い?';     vcolor = '#ffaa44'; }
-        else if (diff <= -8) { verdict = '💪 アッパー候補?'; vcolor = '#4488ff'; }
-        else if (diff <= -4) { verdict = '↓ やや弱い?';     vcolor = '#88aaff'; }
-        else                 { verdict = '✓ 適正?';          vcolor = '#66cc88'; }
-        const barPct = Math.round(wr * 100);
-        const barColor = v.played < MIN_SAMPLE_LEGACY ? '#444' : diff >= 8 ? '#ff6644' : diff >= 4 ? '#ffaa44' : diff <= -8 ? '#4488ff' : diff <= -4 ? '#88aaff' : '#44aa66';
-        const barOpacity = v.played < MIN_SAMPLE_LEGACY ? 0.35 : 0.7; // 旧指標は少し暗め
-        return { cid, card, costTot, aiW, wr, delta:diff, verdict, vcolor, barPct, barColor, barOpacity, games:v.played, mode:'legacy' };
+      // 改善1+2: 対称排他勝率（P0単独とP1単独の平均）→ 50%が期待値
+      const soloGames = (v.p0_solo||0) + (v.p1_solo||0);
+      const soloWins  = (v.p0_solo_wins||0) + (v.p1_solo_wins||0);
+      // P0とP1別々に勝率を出して平均（先手バイアス除去）
+      const p0wr = (v.p0_solo||0) > 0 ? (v.p0_solo_wins||0) / v.p0_solo : null;
+      const p1wr = (v.p1_solo||0) > 0 ? (v.p1_solo_wins||0) / v.p1_solo : null;
+      const symWr = (p0wr !== null && p1wr !== null) ? (p0wr + p1wr) / 2
+                  : (p0wr !== null ? p0wr : p1wr !== null ? p1wr : null);
+      // 改善3: 加重勝率（プレイ回数による重み）
+      const wtWr = (v.wt_played||0) > 0 ? (v.wt_wins||0) / v.wt_played : null;
+      // 改善5: 平均プレイターン
+      const avgTurn = (v.turn_count||0) > 0 ? v.turn_sum / v.turn_count : null;
+      const MIN_SOLO = 30;
+      const hasSolo = soloGames >= MIN_SOLO;
+
+      let wr, delta, games, modeLabel;
+      if (hasSolo && symWr !== null) {
+        // 主指標: 対称排他勝率（改善1+2）
+        wr = symWr; delta = (wr - 0.5) * 100; games = soloGames;
+        modeLabel = `${soloGames}排他`;
       } else {
-        // A/Bテスト実行中 or このカードのデータ未収集
-        return { cid, card, costTot, aiW, wr:0.5, delta:0, verdict:'▪ 未テスト', vcolor:'#555', barPct:50, barColor:'#444', barOpacity:0.3, games:0, mode:'pending' };
+        // データ不足: グレー表示
+        wr = 0.5; delta = 0; games = soloGames;
+        modeLabel = `▪${soloGames}`;
       }
+
+      let verdict, vcolor;
+      if (!hasSolo)          { verdict = `▪ ${soloGames}/${MIN_SOLO}戦`; vcolor = '#555'; }
+      else if (delta >= 10)  { verdict = '⚠️ ナーフ候補';   vcolor = '#ff6644'; }
+      else if (delta >= 5)   { verdict = '↑ やや強い';      vcolor = '#ffaa44'; }
+      else if (delta <= -10) { verdict = '💪 アッパー候補'; vcolor = '#4488ff'; }
+      else if (delta <= -5)  { verdict = '↓ やや弱い';      vcolor = '#88aaff'; }
+      else                   { verdict = '✓ 適正';           vcolor = '#66cc88'; }
+
+      const barPct = Math.min(100, Math.round(wr * 100));
+      const barColor = !hasSolo ? '#444' : delta >= 10 ? '#ff6644' : delta >= 5 ? '#ffaa44' : delta <= -10 ? '#4488ff' : delta <= -5 ? '#88aaff' : '#44aa66';
+      const barOpacity = hasSolo ? 1.0 : 0.35;
+
+      // 改善3: 加重勝率の補足表示
+      const wtStr = (wtWr !== null && (v.wt_played||0) >= 20)
+        ? `<span style="color:#777;font-size:10px;">(加重${Math.round(wtWr*100)}%)</span>` : '';
+      // 改善5: 平均ターンの補足表示（早いほど中立、遅いほど盤面依存）
+      const turnStr = avgTurn !== null
+        ? `<span style="color:#666;font-size:10px;">T${avgTurn.toFixed(1)}</span>` : '';
+
+      return { cid, card, costTot, aiW, wr, delta, verdict, vcolor, barPct, barColor, barOpacity, games, wtStr, turnStr };
     })
     .sort((a,b) => b.delta - a.delta)
     .map(r => `<tr style="border-bottom:1px solid #1a1a2a;">
       <td style="padding:5px 6px;font-size:12px;white-space:nowrap;">${r.card.icon} ${r.card.name}</td>
       <td style="padding:5px 6px;font-size:11px;text-align:center;color:#888;">${r.costTot||'土地'}</td>
       <td style="padding:5px 6px;">
-        <div style="display:flex;align-items:center;gap:6px;">
+        <div style="display:flex;align-items:center;gap:4px;">
           <div style="position:relative;flex:1;height:8px;background:#111;border-radius:4px;overflow:hidden;min-width:60px;opacity:${r.barOpacity};">
-            <div style="position:absolute;left:50%;top:0;width:1px;height:100%;background:#333;"></div>
+            <div style="position:absolute;left:50%;top:0;width:1px;height:100%;background:#444;"></div>
             <div style="width:${r.barPct}%;height:100%;background:${r.barColor};border-radius:4px;transition:width 0.3s;"></div>
           </div>
-          <span style="font-size:12px;font-weight:700;min-width:38px;text-align:right;opacity:${r.barOpacity};">${r.barPct}%</span>
+          <span style="font-size:12px;font-weight:700;min-width:34px;text-align:right;opacity:${r.barOpacity};">${r.barPct}%</span>
+          ${r.wtStr}
         </div>
       </td>
       <td style="padding:5px 6px;font-size:11px;text-align:right;color:${r.delta>=0?'#ffaa77':'#88aaff'};">${r.delta>=0?'+':''}${r.delta.toFixed(1)}</td>
       <td style="padding:5px 6px;font-size:11px;color:${r.vcolor};white-space:nowrap;">${r.verdict}</td>
+      <td style="padding:5px 6px;font-size:11px;color:#666;">${r.turnStr}</td>
       <td style="padding:5px 6px;font-size:11px;text-align:right;color:${r.aiW>=0?'#66cc66':'#cc6666'};">${r.aiW>=0?'+':''}${r.aiW.toFixed(2)}</td>
     </tr>`).join('');
 
-  const nerfs  = entries.filter(([cid]) => { const ab=CARD_IMPACT[cid]; return ab&&ab.games>=MIN_SAMPLE_AB&&(ab.wins/ab.games-0.5)*100>=12; });
-  const uppers = entries.filter(([cid]) => { const ab=CARD_IMPACT[cid]; return ab&&ab.games>=MIN_SAMPLE_AB&&(ab.wins/ab.games-0.5)*100<=-12; });
+  const nerfs  = entries.filter(([,v]) => { const sg=(v.p0_solo||0)+(v.p1_solo||0); if(sg<30)return false; const sw=(v.p0_solo_wins||0)+(v.p1_solo_wins||0); return (sw/sg-0.5)*100>=10; });
+  const uppers = entries.filter(([,v]) => { const sg=(v.p0_solo||0)+(v.p1_solo||0); if(sg<30)return false; const sw=(v.p0_solo_wins||0)+(v.p1_solo_wins||0); return (sw/sg-0.5)*100<=-10; });
   const summaryChips = [
     nerfs.length  ? `<span style="background:#2a1a14;border:1px solid #ff6644;color:#ff9977;padding:3px 8px;border-radius:4px;font-size:11px;">⚠️ ナーフ候補 ${nerfs.length}枚</span>` : '',
     uppers.length ? `<span style="background:#14182a;border:1px solid #4488ff;color:#88aaff;padding:3px 8px;border-radius:4px;font-size:11px;">💪 アッパー候補 ${uppers.length}枚</span>` : '',
   ].filter(Boolean).join(' ');
-  const modeNote = hasImpact
-    ? `<span style="font-size:11px;color:#557755;padding:2px 6px;background:#0a1a0a;border-radius:3px;">A/Bテスト結果 (50%=均衡)</span>`
-    : `<span style="font-size:11px;color:#775544;padding:2px 6px;background:#1a0a0a;border-radius:3px;">参考値（高コストカードは過大評価）→ A/Bテスト推奨</span>`;
+  const modeNote = `<span style="font-size:11px;color:#557755;padding:2px 6px;background:#0a1a0a;border-radius:3px;">対称排他勝率 (50%=均衡 | バー中線=50%)</span>`;
 
   const html = `
     <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:10px;">
@@ -7464,9 +7493,10 @@ function showBalancePanel() {
       <thead><tr style="border-bottom:1px solid #333;color:#555;font-size:10px;">
         <th style="padding:4px 6px;text-align:left;">カード</th>
         <th style="padding:4px 6px;text-align:center;">コスト</th>
-        <th style="padding:4px 6px;text-align:left;">強さバー (50%中立)</th>
+        <th style="padding:4px 6px;text-align:left;">排他勝率バー (50%中立)</th>
         <th style="padding:4px 6px;text-align:right;">差分</th>
         <th style="padding:4px 6px;text-align:left;">判定</th>
+        <th style="padding:4px 6px;text-align:left;">平均T</th>
         <th style="padding:4px 6px;text-align:right;">AI重み</th>
       </tr></thead>
       <tbody>${rows}</tbody>
