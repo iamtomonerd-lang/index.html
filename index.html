@@ -2048,7 +2048,8 @@ function initGame() {
   const firstPlayer = Math.random() < 0.5 ? 0 : 1; // 先手後手ランダム
   G = {
     turn: 1,
-    activePlayer: firstPlayer, // 0=player, 1=ai（ランダム決定）
+    activePlayer: firstPlayer,
+    firstPlayer: firstPlayer, // 先手プレイヤーを記録（先行1ターン目のみドローなし判定用）
     phase: 'untap', // untap, draw, main, combat, end
     combatStep: null, // declare_attackers, declare_blockers, damage
     priority: 0,
@@ -3560,8 +3561,10 @@ function endTurn() {
 
   G.phase = 'draw';
   placeLands(ap, 2);
-  if (!G.firstTurn) drawCard(ap);
-  G.firstTurn = false;
+  // 先行（firstPlayer）の最初のターンのみドローなし。後手の1ターン目は引ける。
+  const isFirstPlayerFirstTurn = (ap === G.firstPlayer && G.turn === 1);
+  if (!isFirstPlayerFirstTurn) drawCard(ap);
+  G.firstTurn = false; // 旧フラグも互換のため更新
 
   G.phase = 'main';
   render();
@@ -5985,7 +5988,7 @@ class SimGame {
       return { life:20, deck, landDeck:this.mkLandDeck(idx), hand,
                field:[], lands:[], mana:{W:0,C:0}, graveyard:[], mulliganUsed:false };
     };
-    return { players:[mk(0),mk(1)], turn:0, activePlayer:0 };
+    return { players:[mk(0),mk(1)], turn:0, activePlayer:0, firstPlayer:0 };
   }
 
   run() {
@@ -6060,8 +6063,9 @@ class SimGame {
     // Untap
     p.field.forEach(c=>{ c.tapped=false; c.tempPower=0; c.tempToughness=0; });
     p.lands.forEach(l=>l.tapped=false);
-    // Draw
-    if (s.turn > 1 && p.deck.length) p.hand.push(p.deck.shift());
+    // Draw: 先行(activePlayer=0想定、turn=1)のみスキップ。後手turn=1はドローあり。
+    const _skipDraw = (s.turn === 1 && ap === s.firstPlayer);
+    if (!_skipDraw && p.deck.length) p.hand.push(p.deck.shift());
     // Place land
     if (p.landDeck.length) {
       const landId = p.landDeck.shift();
@@ -6509,7 +6513,7 @@ function mctsStateFromG() {
       mulliganUsed: true,
     };
   });
-  return { players, turn: G.turn, activePlayer: G.activePlayer };
+  return { players, turn: G.turn, activePlayer: G.activePlayer, firstPlayer: G.firstPlayer ?? G.activePlayer };
 }
 
 // Determinization: replace opponent (p0) hand with random sample from their deck
