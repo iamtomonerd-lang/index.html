@@ -4619,7 +4619,8 @@ function aiAttack() {
   if (attackerInsts.length === 0) { setTimeout(() => endTurnAfterMainPhase(), 300); return; }
 
   showAIBalloon(isLethal ? '💀 総攻撃！' : '⚔️ 攻撃宣言！');
-  G._aiAttackQueue = attackerInsts.map(c => c.instanceId);
+  const orderedAttackers = isLethal ? attackerInsts : mctsOrderAttackers(attackerInsts);
+  G._aiAttackQueue = orderedAttackers.map(c => c.instanceId);
   setTimeout(() => continueAIAttack(), 400);
 }
 
@@ -6075,6 +6076,10 @@ class SimGame {
     if (s.turn<=6) score += w.earlyFieldBonus*me.field.length;
     const unplayable = me.hand.filter(cid=>{const c=CARD_DB[cid];return c.cost&&!this.canAfford(me,c.cost);}).length;
     score -= w.manaEff*unplayable;
+    // 手札プレイ可能枚数の優位: 実際に出せるカードが多いほど有利
+    const myPlayable = me.hand.filter(cid=>{const c=CARD_DB[cid];return c.cost&&this.canAfford(me,c.cost);}).length;
+    const oppPlayable = opp.hand.filter(cid=>{const c=CARD_DB[cid];return c.cost&&this.canAfford(opp,c.cost);}).length;
+    score += (w.handAdv * 0.5) * (myPlayable - oppPlayable);
     // CX/OC評価: チャージ状況と閾値達成を得点に反映
     const myCX = me.lands.length + me.lands.filter(l=>l.chargeCard).length;
     const oppCX = opp.lands.length + opp.lands.filter(l=>l.chargeCard).length;
@@ -6475,6 +6480,24 @@ function mctsStateFromG() {
   return { players, turn: G.turn, activePlayer: G.activePlayer };
 }
 
+// Determinization: replace opponent (p0) hand with random sample from their deck
+// This models hidden-information MCTS (single-observer determinization)
+function deterministicState(baseState) {
+  const s = JSON.parse(JSON.stringify(baseState));
+  const p0 = s.players[0];
+  const handSize = p0.hand.length;
+  if (handSize === 0 || p0.deck.length === 0) return s;
+  // shuffle deck copy and take handSize cards as the "sampled" hand
+  const deck = [...p0.deck];
+  for (let i = deck.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [deck[i], deck[j]] = [deck[j], deck[i]];
+  }
+  p0.hand = deck.slice(0, Math.min(handSize, deck.length));
+  p0.deck = deck.slice(p0.hand.length);
+  return s;
+}
+
 // Enumerate possible actions from an AI-turn SimGame state (player=1, main phase)
 function mctsEnumerateActions(simState, nid) {
   const sim = new SimGame();
@@ -6649,7 +6672,7 @@ function mctsPickAttackers(candidates) {
     ci++;
     const atkIds = atkCombos[idx];
     const sim = new SimGame();
-    sim.state = JSON.parse(JSON.stringify(baseState));
+    sim.state = deterministicState(baseState);
     // 選択した攻撃者をシム内でシミュレート
     const s = sim.state, p1 = s.players[1], p0 = s.players[0];
     // 各攻撃者でブロッカーを選ばせて戦闘解決
@@ -6744,7 +6767,7 @@ function mctsPickBlockers(attackerInsts) {
     ci++;
     const assign = assignments[idx];
     const sim = new SimGame();
-    sim.state = JSON.parse(JSON.stringify(baseState));
+    sim.state = deterministicState(baseState);
     const s = sim.state, p0 = s.players[0], p1 = s.players[1];
     // 割り当て通りに戦闘解決
     for (const atk of sortedAtk) {
@@ -6783,6 +6806,66 @@ function mctsPickBlockers(attackerInsts) {
   return assignments[bestIdx];
 }
 
+// 攻撃順序最適化: insts（実Gフィールドのクリーチャー配列）の最善攻撃順を返す
+// パワー昇順・降順・元の順・ランダム数パターンを評価し最高勝率順を返す
+function mctsOrderAttackers(insts) {
+  if (insts.length <= 1) return insts;
+  const baseState = mctsStateFromG();
+  const budget = Math.min(mctsTimeBudget(), 150);
+  const deadline = Date.now() + budget;
+
+  // 候補順序: 元の順・パワー昇順・パワー降順・タフネス昇順
+  const byPowAsc = [...insts].sort((a,b) => getEffectivePower(1,a) - getEffectivePower(1,b));
+  const byPowDesc = [...insts].sort((a,b) => getEffectivePower(1,b) - getEffectivePower(1,a));
+  const byTouAsc = [...insts].sort((a,b) => (CARD_DB[a.cardId].toughness||0) - (CARD_DB[b.cardId].toughness||0));
+  const orders = [insts, byPowAsc, byPowDesc, byTouAsc];
+  const wins = new Array(orders.length).fill(0);
+  const trials = new Array(orders.length).fill(0);
+  let ci = 0;
+
+  while (Date.now() < deadline) {
+    const idx = ci % orders.length;
+    ci++;
+    const order = orders[idx];
+    const sim = new SimGame();
+    sim.state = deterministicState(baseState);
+    const s = sim.state, p1 = s.players[1], p0 = s.players[0];
+    for (const inst of order) {
+      const atk = p1.field.find(c => c.id === inst.instanceId);
+      if (!atk) continue;
+      const atkCard = CARD_DB[atk.cardId];
+      if (!atkCard.vigilance) atk.tapped = true;
+      const eligible = p0.field.filter(b => !b.tapped && sim._canFlyBlock(atk, b));
+      const blocker = sim.simPickBlocker(0, atk, eligible, (atkCard.power||0)+(atk.tempPower||0));
+      if (blocker) {
+        const atkPow = (atkCard.power||0)+(atk.tempPower||0);
+        const blkPow = (CARD_DB[blocker.cardId].power||0)+(blocker.tempPower||0);
+        blocker.damage += atkPow;
+        atk.damage += blkPow;
+        sim.simCheckDeath(0); sim.simCheckDeath(1);
+      } else {
+        p0.life -= (atkCard.power||0)+(atk.tempPower||0);
+      }
+    }
+    let g = 0;
+    while (g++ < MCTS_ROLLOUT_DEPTH * 2 && p0.life > 0 && p1.life > 0) {
+      if (sim.simTurn(sim.state.activePlayer)) break;
+    }
+    const [rp0, rp1] = sim.state.players;
+    const result = rp1.life <= 0 ? 0 : rp0.life <= 0 ? 1 : 1/(1+Math.exp(-sim.simEval(1)*0.02));
+    wins[idx] += result;
+    trials[idx]++;
+  }
+
+  let bestIdx = 0, bestRate = -1;
+  for (let i = 0; i < orders.length; i++) {
+    if (trials[i] === 0) continue;
+    const rate = wins[i] / trials[i];
+    if (rate > bestRate) { bestRate = rate; bestIdx = i; }
+  }
+  return orders[bestIdx];
+}
+
 // SimGame内部メソッド _canFlyBlock（外部から呼べるように追加）
 SimGame.prototype._canFlyBlock = function(atk, blk) {
   const ac = CARD_DB[atk.cardId], bc = CARD_DB[blk.cardId];
@@ -6806,7 +6889,7 @@ function mctsPickOption(options, applyToSim) {
     const idx = ci % options.length;
     ci++;
     const sim = new SimGame();
-    sim.state = JSON.parse(JSON.stringify(baseState));
+    sim.state = deterministicState(baseState);
     applyToSim(sim, options[idx]);
     sim.simCheckDeath(0); sim.simCheckDeath(1);
     let g = 0;
