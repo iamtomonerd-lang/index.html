@@ -5265,10 +5265,10 @@ function handleLandClick(player, instId) {
     return;
   }
   if (G.targetMode) return;
-  // 相手のターン中は自分の土地のみ操作可能（チャージ能力起動のため）
-  if (player !== lp && !land) return; // landはまだ定義されてないので先に player === lp 制限を緩和
+  // 自分の土地のみ操作可能（起動効果はQuickなので相手ターン中も可）
+  if (player !== lp) return;
 
-  const p = G.players[player]; // 常に player の土地を操作
+  const p = G.players[player];
   const land = p.lands.find(l=>l.instanceId===instId);
   if (!land) return;
 
@@ -5290,7 +5290,7 @@ function handleLandClick(player, instId) {
   }
 
   // Tap for mana (Quick: any time)
-  tapLandForMana(lp, instId);
+  tapLandForMana(player, instId);
 }
 
 // Direct damage target on life display
