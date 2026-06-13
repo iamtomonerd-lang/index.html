@@ -4049,53 +4049,74 @@ function aiTurn() {
     if (!land.tapped) tapLandForMana(1, land.instanceId);
   });
 
-  // Play creatures/spells
-  let played = true;
-  let attempts = 0;
+  // MCTSで最善カードプレイ順序を決定
+  const mctsPlays = mctsSearch(MCTS_TIME_BUDGET_MS);
   let aiPlayedCard = false;
-  while (played && attempts < 20) {
-    played = false; attempts++;
+
+  // MCTSが推奨するカードを順に試みる
+  for (const cardIdToPlay of mctsPlays) {
+    const idx = ai.hand.indexOf(cardIdToPlay);
+    if (idx === -1) continue;
+    const cid = ai.hand[idx];
+    const card = CARD_DB[cid];
+    if (!canAfford(1, card.cost)) continue;
+    if (card.type === 'creature' && ai.field.length < 5) {
+      payMana(1, card.cost);
+      ai.hand.splice(idx, 1);
+      const inst = newInstance(cid);
+      inst.sick = true; inst.entryTurn = G.turn;
+      log(`AI: ${card.name} をスタックに積んだ`);
+      showAIBalloon(`${card.icon} ${card.name} 召喚！`);
+      G.stack.push({ name: card.name, icon: card.icon||'⚔️', owner: 1, resolve: () => {
+        if (ai.field.length >= 5) { ai.graveyard.push(cid); return; }
+        _enteringInstIds.add(inst.instanceId);
+        ai.field.push(inst);
+        log(`AI: ${card.name} が場に出た`, 'important');
+        fireETB(1, inst.instanceId);
+        render();
+      }});
+      renderStack(); render();
+      aiPlayedCard = true;
+    } else if (card.type === 'spell') {
+      payMana(1, card.cost);
+      ai.hand.splice(idx, 1);
+      showAIBalloon(`${card.icon} ${card.name} 使用！`);
+      log(`AI: ${card.name} をスタックに積んだ`);
+      G.stack.push({ name: card.name, icon: card.icon||'✨', owner: 1, resolve: () => {
+        ai.graveyard.push(cid);
+        aiPlaySpellEffect(card);
+      }});
+      renderStack(); render();
+      aiPlayedCard = true;
+    }
+  }
+
+  // MCTSが見つからなかった場合のフォールバック（従来のgreedyを使用）
+  if (!aiPlayedCard) {
     const playable = ai.hand.map((cid, i) => ({cid, i, card: CARD_DB[cid]}))
       .filter(({card}) => card.type !== 'land' && canAfford(1, card.cost));
-
-    // 評価スコアで最善カードを選択（学習済み重みを使用）
-    const best = playable.length > 0 ? aiPickBestCard(playable) : null;
     if (playable.length > 0) {
-      const {cid, i, card} = best;
+      const {cid, i, card} = aiPickBestCard(playable);
       if (card.type === 'creature' && ai.field.length < 5) {
-        payMana(1, card.cost);
-        ai.hand.splice(i, 1);
-        const inst = newInstance(cid);
-        inst.sick = true;
-        inst.entryTurn = G.turn;
+        payMana(1, card.cost); ai.hand.splice(i, 1);
+        const inst = newInstance(cid); inst.sick = true; inst.entryTurn = G.turn;
         log(`AI: ${card.name} をスタックに積んだ`);
         showAIBalloon(`${card.icon} ${card.name} 召喚！`);
         G.stack.push({ name: card.name, icon: card.icon||'⚔️', owner: 1, resolve: () => {
           if (ai.field.length >= 5) { ai.graveyard.push(cid); return; }
-          _enteringInstIds.add(inst.instanceId);
-          ai.field.push(inst);
+          _enteringInstIds.add(inst.instanceId); ai.field.push(inst);
           log(`AI: ${card.name} が場に出た`, 'important');
-          fireETB(1, inst.instanceId);
-          render();
+          fireETB(1, inst.instanceId); render();
         }});
-        renderStack();
-        played = true;
-        aiPlayedCard = true;
-        render();
+        renderStack(); render(); aiPlayedCard = true;
       } else if (card.type === 'spell') {
-        payMana(1, card.cost);
-        ai.hand.splice(i, 1);
-        // スタックゾーンに置く（解決時に墓地へ）
+        payMana(1, card.cost); ai.hand.splice(i, 1);
         showAIBalloon(`${card.icon} ${card.name} 使用！`);
         log(`AI: ${card.name} をスタックに積んだ`);
         G.stack.push({ name: card.name, icon: card.icon||'✨', owner: 1, resolve: () => {
-          ai.graveyard.push(cid); // 解決時に墓地へ
-          aiPlaySpellEffect(card);
+          ai.graveyard.push(cid); aiPlaySpellEffect(card);
         }});
-        renderStack();
-        played = true;
-        aiPlayedCard = true;
-        render();
+        renderStack(); render(); aiPlayedCard = true;
       }
     }
   }
@@ -6011,6 +6032,201 @@ class SimGame {
 
   snapshot() { return JSON.parse(JSON.stringify(this.state)); }
   restore(snap) { this.state=JSON.parse(JSON.stringify(snap)); }
+}
+
+// ── MCTS (Monte Carlo Tree Search) ──────────────────────────────────
+const MCTS_EXPLORATION = 1.414; // UCB1 exploration constant
+const MCTS_ROLLOUT_DEPTH = 20;  // max turns per rollout
+const MCTS_TIME_BUDGET_MS = 450; // time budget per AI decision
+
+class MCTSNode {
+  constructor(state, parent, action, simNid) {
+    this.state = state;       // SimGame state snapshot
+    this.parent = parent;
+    this.action = action;     // {type:'play'|'attack'|'pass', ...} action that led here
+    this.children = [];
+    this.visits = 0;
+    this.wins = 0.0;
+    this.untriedActions = null; // null = not yet expanded
+    this._nid = simNid || 1;
+  }
+
+  ucb1() {
+    if (this.visits === 0) return Infinity;
+    return this.wins / this.visits
+      + MCTS_EXPLORATION * Math.sqrt(Math.log(this.parent.visits) / this.visits);
+  }
+
+  bestChild() {
+    return this.children.reduce((best, c) => c.ucb1() > best.ucb1() ? c : best);
+  }
+
+  mostVisitedChild() {
+    return this.children.reduce((best, c) => c.visits > best.visits ? c : best);
+  }
+}
+
+// Convert current G.players to SimGame-compatible state
+function mctsStateFromG() {
+  const players = G.players.map((p, i) => {
+    const field = p.field.map(c => ({
+      id: c.instanceId,
+      cardId: c.cardId,
+      tapped: c.tapped || false,
+      damage: c.damage || 0,
+      sick: c.sick || false,
+      tempPower: c.tempPower || 0,
+      tempToughness: c.tempToughness || 0,
+      entryTurn: c.entryTurn || G.turn,
+      mustAttack: c.mustAttack || false,
+    }));
+    // Approximate total mana as W (SimGame uses W/C only)
+    const totalMana = Object.values(p.mana).reduce((s,v)=>s+v, 0);
+    return {
+      life: p.life,
+      hand: [...p.hand],
+      deck: [...p.deck],
+      landDeck: [...p.landDeck],
+      field,
+      lands: p.lands.map(l => ({...l})),
+      mana: { W: p.mana.W || 0, C: totalMana - (p.mana.W||0) },
+      graveyard: [...p.graveyard],
+      mulliganUsed: true,
+    };
+  });
+  return { players, turn: G.turn, activePlayer: G.activePlayer };
+}
+
+// Enumerate possible actions from an AI-turn SimGame state (player=1, main phase)
+function mctsEnumerateActions(simState, nid) {
+  const sim = new SimGame();
+  sim.state = JSON.parse(JSON.stringify(simState));
+  sim.nid = nid;
+  const p1 = sim.state.players[1];
+  const actions = [];
+
+  // Action: play each affordable non-land card
+  p1.hand.forEach((cid, i) => {
+    const card = CARD_DB[cid];
+    if (card && card.type !== 'land' && sim.canAfford(p1, card.cost)) {
+      actions.push({ type: 'play', handIdx: i, cardId: cid });
+    }
+  });
+
+  // Action: pass (end main phase, go to attack)
+  actions.push({ type: 'pass' });
+
+  return actions;
+}
+
+// Apply an action to a SimGame state, return new state snapshot + new nid
+function mctsApplyAction(simState, action, nid) {
+  const sim = new SimGame();
+  sim.state = JSON.parse(JSON.stringify(simState));
+  sim.nid = nid;
+  const ap = 1; // AI is always player 1
+  const p = sim.state.players[ap];
+
+  if (action.type === 'play') {
+    // Re-find the card by cardId (index may shift after previous plays)
+    const idx = p.hand.indexOf(action.cardId);
+    if (idx === -1) return { state: sim.snapshot(), nid: sim.nid };
+    const card = CARD_DB[action.cardId];
+    if (card && card.type === 'creature' && p.field.length < 5 && sim.canAfford(p, card.cost)) {
+      sim.payMana(p, card.cost);
+      p.hand.splice(idx, 1);
+      const inst = { id: sim.nid++, cardId: action.cardId, tapped: false, damage: 0, sick: true,
+                     tempPower: 0, tempToughness: 0, entryTurn: sim.state.turn };
+      p.field.push(inst);
+      sim.simETB(ap, inst);
+      sim.simCheckDeath(0); sim.simCheckDeath(1);
+    } else if (card && card.type === 'spell' && sim.canAfford(p, card.cost)) {
+      sim.payMana(p, card.cost);
+      p.hand.splice(idx, 1);
+      sim.simSpellEffect(ap, card);
+      sim.simCheckDeath(0); sim.simCheckDeath(1);
+      p.graveyard.push(action.cardId);
+    }
+  }
+  // 'pass': no state change, just ends main phase
+  return { state: sim.snapshot(), nid: sim.nid };
+}
+
+// Rollout: play game to completion from simState, return 1 if P1 wins, 0 otherwise
+function mctsRollout(simState, nid) {
+  const sim = new SimGame();
+  sim.state = JSON.parse(JSON.stringify(simState));
+  sim.nid = nid;
+  sim.maxTurns = MCTS_ROLLOUT_DEPTH;
+  let guard = 0;
+  while (guard++ < MCTS_ROLLOUT_DEPTH * 2) {
+    const ap = sim.state.activePlayer;
+    if (sim.simTurn(ap)) break;
+  }
+  const [p0, p1] = sim.state.players;
+  if (p1.life <= 0) return 0;
+  if (p0.life <= 0) return 1;
+  return sim.simEval(1) > 0 ? 1 : 0;
+}
+
+// MCTS search: find best sequence of card plays for AI (player 1)
+// Returns array of cardIds to play in order
+function mctsSearch(timeMs) {
+  const deadline = Date.now() + (timeMs || MCTS_TIME_BUDGET_MS);
+  const rootState = mctsStateFromG();
+  const root = new MCTSNode(rootState, null, null, 1);
+  root.untriedActions = mctsEnumerateActions(rootState, 1);
+
+  let iterations = 0;
+  while (Date.now() < deadline && iterations < 500) {
+    iterations++;
+
+    // 1. Selection: walk tree using UCB1
+    let node = root;
+    while (node.untriedActions !== null && node.untriedActions.length === 0 && node.children.length > 0) {
+      node = node.bestChild();
+    }
+
+    // 2. Expansion: try one untried action
+    if (node.untriedActions === null) {
+      node.untriedActions = mctsEnumerateActions(node.state, node._nid);
+    }
+    if (node.untriedActions.length > 0) {
+      const actionIdx = Math.floor(Math.random() * node.untriedActions.length);
+      const action = node.untriedActions.splice(actionIdx, 1)[0];
+      const { state: newState, nid: newNid } = mctsApplyAction(node.state, action, node._nid);
+      const child = new MCTSNode(newState, node, action, newNid);
+      if (action.type === 'play') {
+        child.untriedActions = mctsEnumerateActions(newState, newNid);
+      } else {
+        child.untriedActions = []; // pass is a leaf
+      }
+      node.children.push(child);
+      node = child;
+    }
+
+    // 3. Rollout
+    const result = mctsRollout(node.state, node._nid);
+
+    // 4. Backpropagation
+    let cur = node;
+    while (cur !== null) {
+      cur.visits++;
+      cur.wins += result;
+      cur = cur.parent;
+    }
+  }
+
+  // Extract best action sequence: follow most-visited path
+  const plays = [];
+  let cur = root;
+  while (cur.children.length > 0) {
+    const best = cur.mostVisitedChild();
+    if (!best.action || best.action.type !== 'play') break;
+    plays.push(best.action.cardId);
+    cur = best;
+  }
+  return plays;
 }
 
 function getEffectivePowerSim(inst) {
