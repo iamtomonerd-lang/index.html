@@ -2564,7 +2564,19 @@ function kaizenOCDeploy(player) {
 
   // AI・オンラインのゲスト側は自動で最強を選ぶ（モーダルは自分の画面にしか出せないため）
   if (player === 1 && NET_MODE !== 'hotseat') {
-    const best = eligible.reduce((a,b)=>(b.card.power||0)>(a.card.power||0)?b:a);
+    showAIThinking(true);
+    const best = mctsPickOption(eligible, (sim, opt) => {
+      const p1 = sim.state.players[1];
+      if (p1.field.length >= 5) return;
+      const idx = p1.hand.indexOf(opt.cid);
+      if (idx === -1) return;
+      p1.hand.splice(idx, 1);
+      const inst = {id:sim.nid++,cardId:opt.cid,tapped:false,damage:0,sick:false,tempPower:0,tempToughness:0,entryTurn:sim.state.turn};
+      p1.field.push(inst);
+      sim.simETB(1, inst);
+      sim.simCheckDeath(0); sim.simCheckDeath(1);
+    }) || eligible.reduce((a,b)=>(b.card.power||0)>(a.card.power||0)?b:a);
+    showAIThinking(false);
     _kaizenDeployCreature(player, best.cid, best.i);
     return;
   }
@@ -4022,6 +4034,9 @@ function aiHandlePriority() {
   const ai = G.players[1];
   const player = G.players[0];
 
+  // 残っているアンタップ土地からマナを生成（Quick対応用に保留していた分）
+  ai.lands.filter(l => !l.tapped).forEach(land => tapLandForMana(1, land.instanceId));
+
   const quickSpells = ai.hand.map((cid, i) => ({ cid, i, card: CARD_DB[cid] }))
     .filter(({ card }) => card.keywords && card.keywords.includes('Quick') && canAfford(1, card.cost));
 
@@ -4152,15 +4167,130 @@ function confirmMulligan() {
 // ============================================================
 // AI LOGIC
 // ============================================================
+function aiDoActivateChargedLand(landInstId) {
+  const ai = G.players[1], opp = G.players[0];
+  const land = ai.lands.find(l => l.instanceId === landInstId);
+  if (!land || !land.chargeCard) return;
+  const lc = CARD_DB[land.cardId];
+  if (!lc.chargedAbility) return;
+
+  if (lc.chargedAbility === 'look3keep1white') {
+    if (land.tapped || !canAfford(1, {W:3})) return;
+    land.tapped = true;
+    payMana(1, {W:3});
+    doLook3Keep1White(1);
+    log(`AI ${lc.name}: 3ルック1(白)`);
+    render();
+  } else if (lc.chargedAbility === 'kaizouReturn') {
+    if (!isOCActive(1) || land.tapped) return;
+    land.tapped = true;
+    ai.mana.W = (ai.mana.W||0)+2;
+    const idx = ai.lands.findIndex(l=>l.instanceId===landInstId);
+    if (idx !== -1) { ai.lands.splice(idx,1); ai.landDeck.push(land.cardId); }
+    log(`AI ${lc.name} 還元: WW追加、土地デッキ底へ`, 'heal');
+    render();
+  } else if (lc.chargedAbility === 'damage2opponent') {
+    const idx = ai.lands.findIndex(l=>l.instanceId===landInstId);
+    if (idx === -1) return;
+    ai.lands.splice(idx,1);
+    ai.landDeck.push(lc.id);
+    if (land.chargeCard) { if (!ai.exile) ai.exile=[]; ai.exile.push(land.chargeCard); }
+    log(`AI ${lc.name} 還元: 土地デッキ底へ`);
+    const targets = opp.field;
+    if (targets.length > 0) {
+      showAIThinking(true);
+      const tgt = mctsPickOption(targets, (sim, t) => {
+        const s0 = sim.state.players[0];
+        const st = s0.field.find(c=>c.id===t.instanceId);
+        if (st) { st.damage+=2; sim.simCheckDeath(0); } else s0.life-=2;
+      }) || targets[0];
+      showAIThinking(false);
+      applyDamageToCreature(0, tgt.instanceId, 2, 1);
+      log(`AI ${lc.name} 還元: 2ダメージ → ${CARD_DB[tgt.cardId].name}`, 'damage');
+    }
+    checkDeath(); render();
+  } else if (lc.chargedAbility === 'buffWhiteCreature') {
+    if (land.tapped) return;
+    land.tapped = true;
+    const whites = ai.field.filter(c=>CARD_DB[c.cardId].color==='W');
+    if (whites.length > 0) {
+      const tgt = whites.reduce((a,b)=>getEffectiveToughness(1,b)<getEffectiveToughness(1,a)?b:a);
+      addPermanentBuff(1, tgt.instanceId, 0, 1);
+      log(`AI ${lc.name}: 白クリーチャー+0/+1(永続)`);
+    }
+    render();
+  }
+}
+
+function aiActivateChargedLands() {
+  const ai = G.players[1];
+  for (const land of [...ai.lands]) {
+    const lc = CARD_DB[land.cardId];
+    if (!land.chargeCard || !lc.chargedAbility || land.tapped) continue;
+    // kaizouReturn requires OC
+    if (lc.chargedAbility === 'kaizouReturn' && !isOCActive(1)) continue;
+    // look3keep1white requires mana
+    if (lc.chargedAbility === 'look3keep1white' && !canAfford(1, {W:3})) continue;
+
+    const landInstId = land.instanceId;
+    showAIThinking(true);
+    const best = mctsPickOption([{type:'skip'}, {type:'activate'}], (sim, opt) => {
+      if (opt.type === 'skip') return;
+      const p1 = sim.state.players[1], p0 = sim.state.players[0];
+      const simLand = p1.lands.find(l=>l.instanceId===landInstId);
+      if (!simLand || simLand.tapped) return;
+      if (lc.chargedAbility === 'look3keep1white') {
+        if (!sim.canAfford(p1,{W:3})) return;
+        sim.payMana(p1,{W:1,C:3}); simLand.tapped=true;
+        if (p1.deck.length) p1.hand.push(p1.deck.shift());
+      } else if (lc.chargedAbility === 'kaizouReturn') {
+        if (!sim.simIsOC(p1)||simLand.tapped) return;
+        p1.mana.W=(p1.mana.W||0)+2;
+        const ix=p1.lands.indexOf(simLand); if(ix!==-1){p1.lands.splice(ix,1);p1.landDeck.push(simLand.cardId);}
+      } else if (lc.chargedAbility === 'damage2opponent') {
+        const ix=p1.lands.indexOf(simLand); if(ix!==-1){p1.lands.splice(ix,1);p1.landDeck.push(lc.id);}
+        if (p0.field.length){const t=p0.field.reduce((a,b)=>sim.hp(b)<sim.hp(a)?b:a);t.damage+=2;sim.simCheckDeath(0);}else p0.life-=2;
+      } else if (lc.chargedAbility === 'buffWhiteCreature') {
+        if (simLand.tapped) return; simLand.tapped=true;
+        const ws=p1.field.filter(c=>CARD_DB[c.cardId].color==='W');
+        if (ws.length){const t=ws.reduce((a,b)=>sim.hp(a)<sim.hp(b)?a:b);t.tempToughness=(t.tempToughness||0)+1;}
+      }
+    });
+    showAIThinking(false);
+    if (best && best.type === 'activate') aiDoActivateChargedLand(landInstId);
+  }
+}
+
 function aiTurn() {
   if (G.phase === 'ended') return;
   const ai = G.players[1];
   log('AIのターン...', 'important');
 
-  // Tap lands for mana
-  ai.lands.forEach(land => {
-    if (!land.tapped) tapLandForMana(1, land.instanceId);
+  // Quickスペルがある場合: MCTSでマナ保留を評価
+  const quickInHand = ai.hand.filter(cid => {
+    const c = CARD_DB[cid]; return c.keywords && c.keywords.includes('Quick');
   });
+  let landsToTap = ai.lands.filter(l => !l.tapped);
+  if (quickInHand.length > 0 && landsToTap.length >= 2) {
+    showAIThinking(true);
+    const best = mctsPickOption([{hold:0},{hold:1}], (sim, opt) => {
+      const p1 = sim.state.players[1];
+      const avail = p1.lands.filter(l => !l.tapped);
+      const tapN = Math.max(0, avail.length - opt.hold);
+      for (let i = 0; i < tapN; i++) {
+        const l = avail[i];
+        l.tapped = true;
+        const lc = CARD_DB[l.cardId];
+        p1.mana.W = (p1.mana.W||0) + (lc.manaProduction ? (lc.manaProduction.W||0) : 0);
+        p1.mana.C = (p1.mana.C||0) + (lc.manaProduction ? (lc.manaProduction.C||0) : 1);
+      }
+    });
+    showAIThinking(false);
+    if (best && best.hold === 1) {
+      landsToTap = landsToTap.slice(0, landsToTap.length - 1);
+    }
+  }
+  landsToTap.forEach(land => tapLandForMana(1, land.instanceId));
 
   // チャージ決定: MCTSで評価
   if (!G.chargeUsedThisTurn) {
@@ -4192,6 +4322,9 @@ function aiTurn() {
       }
     }
   }
+
+  // チャージ済み土地の起動能力を評価・使用
+  aiActivateChargedLands();
 
   // 改善8: 局面に応じた時間でMCTS実行
   showAIThinking(true);
@@ -5942,6 +6075,14 @@ class SimGame {
     if (s.turn<=6) score += w.earlyFieldBonus*me.field.length;
     const unplayable = me.hand.filter(cid=>{const c=CARD_DB[cid];return c.cost&&!this.canAfford(me,c.cost);}).length;
     score -= w.manaEff*unplayable;
+    // CX/OC評価: チャージ状況と閾値達成を得点に反映
+    const myCX = me.lands.length + me.lands.filter(l=>l.chargeCard).length;
+    const oppCX = opp.lands.length + opp.lands.filter(l=>l.chargeCard).length;
+    score += w.threshold * (myCX - oppCX);
+    if (myCX === 9) score += w.threshold * 3;
+    if (myCX >= 10) score += w.threshold * 5;
+    if (oppCX === 9) score -= w.threshold * 3;
+    if (oppCX >= 10) score -= w.threshold * 5;
     return score;
   }
 
@@ -6174,7 +6315,8 @@ class SimGame {
       } else {
         attackValue=w.life*atkPow*0.8;
       }
-      if (!lethal && !atk.mustAttack && attackValue+w.attackBias<=0) continue; // #2: skip bad attacks (リーサル時は強行)
+      const oppHasArestia = opp.field.some(c=>CARD_DB[c.cardId].id==='arestia');
+      if (!lethal && !atk.mustAttack && !oppHasArestia && attackValue+w.attackBias<=0) continue; // #2: skip bad attacks (リーサル時は強行)
       if (!atkCard.vigilance) atk.tapped=true;
       // kakutou: pick best target (#8)
       if (atkCard.kakutou&&atk.entryTurn===s.turn) {
