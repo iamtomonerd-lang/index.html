@@ -2092,6 +2092,7 @@ function initGame() {
     priorityReason: '',
     _pendingCont: null,
     _pendingReason: '',
+    _awaitingModal: false,
     chargingMode: false,
     chargeUsedThisTurn: false,
     targetMode: null, // {type, callback}
@@ -2372,44 +2373,40 @@ function playCardFromHand(player, handIndex) {
 
   if (card.type === 'spell') {
     if (card.effect === 'junigeki') {
-      // スタックに積んでから解決時に対象選択
+      // ■効果を逆順にスタック積み（LIFOで上の効果から解決）
       payMana(player, card.cost);
       p.hand.splice(handIndex, 1);
       log(`${card.name} をスタックに積んだ`, 'important');
-      G.stack.push({ name: card.name, icon: card.icon||'🛡️', owner: player, resolve: () => {
-        const opp = 1-player;
-        const finish = () => {
+      const opp = 1-player;
+      // ■2: 自クリーチャー+0/+1(永続) — 後から積む = 後で解決
+      G.stack.push({ name:`${card.name} ■2: 自クリーチャー+0/+1`, icon:'🛡️', owner:player, resolve:() => {
+        if (G.players[player].field.length === 0) {
+          log(`${card.name} ■2: 対象なしのためスキップ`);
           p.graveyard.push(cardId);
-          render(); updateHints();
-          continueStack();
-        };
-        const doEffect2 = () => {
-          if (G.players[player].field.length === 0) {
-            log(`${card.name} 効果2/2: 対象なしのためスキップ`);
-            finish(); return;
-          }
-          showEffectStep(card.name, 2, 2, '+0/+1する自クリーチャーを選択');
-          G.targetMode = { type:'ownCreature', owner:player, callback:(tgt2) => {
-            G.targetMode = null;
-            addPermanentBuff(player, tgt2.instId, 0, 1);
-            log(`${card.name} 効果2/2: 自クリーチャー+0/+1(永続)`);
-            finish();
-          }};
-          render(); updateHints();
-        };
-        if (G.players[opp].field.length === 0) {
-          log(`${card.name} 効果1/2: 対象なしのためスキップ`);
-          doEffect2();
-        } else {
-          showEffectStep(card.name, 1, 2, '相手クリーチャーに2ダメージ — 対象を選択');
-          G.targetMode = { type:'opponentCreature', callback:(tgt1) => {
-            G.targetMode = null;
-            applyDamageToCreature(opp, tgt1.instId, 2, player);
-            log(`${card.name} 効果1/2: 相手クリーチャーに2ダメージ`);
-            doEffect2();
-          }};
-          render(); updateHints();
+          render(); updateHints(); continueStack(); return;
         }
+        G.targetMode = { type:'ownCreature', owner:player, callback:(tgt) => {
+          G.targetMode = null;
+          addPermanentBuff(player, tgt.instId, 0, 1);
+          log(`${card.name} ■2: 自クリーチャー+0/+1(永続)`);
+          p.graveyard.push(cardId);
+          render(); updateHints(); continueStack();
+        }};
+        render(); updateHints();
+      }});
+      // ■1: 相手クリーチャー1体に2ダメージ — 先に積む = 先に解決（LIFO）
+      G.stack.push({ name:`${card.name} ■1: 相手クリーチャーに2ダメージ`, icon:'🛡️', owner:player, resolve:() => {
+        if (G.players[opp].field.length === 0) {
+          log(`${card.name} ■1: 対象なしのためスキップ`);
+          continueStack(); return;
+        }
+        G.targetMode = { type:'opponentCreature', callback:(tgt) => {
+          G.targetMode = null;
+          applyDamageToCreature(opp, tgt.instId, 2, player);
+          log(`${card.name} ■1: 相手クリーチャーに2ダメージ`);
+          render(); updateHints(); continueStack();
+        }};
+        render(); updateHints();
       }});
       renderStack(); render(); updateHints();
       openPriorityWindow(1 - player, G.priorityContinuation, `${card.name}に対応`);
@@ -2473,88 +2470,59 @@ function playKaizen(player, handIndex) {
   const card = CARD_DB[cardId];
   if (!canAfford(player, card.cost)) { log('マナが足りません'); return; }
 
-  const ocAtCast = isOCActive(player); // OCは唱えた時点の達成で判定
-  const totalSteps = ocAtCast ? 4 : 3;
-  const oppField = G.players[1-player].field;
+  payMana(player, card.cost);
+  p.hand.splice(handIndex, 1);
+  log(`${card.name} をスタックに積んだ (${costToString(card.cost)})`, 'important');
 
-  // 唱える時に対象を上から順に選択 → スタック → 解決時に順に処理
-  const targets = { damage: null, mustAttack: null };
-
-  const castNow = () => {
-    payMana(player, card.cost);
-    p.hand.splice(handIndex, 1);
-    log(`介善 をスタックに積んだ (${costToString(card.cost)})`, 'important');
-    G.stack.push({ name: card.name, icon: card.icon||'✨', owner: player, resolve: () => {
-      kaizenResolve(player, cardId, targets, ocAtCast, totalSteps);
-    }});
-    renderStack(); render(); updateHints();
-    openPriorityWindow(1 - player, G.priorityContinuation, '介善に対応');
-  };
-
-  // 効果2の対象選択 → キャスト
-  const selectMustAttackTarget = () => {
-    if (oppField.length === 0) { castNow(); return; }
-    showEffectStep(card.name, 2, totalSteps, '攻撃強制の対象を選択');
-    G.targetMode = { type:'opponentCreature', callback:(tgt) => {
-      G.targetMode = null;
-      targets.mustAttack = tgt.instId;
-      castNow();
-    }};
-    render(); updateHints();
-  };
-
-  // 効果1の対象選択 → 効果2へ
-  if (oppField.length === 0) {
-    log('介善: 相手クリーチャーがいないため効果1・2は対象なし');
-    castNow();
-    return;
-  }
-  showEffectStep(card.name, 1, totalSteps, '5ダメージの対象を選択');
-  G.targetMode = { type:'opponentCreature', callback:(tgt) => {
-    G.targetMode = null;
-    targets.damage = tgt.instId;
-    selectMustAttackTarget();
-  }};
-  render(); updateHints();
-}
-
-// 解決: ■効果を上から順に処理して表示
-function kaizenResolve(player, cardId, targets, ocAtCast, totalSteps) {
-  const card = CARD_DB[cardId];
-  const p = G.players[player];
+  const ocAtCast = isOCActive(player);
   const opp = 1 - player;
 
-  // 効果1: 相手クリーチャー1体に5ダメージ
-  if (targets.damage != null) {
-    const tgtInst = G.players[opp].field.find(x=>x.instanceId===targets.damage);
-    showEffectStep(card.name, 1, totalSteps, `5ダメージ${tgtInst?` → ${CARD_DB[tgtInst.cardId].name}`:''}`);
-    if (tgtInst) applyDamageToCreature(opp, targets.damage, 5, player);
-  } else {
-    log(`${card.name} 効果1/${totalSteps}: 対象なしのためスキップ`);
-  }
-
-  // 効果2: 相手クリーチャー1体に攻撃強制
-  if (targets.mustAttack != null) {
-    const tc = G.players[opp].field.find(x=>x.instanceId===targets.mustAttack);
-    showEffectStep(card.name, 2, totalSteps, `攻撃強制${tc?` → ${CARD_DB[tc.cardId].name}`:''}`);
-    if (tc) { tc.mustAttack = true; G.mustAttackCreatures.add(targets.mustAttack); }
-  } else {
-    log(`${card.name} 効果2/${totalSteps}: 対象なしのためスキップ`);
-  }
-
-  // 効果3: 自分のクリーチャーがブロックする時1枚引く（次の自分のターン開始時まで持続）
-  showEffectStep(card.name, 3, totalSteps, 'ブロック時1ドロー（次の自分のターン開始まで）');
-  if (!G.blockDrawActive) G.blockDrawActive = [false, false];
-  G.blockDrawActive[player] = true;
-
-  p.graveyard.push(cardId);
-
-  // 効果4 (OC): 手札からマナ総量8以下のクリーチャーを出す（攻撃不可・ターン1:同名）
+  // ■効果を逆順にスタック積み（LIFOで上から順に解決）
+  // ■4 OC (最後に積む = 最後に解決)
   if (ocAtCast) {
-    showEffectStep(card.name, 4, totalSteps, '〈OC〉手札からクリーチャーを出す（任意）');
-    kaizenOCDeploy(player);
+    G.stack.push({ name:`${card.name} ■4(OC): クリーチャー展開`, icon:'✨', owner:player, resolve:() => {
+      p.graveyard.push(cardId);
+      kaizenOCDeploy(player);
+    }});
   }
-  render(); updateHints();
+  // ■3: ブロック時1枚引く
+  G.stack.push({ name:`${card.name} ■3: ブロック時1ドロー`, icon:'✨', owner:player, resolve:() => {
+    if (!G.blockDrawActive) G.blockDrawActive = [false, false];
+    G.blockDrawActive[player] = true;
+    log(`${card.name} ■3: このターン、ブロック時1ドロー`);
+    if (!ocAtCast) p.graveyard.push(cardId);
+    render(); updateHints(); continueStack();
+  }});
+  // ■2: 相手クリーチャー1体を選ぶ、攻撃強制
+  G.stack.push({ name:`${card.name} ■2: 相手クリーチャー攻撃強制`, icon:'✨', owner:player, resolve:() => {
+    if (G.players[opp].field.length === 0) {
+      log(`${card.name} ■2: 対象なしのためスキップ`); continueStack(); return;
+    }
+    G.targetMode = { type:'opponentCreature', callback:(tgt) => {
+      G.targetMode = null;
+      const tc = G.players[opp].field.find(x=>x.instanceId===tgt.instId);
+      if (tc) { tc.mustAttack = true; G.mustAttackCreatures.add(tgt.instId); }
+      log(`${card.name} ■2: 攻撃強制`);
+      render(); updateHints(); continueStack();
+    }};
+    render(); updateHints();
+  }});
+  // ■1: 相手クリーチャー1体に5ダメージ (先に積む = 最初に解決)
+  G.stack.push({ name:`${card.name} ■1: 相手クリーチャーに5ダメージ`, icon:'✨', owner:player, resolve:() => {
+    if (G.players[opp].field.length === 0) {
+      log(`${card.name} ■1: 対象なしのためスキップ`); continueStack(); return;
+    }
+    G.targetMode = { type:'opponentCreature', callback:(tgt) => {
+      G.targetMode = null;
+      applyDamageToCreature(opp, tgt.instId, 5, player);
+      log(`${card.name} ■1: 5ダメージ`);
+      render(); updateHints(); continueStack();
+    }};
+    render(); updateHints();
+  }});
+
+  renderStack(); render(); updateHints();
+  openPriorityWindow(1 - player, G.priorityContinuation, `${card.name}に対応`);
 }
 
 function kaizenOCDeploy(player) {
@@ -2564,7 +2532,6 @@ function kaizenOCDeploy(player) {
   if (eligible.length === 0) { log('介善OC: 出せるクリーチャーがありません'); return; }
   if (p.field.length >= 5) { log('介善OC: フィールドが満杯のため出せません'); return; }
 
-  // AI・オンラインのゲスト側は自動で最強を選ぶ（モーダルは自分の画面にしか出せないため）
   if (player === 1 && NET_MODE !== 'hotseat') {
     showAIThinking(true);
     const best = mctsPickOption(eligible, (sim, opt) => {
@@ -2580,12 +2547,14 @@ function kaizenOCDeploy(player) {
     }) || eligible.reduce((a,b)=>(b.card.power||0)>(a.card.power||0)?b:a);
     showAIThinking(false);
     _kaizenDeployCreature(player, best.cid, best.i);
-    return;
+    return; // AI同期処理 — closePriorityAndResolveが続きを処理
   }
 
+  // プレイヤー非同期: モーダル待機
+  G._awaitingModal = true;
   let html = `<p style="margin-bottom:10px;">場に出すクリーチャーを選択（このゲーム中攻撃不可）:</p>
     <div style="display:flex; flex-wrap:wrap; gap:8px;" id="koc-cards"></div>
-    <button onclick="closeModal()" style="margin-top:10px;width:100%;">出さない（スキップ）</button>`;
+    <button onclick="closeModal(); G._awaitingModal=false; continueStack();" style="margin-top:10px;width:100%;">出さない（スキップ）</button>`;
   showModal('介善 OC効果', html);
   const container = document.getElementById('koc-cards');
   eligible.forEach(({cid,i,card}) => {
@@ -2596,6 +2565,8 @@ function kaizenOCDeploy(player) {
     el.onclick = () => {
       closeModal();
       _kaizenDeployCreature(player, cid, i);
+      G._awaitingModal = false;
+      continueStack();
     };
     container.appendChild(el);
   });
@@ -4054,7 +4025,7 @@ function closePriorityAndResolve() {
     if (item.resolve) item.resolve();
     renderStack();
     render();
-    if (G.targetMode) return; // 非同期対象選択中 → continueStack()を待つ
+    if (G.targetMode || G._awaitingModal) return; // 非同期待機中 → continueStack()を待つ
     G._pendingCont = null;
     G._pendingReason = '';
     // まだスタックが残っていれば再度優先権ウィンドウ
@@ -4486,11 +4457,10 @@ function aiPlaySpellEffect(card) {
       }) || targets[0];
       applyDamageToCreature(0, tgt.instanceId, 2, 1);
       log(`AI: ${card.name} でプレイヤークリーチャーに2ダメージ`, 'damage');
-      // Buff own weakest (most in danger) creature +0/+1
+      // Buff own weakest (most in danger) creature +0/+1 (永続)
       if (ai.field.length > 0) {
         const ally = ai.field.reduce((a,b) => getEffectiveToughness(1,b) < getEffectiveToughness(1,a) ? b : a);
-        ally.tempToughness = (ally.tempToughness||0)+1;
-        G.tempBuffs.push({instanceId:ally.instanceId,power:0,toughness:1});
+        addPermanentBuff(1, ally.instanceId, 0, 1);
       }
     }
   } else if (card.effect === 'kaizen') {
@@ -8296,34 +8266,41 @@ function runCardTests() {
     assert('Arestiaバフ: 実効パワーに反映(5+1=6)', eff===6);
   });
 
-  // 15. 介善: 効果1(5ダメージ)→効果2(攻撃強制)→効果3(ブロック時ドロー)を順に処理
+  // 15. 介善: ■効果が個別スタックエントリとして積まれ、解決時に対象選択
   withState(()=>{
     G.players[0].hand = ['kaizen'];
     G.players[0].mana = {R:0,U:0,G:0,W:4,B:0,C:0};
     const t1 = _testAddCreature(1,'arestia');        // 5/5 ← 5ダメージ対象
     const t2 = _testAddCreature(1,'shinmai_heishi'); // 攻撃強制対象
     playKaizen(0, 0);
-    assert('介善: 効果1のtargetModeがセット', G.targetMode && G.targetMode.type==='opponentCreature');
-    G.targetMode.callback({instId: t1.instanceId});
-    assert('介善: 効果2のtargetModeがセット', G.targetMode && G.targetMode.type==='opponentCreature');
-    G.targetMode.callback({instId: t2.instanceId});
-    assert('介善: スタックに積まれる', G.stack.length===1);
+    assert('介善: 3つの効果がスタックに積まれる', G.stack.length===3);
+    // ■1 (5ダメージ) — 最上位のエントリが最初に解決
     G.stack.pop().resolve();
+    assert('介善 ■1: 解決時にtargetModeがセット', G.targetMode && G.targetMode.type==='opponentCreature');
+    G.targetMode.callback({instId: t1.instanceId});
     const r1 = G.players[1].field.find(x=>x.instanceId===t1.instanceId);
-    assert('介善 効果1: 5ダメージで5/5が破壊', !r1);
+    assert('介善 ■1: 5ダメージで5/5が破壊', !r1);
+    // ■2 (攻撃強制)
+    G.stack.pop().resolve();
+    assert('介善 ■2: 解決時にtargetModeがセット', G.targetMode && G.targetMode.type==='opponentCreature');
+    G.targetMode.callback({instId: t2.instanceId});
     const r2 = G.players[1].field.find(x=>x.instanceId===t2.instanceId);
-    assert('介善 効果2: 攻撃強制フラグ', r2 && r2.mustAttack===true && G.mustAttackCreatures.has(t2.instanceId));
-    assert('介善 効果3: ブロック時ドローが有効化', G.blockDrawActive[0]===true);
+    assert('介善 ■2: 攻撃強制フラグ', r2 && r2.mustAttack===true && G.mustAttackCreatures.has(t2.instanceId));
+    // ■3 (ブロック時ドロー)
+    G.stack.pop().resolve();
+    assert('介善 ■3: ブロック時ドローが有効化', G.blockDrawActive[0]===true);
     assert('介善: 墓地に置かれる', G.players[0].graveyard.includes('kaizen'));
   });
 
-  // 16. 介善: 相手クリーチャーなしでも効果3は処理される
+  // 16. 介善: 相手クリーチャーなしでも■3は処理される
   withState(()=>{
     G.players[0].hand = ['kaizen'];
     G.players[0].mana = {R:0,U:0,G:0,W:4,B:0,C:0};
     playKaizen(0, 0);
-    assert('介善(対象なし): 即スタック', G.stack.length===1);
-    G.stack.pop().resolve();
+    assert('介善(対象なし): 3スタック積まれる', G.stack.length===3);
+    G.stack.pop().resolve(); // ■1: 対象なしスキップ
+    G.stack.pop().resolve(); // ■2: 対象なしスキップ
+    G.stack.pop().resolve(); // ■3: ブロック時ドロー
     assert('介善(対象なし): ブロック時ドローが有効化', G.blockDrawActive[0]===true);
   });
 
