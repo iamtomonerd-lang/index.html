@@ -2090,6 +2090,8 @@ function initGame() {
     priorityFor: null,
     priorityContinuation: null,
     priorityReason: '',
+    _pendingCont: null,
+    _pendingReason: '',
     chargingMode: false,
     chargeUsedThisTurn: false,
     targetMode: null, // {type, callback}
@@ -2370,50 +2372,47 @@ function playCardFromHand(player, handIndex) {
 
   if (card.type === 'spell') {
     if (card.effect === 'junigeki') {
-      // 対象選択してからスタックへ（■効果を上から順に処理。対象がいない効果はスキップ）
-      const castJunigeki = (tgt1, tgt2) => {
-        payMana(player, card.cost);
-        p.hand.splice(handIndex, 1);
-        log(`${card.name} をスタックに積んだ`, 'important');
-        G.stack.push({ name: card.name, icon: card.icon||'🛡️', owner: player, resolve: () => {
-          if (tgt1) {
-            showEffectStep(card.name, 1, 2, '相手クリーチャーに2ダメージ');
-            applyDamageToCreature(1-player, tgt1.instId, 2, player);
-          } else {
-            log(`${card.name} 効果1/2: 対象なしのためスキップ`);
-          }
-          if (tgt2) {
-            showEffectStep(card.name, 2, 2, '自クリーチャー+0/+1');
-            const oc = G.players[player].field.find(x=>x.instanceId===tgt2.instId);
-            if (oc) { addPermanentBuff(player, tgt2.instId, 0, 1); }
-          } else {
-            log(`${card.name} 効果2/2: 対象なしのためスキップ`);
-          }
+      // スタックに積んでから解決時に対象選択
+      payMana(player, card.cost);
+      p.hand.splice(handIndex, 1);
+      log(`${card.name} をスタックに積んだ`, 'important');
+      G.stack.push({ name: card.name, icon: card.icon||'🛡️', owner: player, resolve: () => {
+        const opp = 1-player;
+        const finish = () => {
           p.graveyard.push(cardId);
-          render();
-        }});
-        renderStack(); render(); updateHints();
-        openPriorityWindow(1 - player, G.priorityContinuation, `${card.name}に対応`);
-      };
-      const selectOwn = (tgt1) => {
-        if (G.players[player].field.length === 0) { castJunigeki(tgt1, null); return; }
-        showEffectStep(card.name, 2, 2, '+0/+1する自クリーチャーを選択');
-        G.targetMode = { type:'ownCreature', owner:player, callback: (tgt2) => {
-          G.targetMode = null;
-          castJunigeki(tgt1, tgt2);
-        }};
-        render(); updateHints();
-      };
-      if (G.players[1-player].field.length === 0) {
-        selectOwn(null);
-      } else {
-        showEffectStep(card.name, 1, 2, '2ダメージの対象を選択');
-        G.targetMode = { type:'opponentCreature', callback: (tgt1) => {
-          selectOwn(tgt1);
-        }};
-      }
-      G.selectedCard = {owner:player, zone:'hand', index:handIndex};
-      render(); updateHints();
+          render(); updateHints();
+          continueStack();
+        };
+        const doEffect2 = () => {
+          if (G.players[player].field.length === 0) {
+            log(`${card.name} 効果2/2: 対象なしのためスキップ`);
+            finish(); return;
+          }
+          showEffectStep(card.name, 2, 2, '+0/+1する自クリーチャーを選択');
+          G.targetMode = { type:'ownCreature', owner:player, callback:(tgt2) => {
+            G.targetMode = null;
+            addPermanentBuff(player, tgt2.instId, 0, 1);
+            log(`${card.name} 効果2/2: 自クリーチャー+0/+1(永続)`);
+            finish();
+          }};
+          render(); updateHints();
+        };
+        if (G.players[opp].field.length === 0) {
+          log(`${card.name} 効果1/2: 対象なしのためスキップ`);
+          doEffect2();
+        } else {
+          showEffectStep(card.name, 1, 2, '相手クリーチャーに2ダメージ — 対象を選択');
+          G.targetMode = { type:'opponentCreature', callback:(tgt1) => {
+            G.targetMode = null;
+            applyDamageToCreature(opp, tgt1.instId, 2, player);
+            log(`${card.name} 効果1/2: 相手クリーチャーに2ダメージ`);
+            doEffect2();
+          }};
+          render(); updateHints();
+        }
+      }});
+      renderStack(); render(); updateHints();
+      openPriorityWindow(1 - player, G.priorityContinuation, `${card.name}に対応`);
       return;
     }
     if (card.effect === 'kaizen') {
@@ -2650,6 +2649,7 @@ function resolveETBEffect(player, instanceId) {
         applyDamageToCreature(opp, tgt.instId, 1, player);
         log(`${card.name} ETB: 対戦相手クリーチャーに1ダメージ`, 'damage');
         G.targetMode = null; render(); updateHints();
+        continueStack();
       }};
       log(`${card.name} ETB: 対象を選択（1ダメージ）`);
       render(); updateHints();
@@ -2677,6 +2677,7 @@ function resolveETBEffect(player, instanceId) {
         if (tc) { tc.mustAttack = true; G.mustAttackCreatures.add(tgt.instId); }
         log(`${card.name} ETB: 対戦相手クリーチャーに攻撃強制`, 'important');
         G.targetMode = null; render(); updateHints();
+        continueStack();
       }};
       log(`${card.name} ETB: 対象を選択（次ターン攻撃強制）`);
       render(); updateHints();
@@ -2710,6 +2711,7 @@ function resolveETBEffect(player, instanceId) {
         applyDamageToCreature(opp, tgt.instId, 3, player);
         log(`${card.name} ETB: 3ダメージ`, 'damage');
         G.targetMode = null; render(); updateHints();
+        continueStack();
       }};
       log(`${card.name} ETB: 対象を選択（3ダメージ）`);
       render(); updateHints();
@@ -2769,9 +2771,12 @@ function bastianChooseETB(instanceId, hasCX6Override) {
         G.targetMode = null;
         checkDeath();
         render(); updateHints();
+        continueStack();
       }};
       log('バスティオン 出た時 CX6: 3ダメージの対象を選択');
       render(); updateHints();
+    } else {
+      continueStack();
     }
   }};
   log('バスティオン 出た時: 2ダメージの対象を選択');
@@ -3424,6 +3429,7 @@ function resolveSingleCombat(atkPlayer, atkInstId, kakutouTargetId, blockerInstI
                 applyDamageToCreature(atkPlayer, tgt.instId, 2, opp);
                 log(`${blkCard.name}: 相手クリーチャーに2ダメージ`, 'damage');
                 G.targetMode = null; checkDeath(); render(); updateHints();
+                continueStack();
               }};
               log(`${blkCard.name}: 2ダメージの対象を選択（紫枠のクリーチャー）`);
               render(); updateHints();
@@ -3449,6 +3455,7 @@ function resolveSingleCombat(atkPlayer, atkInstId, kakutouTargetId, blockerInstI
               addPermanentBuff(0, tgt.instId, 1, 1);
               log(`${blkCard.name} CX8: 味方+1/+1`, 'important');
               G.targetMode = null; render(); updateHints();
+              continueStack();
             }};
           } else {
             const ally = G.players[1].field.find(c=>c.instanceId!==blockerInstId);
@@ -3719,11 +3726,12 @@ function activateChargedLand(player, instId) {
       owner: player,
       resolve: () => {
         if (player === 0) {
-          if (G.players[opp].field.length === 0) { log(`${landCard.name} 還元: 対象なしのためスキップ`); render(); updateHints(); return; }
+          if (G.players[opp].field.length === 0) { log(`${landCard.name} 還元: 対象なしのためスキップ`); render(); updateHints(); continueStack(); return; }
           G.targetMode = { type:'opponentCreature', callback:(tgt) => {
             applyDamageToCreature(opp, tgt.instId, 2, player);
             log(`${landCard.name} 還元: 2ダメージ`, 'damage');
             G.targetMode = null; render(); updateHints();
+            continueStack();
           }};
           log('対象を選択（2ダメージ）');
           render(); updateHints();
@@ -3757,6 +3765,7 @@ function activateChargedLand(player, instId) {
               log(`${landCard.name}: 白クリーチャー+0/+1(永続)`);
             } else { log('白クリーチャーを選んでください'); }
             G.targetMode = null; render(); updateHints();
+            continueStack();
           }};
           log('白クリーチャーを選択（+0/+1永続）');
           render(); updateHints();
@@ -4016,6 +4025,18 @@ function openPriorityWindow(forPlayer, continuation, reason) {
   }
 }
 
+function continueStack() {
+  const cont = G._pendingCont;
+  const reason = G._pendingReason || '';
+  G._pendingCont = null;
+  G._pendingReason = '';
+  if (G.stack.length > 0) {
+    setTimeout(() => openPriorityWindow(1 - G.activePlayer, cont, reason), 300);
+  } else if (cont) {
+    setTimeout(cont, 50);
+  }
+}
+
 function closePriorityAndResolve() {
   G.awaitingPriority = false;
   G.priorityFor = null;
@@ -4028,9 +4049,14 @@ function closePriorityAndResolve() {
     // LIFO: 最後に積んだものを解決
     const item = G.stack.pop();
     log(`スタック解決: ${item.icon||''} ${item.name}`, 'important');
+    G._pendingCont = cont;
+    G._pendingReason = reason;
     if (item.resolve) item.resolve();
     renderStack();
     render();
+    if (G.targetMode) return; // 非同期対象選択中 → continueStack()を待つ
+    G._pendingCont = null;
+    G._pendingReason = '';
     // まだスタックが残っていれば再度優先権ウィンドウ
     if (G.stack.length > 0) {
       setTimeout(() => openPriorityWindow(1 - G.activePlayer, cont, reason), 400);
