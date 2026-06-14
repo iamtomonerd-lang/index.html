@@ -2064,6 +2064,7 @@ function initGame() {
         hand: [],
         field: [], // {instanceId, cardId, tapped, damage, sick, charges, tempBuff}
         lands: [], // {instanceId, cardId, tapped, chargeCard}
+        artifacts: [], // {instanceId, name, icon, countdown, onLeaveType, owner}
         graveyard: [],
         exile: [],
         mana: {R:0,U:0,G:0,W:0,B:0,C:0},
@@ -2078,6 +2079,7 @@ function initGame() {
         hand: [],
         field: [],
         lands: [],
+        artifacts: [],
         graveyard: [],
         exile: [],
         mana: {R:0,U:0,G:0,W:0,B:0,C:0},
@@ -2095,6 +2097,7 @@ function initGame() {
     _pendingCont: null,
     _pendingReason: '',
     _awaitingModal: false,
+    _pendingCrystalPay: false,
     chargingMode: false,
     chargeUsedThisTurn: false,
     targetMode: null, // {type, callback}
@@ -2438,17 +2441,56 @@ function playCardFromHand(player, handIndex) {
 
   // Creature: スタックに積んで解決時に場に出る
   if (p.field.length >= 5) { log('フィールドがいっぱいです（最大5体）'); return; }
+
+  // 結晶コスト選択（アレスティアなど crystalEtb を持つカード）
+  if (card.crystalEtb && player === 0) {
+    const crystalCost = card.crystalEtb; // 1 = 白1マナ
+    const canPayCrystal = (p.mana.W || 0) >= crystalCost;
+    if (canPayCrystal) {
+      G._awaitingModal = true;
+      showModal(`${card.name} 結晶コスト`,
+        `<p>結晶${crystalCost}：白${crystalCost}マナを追加で支払い、カウントダウン2のアーティファクトを場に出しますか？<br><small>（このカードが離れた時、アレスティアを再召喚します）</small></p>
+        <button onclick="closeModal();G._awaitingModal=false;G._pendingCrystalPay=true;playCardFromHandAfterCrystal(${player},${handIndex});" style="margin:4px;padding:6px 14px;background:#c0a020;border:none;border-radius:4px;color:#fff;cursor:pointer;">支払う（白${crystalCost}）</button>
+        <button onclick="closeModal();G._awaitingModal=false;G._pendingCrystalPay=false;playCardFromHandAfterCrystal(${player},${handIndex});" style="margin:4px;padding:6px 14px;background:#555;border:none;border-radius:4px;color:#fff;cursor:pointer;">支払わない</button>`
+      );
+      return;
+    }
+  }
+  // AI の結晶コストは常に支払わない（シンプル実装）
+  if (card.crystalEtb && player === 1) {
+    G._pendingCrystalPay = false;
+  }
+  _doPlayCreature(player, handIndex, cardId, card, p);
+}
+
+function playCardFromHandAfterCrystal(player, handIndex) {
+  const p = G.players[player];
+  const cardId = p.hand[handIndex];
+  const card = CARD_DB[cardId];
+  _doPlayCreature(player, handIndex, cardId, card, p);
+}
+
+function _doPlayCreature(player, handIndex, cardId, card, p) {
+  const payCrystal = G._pendingCrystalPay;
+  G._pendingCrystalPay = false;
   payMana(player, card.cost);
+  if (payCrystal && card.crystalEtb) {
+    p.mana.W = Math.max(0, (p.mana.W || 0) - card.crystalEtb);
+  }
   p.hand.splice(handIndex, 1);
   const inst = newInstance(cardId);
   inst.sick = true;
   inst.entryTurn = G.turn;
-  log(`${card.name} をスタックに積んだ (${costToString(card.cost)})`, 'important');
+  inst._payCrystal = payCrystal;
+  log(`${card.name} をスタックに積んだ (${costToString(card.cost)})${payCrystal ? ' [結晶'+card.crystalEtb+']' : ''}`, 'important');
   G.stack.push({ name: card.name, icon: card.icon||'⚔️', owner: player, resolve: () => {
     if (p.field.length >= 5) { p.graveyard.push(cardId); log(`${card.name}: フィールドが満杯`); return; }
     _enteringInstIds.add(inst.instanceId);
     p.field.push(inst);
     log(`${card.name} が場に出た`, 'important');
+    if (inst._payCrystal && card.crystalEtb) {
+      spawnCrystalArtifact(player, 2, 'spawnArestia');
+    }
     fireETB(player, inst.instanceId);
     render();
   }});
@@ -2890,6 +2932,39 @@ function modalPeekReturn() {
 
 function addPermanentBuff(player, instanceId, power, toughness) {
   G.permanentBuffs.push({instanceId, power, toughness});
+}
+
+function spawnCrystalArtifact(player, countdown, onLeaveType) {
+  if (!G.players[player].artifacts) G.players[player].artifacts = [];
+  const art = {
+    instanceId: G.nextInstanceId++,
+    name: 'アレスティアの結晶',
+    icon: '💎',
+    countdown: countdown,
+    onLeaveType: onLeaveType,
+    owner: player
+  };
+  G.players[player].artifacts.push(art);
+  log(`${art.name}: 場に出た (カウントダウン${countdown})`, 'important');
+  render();
+  return art;
+}
+
+function triggerArtifactLeave(player, art) {
+  log(`${art.name}: 場を離れた`, 'important');
+  if (art.onLeaveType === 'spawnArestia') {
+    if (G.players[player].field.length >= 5) {
+      log('アレスティアの結晶: フィールドが満杯のため召喚できません');
+      return;
+    }
+    const inst = newInstance('arestia');
+    inst.sick = true;
+    inst.entryTurn = G.turn;
+    G.players[player].field.push(inst);
+    log('アレスティアの結晶: 戦乙女 アレスティアを場に出した', 'important');
+    fireETB(player, inst.instanceId);
+    render();
+  }
 }
 
 function spawnCopyWithReducedToughness(player, instId) {
@@ -3609,7 +3684,22 @@ function endTurn() {
     log('介善のブロック時ドロー効果が終了（自分のターン開始）');
   }
 
+  // アーティファクト カウントダウン処理（アクティブプレイヤーのターン開始時）
   const ap = G.activePlayer;
+  {
+    const arts = G.players[ap].artifacts;
+    if (arts && arts.length > 0) {
+      for (let i = arts.length - 1; i >= 0; i--) {
+        arts[i].countdown--;
+        log(`${arts[i].name}: カウントダウン → ${arts[i].countdown}`);
+        if (arts[i].countdown <= 0) {
+          const art = arts.splice(i, 1)[0];
+          triggerArtifactLeave(ap, art);
+        }
+      }
+      render();
+    }
+  }
   const apName = NET_MODE === 'hotseat' ? (ap === 0 ? 'P1のターン' : 'P2のターン')
     : NET_MODE !== 'local' ? (ap === NET_MY_IDX ? 'あなたのターン' : '相手のターン')
     : (ap === 0 ? 'あなたのターン' : 'AIのターン');
@@ -5078,6 +5168,20 @@ function renderField(player, zoneId) {
       slotEl.textContent = '';
     }
     zone.appendChild(slotEl);
+  }
+
+  // アーティファクト表示（フィールドの後ろに追加）
+  if (p.artifacts && p.artifacts.length > 0) {
+    p.artifacts.forEach(art => {
+      const artEl = document.createElement('div');
+      artEl.className = 'card artifact-card';
+      artEl.style.cssText = 'background:linear-gradient(135deg,#3a2c6a,#5a4090);border:2px solid #a080e0;position:relative;cursor:default;';
+      artEl.innerHTML = `<div style="font-size:1.4em;text-align:center">${art.icon}</div>
+        <div class="card-name" style="font-size:0.7em;text-align:center">${art.name}</div>
+        <div style="text-align:center;font-size:0.85em;margin-top:4px">⏱ ${art.countdown}</div>`;
+      artEl.title = `${art.name}: カウントダウン${art.countdown}\n0になったらアレスティアを再召喚`;
+      zone.appendChild(artEl);
+    });
   }
 }
 
