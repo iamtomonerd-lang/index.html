@@ -8313,7 +8313,7 @@ function runCardTests() {
   // 9. onBlock damage2attacker: 盾兵がブロック時に攻撃者に2ダメージ (AI blocker)
   withState(()=>{
     const atk = _testAddCreature(0,'shinmai_heishi');     // PL攻撃 1/2
-    const blk = _testAddCreature(1,'serashia_junhei');    // AI防御 1/2 onBlock:damage2attacker
+    const blk = _testAddCreature(1,'serashia_junhei');    // AI防御 1/5 onBlock:damage2attackerAndCopy
     // atkPlayer=0がAIのblkにブロックされる場合: opp=1, AIのonBlockはatkInst.damage+=2
     resolveSingleCombat(0, atk.instanceId, null, blk.instanceId);
     drainStack(); // スタックのonBlock誘発を解決
@@ -8332,21 +8332,21 @@ function runCardTests() {
     assert('effectivePower: バフ込みで1+2=3', effPow===3);
   });
 
-  // 11. 盾撃スタック解決: 2ダメージ + +0/+1(永続)
+  // 11. 盾撃スタック解決: 3ダメージ + +0/+1(永続)
   withState(()=>{
     const ownCreature = _testAddCreature(0,'shinmai_heishi');  // 1/2
     const oppCreature = _testAddCreature(1,'arestia');          // 5/5
     const dBefore = oppCreature.damage;
     // スタックに盾撃を直接積んで解決
     G.stack.push({ name:'盾撃', icon:'🛡️', owner:0, resolve:()=>{
-      applyDamageToCreature(1, oppCreature.instanceId, 2, 0);
+      applyDamageToCreature(1, oppCreature.instanceId, 3, 0);
       addPermanentBuff(0, ownCreature.instanceId, 0, 1);
     }});
     // スタック解決
     const fn = G.stack.pop().resolve;
     fn();
     const oC = G.players[1].field.find(x=>x.instanceId===oppCreature.instanceId);
-    assert('盾撃: 相手クリーチャーに2ダメージ', oC && oC.damage===dBefore+2);
+    assert('盾撃: 相手クリーチャーに3ダメージ', oC && oC.damage===dBefore+3);
     const effT = getEffectiveToughness(0, ownCreature);
     assert('盾撃: 自クリーチャーに+0/+1(永続)', effT === (CARD_DB['shinmai_heishi'].toughness + 1));
   });
@@ -8357,7 +8357,7 @@ function runCardTests() {
     const ai  = _testAddCreature(1,'shinmai_heishi'); // 1/2
     resolveSingleCombat(0, pl.instanceId, ai.instanceId, null); // kakutou
     const pInst = G.players[0].field.find(x=>x.instanceId===pl.instanceId);
-    // arestia(5/5) vs 新米兵士(1/2): 新米は5ダメで破壊、arestiaは1ダメ残存
+    // arestia(1/7) vs 新米兵士(1/3): 新米は1ダメで破壊、arestiaは1ダメ残存
     assert('格闘: 弱いクリーチャーが破壊', G.players[1].field.length===0);
     assert('格闘: 強いクリーチャーがダメージを受ける', pInst && pInst.damage===1);
   });
