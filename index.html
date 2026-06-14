@@ -2385,7 +2385,7 @@ function playCardFromHand(player, handIndex) {
           if (tgt2) {
             showEffectStep(card.name, 2, 2, '自クリーチャー+0/+1');
             const oc = G.players[player].field.find(x=>x.instanceId===tgt2.instId);
-            if (oc) { oc.tempToughness=(oc.tempToughness||0)+1; G.tempBuffs.push({instanceId:tgt2.instId,power:0,toughness:1}); }
+            if (oc) { addPermanentBuff(player, tgt2.instId, 0, 1); }
           } else {
             log(`${card.name} 効果2/2: 対象なしのためスキップ`);
           }
@@ -2645,6 +2645,7 @@ function resolveETBEffect(player, instanceId) {
   if (card.etb === 'damage1opponent') {
     const targets = G.players[opp].field;
     if (player === 0) {
+      if (targets.length === 0) { log(`${card.name} ETB: 対象なしのためスキップ`); return; }
       G.targetMode = { type:'opponentCreature', callback:(tgt) => {
         applyDamageToCreature(opp, tgt.instId, 1, player);
         log(`${card.name} ETB: 対戦相手クリーチャーに1ダメージ`, 'damage');
@@ -2670,6 +2671,7 @@ function resolveETBEffect(player, instanceId) {
   } else if (card.etb === 'mustAttackTarget') {
     const targets = G.players[opp].field;
     if (player === 0) {
+      if (targets.length === 0) { log(`${card.name} ETB: 対象なしのためスキップ`); return; }
       G.targetMode = { type:'opponentCreature', callback:(tgt) => {
         const tc = G.players[opp].field.find(x=>x.instanceId===tgt.instId);
         if (tc) { tc.mustAttack = true; G.mustAttackCreatures.add(tgt.instId); }
@@ -2703,6 +2705,7 @@ function resolveETBEffect(player, instanceId) {
   } else if (card.etb === 'damage3opponent') {
     const targets = G.players[opp].field;
     if (player === 0) {
+      if (targets.length === 0) { log(`${card.name} ETB: 対象なしのためスキップ`); return; }
       G.targetMode = { type:'opponentCreature', callback:(tgt) => {
         applyDamageToCreature(opp, tgt.instId, 3, player);
         log(`${card.name} ETB: 3ダメージ`, 'damage');
@@ -3716,6 +3719,7 @@ function activateChargedLand(player, instId) {
       owner: player,
       resolve: () => {
         if (player === 0) {
+          if (G.players[opp].field.length === 0) { log(`${landCard.name} 還元: 対象なしのためスキップ`); render(); updateHints(); return; }
           G.targetMode = { type:'opponentCreature', callback:(tgt) => {
             applyDamageToCreature(opp, tgt.instId, 2, player);
             log(`${landCard.name} 還元: 2ダメージ`, 'damage');
@@ -8206,24 +8210,23 @@ function runCardTests() {
     assert('effectivePower: バフ込みで1+2=3', effPow===3);
   });
 
-  // 11. 盾撃スタック解決: 2ダメージ + +0/+1
+  // 11. 盾撃スタック解決: 2ダメージ + +0/+1(永続)
   withState(()=>{
     const ownCreature = _testAddCreature(0,'shinmai_heishi');  // 1/2
     const oppCreature = _testAddCreature(1,'arestia');          // 5/5
-    const tBefore = ownCreature.tempToughness;
     const dBefore = oppCreature.damage;
     // スタックに盾撃を直接積んで解決
     G.stack.push({ name:'盾撃', icon:'🛡️', owner:0, resolve:()=>{
       applyDamageToCreature(1, oppCreature.instanceId, 2, 0);
-      ownCreature.tempToughness = (ownCreature.tempToughness||0)+1;
-      G.tempBuffs.push({instanceId:ownCreature.instanceId,power:0,toughness:1});
+      addPermanentBuff(0, ownCreature.instanceId, 0, 1);
     }});
     // スタック解決
     const fn = G.stack.pop().resolve;
     fn();
     const oC = G.players[1].field.find(x=>x.instanceId===oppCreature.instanceId);
     assert('盾撃: 相手クリーチャーに2ダメージ', oC && oC.damage===dBefore+2);
-    assert('盾撃: 自クリーチャーに+0/+1', ownCreature.tempToughness===tBefore+1);
+    const effT = getEffectiveToughness(0, ownCreature);
+    assert('盾撃: 自クリーチャーに+0/+1(永続)', effT === (CARD_DB['shinmai_heishi'].toughness + 1));
   });
 
   // 12. 格闘ダメージ交換: 互いにパワー分のダメージ
