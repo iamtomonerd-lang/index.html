@@ -5289,8 +5289,8 @@ function handleLandClick(player, instId) {
       const abilityLabel = landCard.text.split('\n').find(l => l.includes('起動') && l.includes('チャージ')) || landCard.text.split('\n')[1] || '特殊能力';
       const html = `
         <p style="margin-bottom:10px;">${landCard.name} の使用方法を選択:</p>
-        <button onclick="closeModal(); tapLandForMana(${lp},'${instId}'); render();" style="width:100%;margin-bottom:8px;padding:8px;">マナを追加 (${landCard.produces||'C'})</button>
-        <button onclick="closeModal(); activateChargedLand(${lp},'${instId}');" style="width:100%;padding:8px;${canActivate?'':'opacity:0.4;cursor:not-allowed;'}">${abilityLabel}</button>
+        <button onclick="closeModal(); tapLandForMana(${lp},${instId}); render();" style="width:100%;margin-bottom:8px;padding:8px;">マナを追加 (${landCard.produces||'C'})</button>
+        <button onclick="closeModal(); activateChargedLand(${lp},${instId});" style="width:100%;padding:8px;${canActivate?'':'opacity:0.4;cursor:not-allowed;'}">${abilityLabel}</button>
       `;
       showModal(landCard.name, html);
       return;
