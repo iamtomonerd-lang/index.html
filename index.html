@@ -2379,7 +2379,7 @@ function playCardFromHand(player, handIndex) {
       log(`${card.name} をスタックに積んだ`, 'important');
       const opp = 1-player;
       // ■2: 自クリーチャー+0/+1(永続) — 後から積む = 後で解決
-      G.stack.push({ name:`${card.name} ■2: 自クリーチャー+0/+1`, icon:'🛡️', owner:player, resolve:() => {
+      G.stack.push({ name:`${card.name} ■2: 自クリーチャー+0/+1`, icon:'🛡️', owner:player, fastResolve:true, resolve:() => {
         if (G.players[player].field.length === 0) {
           log(`${card.name} ■2: 対象なしのためスキップ`);
           p.graveyard.push(cardId);
@@ -2395,7 +2395,7 @@ function playCardFromHand(player, handIndex) {
         render(); updateHints();
       }});
       // ■1: 相手クリーチャー1体に2ダメージ — 先に積む = 先に解決（LIFO）
-      G.stack.push({ name:`${card.name} ■1: 相手クリーチャーに2ダメージ`, icon:'🛡️', owner:player, resolve:() => {
+      G.stack.push({ name:`${card.name} ■1: 相手クリーチャーに2ダメージ`, icon:'🛡️', owner:player, fastResolve:true, resolve:() => {
         if (G.players[opp].field.length === 0) {
           log(`${card.name} ■1: 対象なしのためスキップ`);
           continueStack(); return;
@@ -2480,13 +2480,13 @@ function playKaizen(player, handIndex) {
   // ■効果を逆順にスタック積み（LIFOで上から順に解決）
   // ■4 OC (最後に積む = 最後に解決)
   if (ocAtCast) {
-    G.stack.push({ name:`${card.name} ■4(OC): クリーチャー展開`, icon:'✨', owner:player, resolve:() => {
+    G.stack.push({ name:`${card.name} ■4(OC): クリーチャー展開`, icon:'✨', owner:player, fastResolve:true, resolve:() => {
       p.graveyard.push(cardId);
       kaizenOCDeploy(player);
     }});
   }
   // ■3: ブロック時1枚引く
-  G.stack.push({ name:`${card.name} ■3: ブロック時1ドロー`, icon:'✨', owner:player, resolve:() => {
+  G.stack.push({ name:`${card.name} ■3: ブロック時1ドロー`, icon:'✨', owner:player, fastResolve:true, resolve:() => {
     if (!G.blockDrawActive) G.blockDrawActive = [false, false];
     G.blockDrawActive[player] = true;
     log(`${card.name} ■3: このターン、ブロック時1ドロー`);
@@ -4002,7 +4002,12 @@ function continueStack() {
   G._pendingCont = null;
   G._pendingReason = '';
   if (G.stack.length > 0) {
-    setTimeout(() => openPriorityWindow(1 - G.activePlayer, cont, reason), 300);
+    const next = G.stack[G.stack.length - 1];
+    if (next.fastResolve) {
+      setTimeout(() => _resolveNextFast(cont, reason), 200);
+    } else {
+      setTimeout(() => openPriorityWindow(1 - G.activePlayer, cont, reason), 300);
+    }
   } else if (cont) {
     setTimeout(cont, 50);
   }
@@ -4028,14 +4033,43 @@ function closePriorityAndResolve() {
     if (G.targetMode || G._awaitingModal) return; // 非同期待機中 → continueStack()を待つ
     G._pendingCont = null;
     G._pendingReason = '';
-    // まだスタックが残っていれば再度優先権ウィンドウ
+    // まだスタックが残っていれば: fastResolveなら即解決、それ以外は優先権ウィンドウ
     if (G.stack.length > 0) {
-      setTimeout(() => openPriorityWindow(1 - G.activePlayer, cont, reason), 400);
+      const next = G.stack[G.stack.length - 1];
+      if (next.fastResolve) {
+        setTimeout(() => _resolveNextFast(cont, reason), 200);
+      } else {
+        setTimeout(() => openPriorityWindow(1 - G.activePlayer, cont, reason), 400);
+      }
       return;
     }
   }
   // スタック空 → continuation実行
   if (cont) setTimeout(cont, 50);
+}
+
+// 同一カードの■効果を優先権ウィンドウなしで連続解決する
+function _resolveNextFast(cont, reason) {
+  if (G.stack.length === 0) { if (cont) setTimeout(cont, 50); return; }
+  const item = G.stack.pop();
+  log(`スタック解決: ${item.icon||''} ${item.name}`, 'important');
+  G._pendingCont = cont;
+  G._pendingReason = reason;
+  if (item.resolve) item.resolve();
+  renderStack(); render();
+  if (G.targetMode || G._awaitingModal) return; // 非同期待機中
+  G._pendingCont = null;
+  G._pendingReason = '';
+  if (G.stack.length > 0) {
+    const next = G.stack[G.stack.length - 1];
+    if (next.fastResolve) {
+      setTimeout(() => _resolveNextFast(cont, reason), 200);
+    } else {
+      setTimeout(() => openPriorityWindow(1 - G.activePlayer, cont, reason), 400);
+    }
+  } else if (cont) {
+    setTimeout(cont, 50);
+  }
 }
 
 function aiHandlePriority() {
