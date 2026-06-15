@@ -8457,11 +8457,11 @@ function runCardTests() {
 
   // 2. applyDamageToCreature: 正しくダメージが入り墓地に行く
   withState(()=>{
-    const inst = _testAddCreature(1,'serashia_junhei'); // 1/2
+    const inst = _testAddCreature(1,'shinmai_heishi'); // 1/2
     applyDamageToCreature(1, inst.instanceId, 1, 0);
     assert('ダメージ適用: 1ダメージ後生存', G.players[1].field.length===1 && G.players[1].field[0].damage===1);
     applyDamageToCreature(1, inst.instanceId, 1, 0);
-    assert('ダメージ適用: 2ダメージ後破壊', G.players[1].field.length===0 && G.players[1].graveyard[0]==='serashia_junhei');
+    assert('ダメージ適用: 2ダメージ後破壊', G.players[1].field.length===0 && G.players[1].graveyard[0]==='shinmai_heishi');
   });
 
   // 3. ETB damage3opponent: セラシアの僧侶が相手クリーチャーに3ダメージ
@@ -8573,11 +8573,11 @@ function runCardTests() {
 
   // 12. 格闘ダメージ交換: 互いにパワー分のダメージ
   withState(()=>{
-    const pl  = _testAddCreature(0,'arestia');      // 5/5
+    const pl  = _testAddCreature(0,'bastian');        // 3/2 格闘
     const ai  = _testAddCreature(1,'shinmai_heishi'); // 1/2
     resolveSingleCombat(0, pl.instanceId, ai.instanceId, null); // kakutou
     const pInst = G.players[0].field.find(x=>x.instanceId===pl.instanceId);
-    // arestia(1/7) vs 新米兵士(1/3): 新米は1ダメで破壊、arestiaは1ダメ残存
+    // bastian(3/2) vs 新米兵士(1/2): 新米は3ダメで破壊、bastianは1ダメ残存
     assert('格闘: 弱いクリーチャーが破壊', G.players[1].field.length===0);
     assert('格闘: 強いクリーチャーがダメージを受ける', pInst && pInst.damage===1);
   });
@@ -8609,45 +8609,63 @@ function runCardTests() {
     const pb = getPermanentBuff(arst.instanceId);
     assert('Arestiaバフ: ターン終了後も永続バフが残る', pb.power===1 && pb.toughness===1);
     const eff = getEffectivePower(0, G.players[0].field[0]);
-    assert('Arestiaバフ: 実効パワーに反映(5+1=6)', eff===6);
+    assert('Arestiaバフ: 実効パワーに反映(1+1=2)', eff===2);
   });
 
-  // 15. 介善: ■効果が個別スタックエントリとして積まれ、解決時に対象選択
+  // 15. 介善（新仕様）: ■1で相手クリーチャー2体にそれぞれ5ダメージ、■2でP/T入れ替え付与
   withState(()=>{
     G.players[0].hand = ['kaizen'];
     G.players[0].mana = {R:0,U:0,G:0,W:4,B:0,C:0};
-    const t1 = _testAddCreature(1,'arestia');        // 5/5 ← 5ダメージ対象
-    const t2 = _testAddCreature(1,'shinmai_heishi'); // 攻撃強制対象
+    const t1 = _testAddCreature(1,'shinmai_heishi'); // 1/2 ← 5ダメージ対象1
+    const t2 = _testAddCreature(1,'shinmai_heishi'); // 1/2 ← 5ダメージ対象2
     playKaizen(0, 0);
-    assert('介善: 3つの効果がスタックに積まれる', G.stack.length===3);
-    // ■1 (5ダメージ) — 最上位のエントリが最初に解決
+    assert('介善(非OC): 3つの効果がスタックに積まれる', G.stack.length===3);
+    // ■1-1 (1体目に5ダメージ) — 最上位が最初に解決
     G.stack.pop().resolve();
-    assert('介善 ■1: 解決時にtargetModeがセット', G.targetMode && G.targetMode.type==='opponentCreature');
+    assert('介善 ■1-1: 解決時にtargetModeがセット', G.targetMode && G.targetMode.type==='opponentCreature');
     G.targetMode.callback({instId: t1.instanceId});
-    const r1 = G.players[1].field.find(x=>x.instanceId===t1.instanceId);
-    assert('介善 ■1: 5ダメージで5/5が破壊', !r1);
-    // ■2 (攻撃強制)
+    assert('介善 ■1-1: 5ダメージで1体目破壊', !G.players[1].field.find(x=>x.instanceId===t1.instanceId));
+    // ■1-2 (2体目に5ダメージ)
     G.stack.pop().resolve();
-    assert('介善 ■2: 解決時にtargetModeがセット', G.targetMode && G.targetMode.type==='opponentCreature');
+    assert('介善 ■1-2: 解決時にtargetModeがセット', G.targetMode && G.targetMode.type==='opponentCreature');
     G.targetMode.callback({instId: t2.instanceId});
-    const r2 = G.players[1].field.find(x=>x.instanceId===t2.instanceId);
-    assert('介善 ■2: 攻撃強制フラグ', r2 && r2.mustAttack===true && G.mustAttackCreatures.has(t2.instanceId));
-    // ■3 (ブロック時ドロー)
+    assert('介善 ■1-2: 5ダメージで2体目破壊', !G.players[1].field.find(x=>x.instanceId===t2.instanceId));
+    // ■2 (自クリーチャーにP/T入れ替えの置き換え効果を付与)
     G.stack.pop().resolve();
-    assert('介善 ■3: ブロック時ドローが有効化', G.blockDrawActive[0]===true);
     assert('介善: 墓地に置かれる', G.players[0].graveyard.includes('kaizen'));
   });
 
-  // 16. 介善: 相手クリーチャーなしでも■3は処理される
+  // 16. 介善: 相手クリーチャーなしでも全スタックが処理される
   withState(()=>{
     G.players[0].hand = ['kaizen'];
     G.players[0].mana = {R:0,U:0,G:0,W:4,B:0,C:0};
     playKaizen(0, 0);
     assert('介善(対象なし): 3スタック積まれる', G.stack.length===3);
-    G.stack.pop().resolve(); // ■1: 対象なしスキップ
-    G.stack.pop().resolve(); // ■2: 対象なしスキップ
-    G.stack.pop().resolve(); // ■3: ブロック時ドロー
-    assert('介善(対象なし): ブロック時ドローが有効化', G.blockDrawActive[0]===true);
+    G.stack.pop().resolve(); // ■1-1: 対象なしスキップ
+    G.stack.pop().resolve(); // ■1-2: 対象なしスキップ
+    G.stack.pop().resolve(); // ■2: P/T入れ替え付与
+    assert('介善(対象なし): 墓地に置かれる', G.players[0].graveyard.includes('kaizen'));
+  });
+
+  // 16a. 介善 ■2: 致死ダメージを受けると離れる代わりにP/Tが入れ替わる（ダメージ引き継ぎ）
+  withState(()=>{
+    const c = _testAddCreature(0,'bastian'); // 3/2
+    c.noDamageKill = true;                   // 介善■2が付与した状態
+    applyDamageToCreature(0, c.instanceId, 2, 1); // タフネス2に致死ダメージ
+    const alive = G.players[0].field.find(x=>x.instanceId===c.instanceId);
+    assert('介善■2: 致死ダメージでも入れ替えで生存', !!alive);
+    assert('介善■2: 入れ替え後パワー=元タフネス(2)', alive && getEffectivePower(0, alive)===2);
+    assert('介善■2: 入れ替え後タフネス=元パワー(3)', alive && getEffectiveToughness(0, alive)===3);
+    assert('介善■2: ダメージは引き継ぐ(2)', alive && alive.damage===2);
+    assert('介善■2: 置き換えは1回限り(フラグ解除)', alive && alive.noDamageKill===false);
+  });
+
+  // 16b. 介善 ■2: 入れ替えても新タフネス以上のダメージなら破壊される
+  withState(()=>{
+    const c = _testAddCreature(0,'bastian'); // 3/2
+    c.noDamageKill = true;
+    applyDamageToCreature(0, c.instanceId, 3, 1); // 入れ替え後タフネス3以上 → 破壊
+    assert('介善■2: 入れ替え後タフネス以上のダメージで破壊', !G.players[0].field.find(x=>x.instanceId===c.instanceId));
   });
 
   // 16b. 介善ブロックドロー: 持続は次の自分のターン開始まで＆ブロック時にドロー
@@ -8729,6 +8747,44 @@ function runCardTests() {
     const wBefore = G.players[0].mana.W;
     tapLandForMana(0, 401);
     assert('土地タップ: タップ済みは再生成不可', G.players[0].mana.W===wBefore);
+  });
+
+  // 21. 攻撃強制(mustAttack): ETBで付与した相手クリーチャーは相手ターン開始後も維持される
+  withState(()=>{
+    // P0が能動側。P1のクリーチャーに「次の相手ターン攻撃強制」が付いている状態
+    const enemy = _testAddCreature(1,'shinmai_heishi');
+    enemy.mustAttack = true;
+    G.mustAttackCreatures.add(enemy.instanceId);
+    G.activePlayer = 0;
+    G.turn = 1;
+    endTurn(); // P1のターンへ切替
+    const e = G.players[1].field.find(x=>x.instanceId===enemy.instanceId);
+    assert('攻撃強制: 相手ターン開始後も維持される', e && e.mustAttack===true);
+    assert('攻撃強制: 能動側になったP1がアクティブ', G.activePlayer===1);
+  });
+
+  // 22. 攻撃強制(mustAttack): ターンを終えた側のフラグはクリアされる
+  withState(()=>{
+    const mine = _testAddCreature(0,'shinmai_heishi');
+    mine.mustAttack = true;
+    G.mustAttackCreatures.add(mine.instanceId);
+    G.activePlayer = 0;
+    G.turn = 1;
+    endTurn(); // P0がターンを終える → P0のフラグはクリア
+    const m = G.players[0].field.find(x=>x.instanceId===mine.instanceId);
+    assert('攻撃強制: ターンを終えた側のフラグはクリア', m && m.mustAttack===false);
+  });
+
+  // 23. アレスティア ■3: 自分のクリーチャーのブロック時、相手プレイヤーへ1ダメージ
+  withState(()=>{
+    // P1が攻撃、P0(アレスティア所持側)がブロック
+    const atk = _testAddCreature(1,'shinmai_heishi'); // 1/2 攻撃側
+    _testAddCreature(0,'arestia');                    // アレスティア(防御側に存在)
+    const blk = _testAddCreature(0,'serashia_souryo'); // 2/6 ブロッカー
+    const lifeBefore = G.players[1].life;
+    resolveSingleCombat(1, atk.instanceId, null, blk.instanceId);
+    drainStack();
+    assert('アレスティア■3: ブロック時、攻撃側プレイヤーへ1ダメージ', G.players[1].life === lifeBefore - 1);
   });
 
   // ─────────────────────────────────────────────
@@ -9216,6 +9272,9 @@ function toggleLog() {
   window.addEventListener('resize', applyMobileHeight);
   window.addEventListener('orientationchange', () => setTimeout(applyMobileHeight, 200));
 })();
+
+// ── ヘッドレステスト用フック（ブラウザでは無害）──
+if (typeof globalThis !== 'undefined') { globalThis.__runCardTests = (typeof runCardTests !== 'undefined') ? runCardTests : null; }
 
 </script>
 </body>
