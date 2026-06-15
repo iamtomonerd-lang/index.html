@@ -2729,7 +2729,7 @@ function resolveETBEffect(player, instanceId) {
   if (card.etb === 'damage1opponent') {
     const targets = G.players[opp].field;
     if (player === 0) {
-      if (targets.length === 0) { log(`${card.name} ETB: 対象なしのためスキップ`); return; }
+      if (targets.length === 0) { log(`${card.name} ETB: 対象なしのためスキップ`); continueStack(); return; }
       G.targetMode = { type:'opponentCreature', callback:(tgt) => {
         applyDamageToCreature(opp, tgt.instId, 1, player);
         log(`${card.name} ETB: 対戦相手クリーチャーに1ダメージ`, 'damage');
@@ -2756,7 +2756,7 @@ function resolveETBEffect(player, instanceId) {
   } else if (card.etb === 'mustAttackTarget') {
     const targets = G.players[opp].field;
     if (player === 0) {
-      if (targets.length === 0) { log(`${card.name} ETB: 対象なしのためスキップ`); return; }
+      if (targets.length === 0) { log(`${card.name} ETB: 対象なしのためスキップ`); continueStack(); return; }
       G.targetMode = { type:'opponentCreature', callback:(tgt) => {
         const tc = G.players[opp].field.find(x=>x.instanceId===tgt.instId);
         if (tc) { tc.mustAttack = true; G.mustAttackCreatures.add(tgt.instId); }
@@ -2791,7 +2791,7 @@ function resolveETBEffect(player, instanceId) {
   } else if (card.etb === 'damage3opponent') {
     const targets = G.players[opp].field;
     if (player === 0) {
-      if (targets.length === 0) { log(`${card.name} ETB: 対象なしのためスキップ`); return; }
+      if (targets.length === 0) { log(`${card.name} ETB: 対象なしのためスキップ`); continueStack(); return; }
       G.targetMode = { type:'opponentCreature', callback:(tgt) => {
         applyDamageToCreature(opp, tgt.instId, 3, player);
         log(`${card.name} ETB: 3ダメージ`, 'damage');
@@ -4238,6 +4238,8 @@ function openPriorityWindow(forPlayer, continuation, reason) {
   updateHints();
   if (NET_MODE === 'local' && forPlayer === 1) {
     setTimeout(() => aiHandlePriority(), 700);
+    // フェイルセーフ: AI応答が5秒以上かかる場合は強制的に解決
+    setTimeout(() => { if (G.awaitingPriority && G.priorityFor === 1) { log('AI応答タイムアウト: 強制解決', 'important'); closePriorityAndResolve(); } }, 5000);
   } else if (NET_MODE === 'hotseat' && forPlayer !== G.activePlayer) {
     // ホットシート: 非アクティブ側の優先権は自動パス（手札が隠れているため）
     setTimeout(() => { if (G.awaitingPriority) closePriorityAndResolve(); }, 400);
