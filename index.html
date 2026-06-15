@@ -2401,7 +2401,7 @@ function playCardFromHand(player, handIndex) {
         modalText += `<button onclick="closeModal();G._awaitingModal=false;playCardFromHandAfterCrystal(${player},${handIndex});" style="margin:4px;padding:6px 14px;background:#4a9eff;border:none;border-radius:4px;color:#fff;cursor:pointer;">本体をプレイ（${costToString(card.cost)}）</button>`;
       }
       if (canPayCrystal) {
-        modalText += `<button onclick="closeModal();G._awaitingModal=false;declareCrystalOnly(${player},${handIndex});" style="margin:4px;padding:6px 14px;background:#c0a020;border:none;border-radius:4px;color:#fff;cursor:pointer;">旗のみ宣言（白${crystalCost}）</button>`;
+        modalText += `<button onclick="closeModal();G._awaitingModal=false;declareCrystalOnly(${player},${handIndex});" style="margin:4px;padding:6px 14px;background:#c0a020;border:none;border-radius:4px;color:#fff;cursor:pointer;">アレスティアの旗のみ宣言（白${crystalCost}）</button>`;
       }
       showModal(`${card.name}`, modalText);
       return;
@@ -2485,7 +2485,7 @@ function playCardFromHand(player, handIndex) {
     if (canPayCrystal) {
       G._awaitingModal = true;
       showModal(`${card.name} 結晶コスト`,
-        `<p>結晶${crystalCost}：白${crystalCost}マナを追加で支払い、カウントダウン2のアーティファクトを場に出しますか？<br><small>（このカードが離れた時、アレスティアを再召喚します）</small></p>
+        `<p>結晶${crystalCost}：白${crystalCost}マナを追加で支払い、「アレスティアの旗」を場に出しますか？<br><small>（このカードが離れた時、アレスティアを再召喚します）</small></p>
         <button onclick="closeModal();G._awaitingModal=false;G._pendingCrystalPay=true;playCardFromHandAfterCrystal(${player},${handIndex});" style="margin:4px;padding:6px 14px;background:#c0a020;border:none;border-radius:4px;color:#fff;cursor:pointer;">支払う（白${crystalCost}）</button>
         <button onclick="closeModal();G._awaitingModal=false;G._pendingCrystalPay=false;playCardFromHandAfterCrystal(${player},${handIndex});" style="margin:4px;padding:6px 14px;background:#555;border:none;border-radius:4px;color:#fff;cursor:pointer;">支払わない</button>`
       );
