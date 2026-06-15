@@ -1826,38 +1826,38 @@ const CARD_DB = {
   // CREATURES
   'shinmai_heishi': {
     id:'shinmai_heishi', name:'新米兵士', type:'creature', color:'W',
-    cost:{W:1}, power:1, toughness:3, subtype:'人間(戦士)', icon:'🛡️',
+    cost:{W:1}, power:1, toughness:2, subtype:'人間(戦士)', icon:'🛡️',
     keywords:[], text:'■ブロック時、このクリーチャーのタフネス-1されたコピーを出してもよい。ただし、このクリーチャーのタフネスが１なら出せない',
     onBlockCopy:true
   },
   'ten_kara_shisha': {
     id:'ten_kara_shisha', name:'天からの使者', type:'creature', color:'W',
-    cost:{W:1,C:1}, power:1, toughness:3, subtype:'天使', icon:'👼',
+    cost:{W:1,C:1}, power:1, toughness:2, subtype:'天使', icon:'👼',
     keywords:['飛行'], text:'■飛行\n■出た時、相手のクリーチャー１体に1ダメージ\n■ブロック時、このクリーチャーのタフネス-1されたコピーを出してもよい。ただし、このクリーチャーのタフネスが１なら出せない',
     flying:true, etb:'damage1opponent', onBlockCopy:true
   },
   'eiyuu_kouho': {
     id:'eiyuu_kouho', name:'英雄候補', type:'creature', color:'W',
-    cost:{W:1,C:3}, power:3, toughness:5, subtype:'人間(戦士)', icon:'⚔️',
+    cost:{W:1,C:1}, power:1, toughness:3, subtype:'人間(戦士)', icon:'⚔️',
     keywords:['格闘'], text:'■格闘\n■出た時、3ルック1(白)',
     kakutou:true, etb:'look3keep1white'
   },
   'serashia_heishi': {
     id:'serashia_heishi', name:'セラシアの兵士', type:'creature', color:'W',
-    cost:{W:2,C:1}, power:2, toughness:5, subtype:'人間(戦士)', icon:'🗡️',
+    cost:{W:1,C:1}, power:1, toughness:4, subtype:'人間(戦士)', icon:'🗡️',
     keywords:[], text:'■ブロック時、1枚引く\n■ブロック時、このクリーチャーのタフネス-1されたコピーを出してもよい。ただし、このクリーチャーのタフネスが１なら出せない',
     onBlock:'draw1', onBlockCopy:true
   },
   'serashia_junhei': {
     id:'serashia_junhei', name:'セラシアの盾兵', type:'creature', color:'W',
-    cost:{W:2,C:1}, power:1, toughness:5, subtype:'人間(戦士)', icon:'🛡️',
+    cost:{W:1,C:1}, power:1, toughness:4, subtype:'人間(戦士)', icon:'🛡️',
     keywords:[], text:'■出た時、相手クリーチャー１体選ぶ。次の相手のターン中、そのクリーチャーは可能なら攻撃する\n■ブロック時、相手クリーチャー1体に2ダメージ。その後、このクリーチャーのタフネス-1されたコピーを出してもよい。ただし、このクリーチャーのタフネスが１なら出せない',
     etb:'mustAttackTarget', onBlock:'damage2attackerAndCopy'
   },
   'serashia_souryo': {
     id:'serashia_souryo', name:'セラシアの僧侶', type:'creature', color:'W',
-    cost:{W:3,C:2}, power:3, toughness:7, subtype:'人間(戦士)', icon:'🙏',
-    keywords:['CX8'], text:'■出た時、相手のクリーチャー１体に3ダメージ\n■ブロック時、自分のライフを3回復\n〈C8〉\nブロック時、自分のクリーチャー1体を+1/+1\nブロック時、このクリーチャーのタフネス-1されたコピーを出してもよい。ただし、このクリーチャーのタフネスが１なら出せない',
+    cost:{W:2,C:2}, power:2, toughness:6, subtype:'人間(戦士)', icon:'🙏',
+    keywords:['CX8'], text:'■出た時、相手のクリーチャー１体に3ダメージ\n■ブロック時、自分のライフを3回復。その後、ブロック時、このクリーチャーのタフネス-1されたコピーを出してもよい。ただし、このクリーチャーのタフネスが１なら出せない\n〈C8〉\n■ブロック時、自分のクリーチャー1体を+1/+1',
     etb:'damage3opponent', onBlock:'gain3life', cx8Block:'buff1ally', onBlockCopy:true
   },
   'bastian': {
@@ -1880,7 +1880,7 @@ const CARD_DB = {
   'junigeki': {
     id:'junigeki', name:'盾撃', type:'spell', color:'W',
     cost:{W:1}, icon:'🛡️', keywords:['Quick'],
-    text:'■相手のクリーチャー1体に３ダメージ\n■自分のクリーチャー1体を+0/+1。そのクリーチャーのタフネス分ダメージを割り振る',
+    text:'■相手のクリーチャー1体に２ダメージ\n■自分のクリーチャー1体を+0/+1。そのクリーチャーのタフネス分ダメージを割り振る',
     effect:'junigeki'
   },
   'kaizen': {
@@ -1905,13 +1905,13 @@ const CARD_DB = {
   'shigen_heichi': {
     id:'shigen_heichi', name:'資源豊富な平地', type:'land', color:'W',
     produces:'W', icon:'⛏️',
-    text:'■起動(タップ):白1マナ生成\n〈OC〉\n■起動(自身の還元):白2マナ生成。これはこの土地がチャージされている時のみ起動できる',
+    text:'■起動(タップ):白1マナ生成\n〈OC〉\n■起動(自身の還元):白3マナ生成。これはこの土地がチャージされている時のみ起動できる',
     chargedAbility:'kaizouReturn'
   },
   'kemono_heichi': {
     id:'kemono_heichi', name:'獣住む平地', type:'land', color:'W',
     produces:'W', icon:'🐾',
-    text:'■起動(タップ):白1マナ生成\n■起動(自身の還元):相手クリーチャー1体に2ダメージ。これはこの土地がチャージされているときのみ起動できる',
+    text:'■起動(タップ):白1マナ生成\n■起動(自身の還元):相手クリーチャー1体に3ダメージ。これはこの土地がチャージされているときのみ起動できる',
     chargedAbility:'damage2opponent'
   },
   'serashia_miyako': {
@@ -2404,16 +2404,16 @@ function playCardFromHand(player, handIndex) {
         }};
         render(); updateHints();
       }});
-      // ■1: 相手クリーチャー1体に3ダメージ — 先に積む = 先に解決（LIFO）
-      G.stack.push({ name:`${card.name} ■1: 相手クリーチャーに3ダメージ`, icon:'🛡️', owner:player, fastResolve:true, resolve:() => {
+      // ■1: 相手クリーチャー1体に2ダメージ — 先に積む = 先に解決（LIFO）
+      G.stack.push({ name:`${card.name} ■1: 相手クリーチャーに2ダメージ`, icon:'🛡️', owner:player, fastResolve:true, resolve:() => {
         if (G.players[opp].field.length === 0) {
           log(`${card.name} ■1: 対象なしのためスキップ`);
           continueStack(); return;
         }
         G.targetMode = { type:'opponentCreature', callback:(tgt) => {
           G.targetMode = null;
-          applyDamageToCreature(opp, tgt.instId, 3, player);
-          log(`${card.name} ■1: 相手クリーチャーに3ダメージ`);
+          applyDamageToCreature(opp, tgt.instId, 2, player);
+          log(`${card.name} ■1: 相手クリーチャーに2ダメージ`);
           render(); updateHints(); continueStack();
         }};
         render(); updateHints();
@@ -3872,7 +3872,7 @@ function activateChargedLand(player, instId) {
       icon: landCard.icon || '✨',
       owner: player,
       resolve: () => {
-        p.mana.W = (p.mana.W||0)+2;
+        p.mana.W = (p.mana.W||0)+3;
         const idx = p.lands.findIndex(l=>l.instanceId===instId);
         if (idx !== -1) { p.lands.splice(idx,1); p.landDeck.push(land.cardId); }
         log(`${landCard.name} 還元: WW追加、土地デッキ底へ`, 'heal');
@@ -3882,7 +3882,7 @@ function activateChargedLand(player, instId) {
     renderStack();
     openPriorityWindow(opp, null, `${landCard.name} 還元起動`);
   } else if (landCard.chargedAbility === 'damage2opponent') {
-    // kemono_heichi: 自身を土地デッキ底へ送り → 相手クリーチャーに2ダメージ
+    // kemono_heichi: 自身を土地デッキ底へ送り → 相手クリーチャーに3ダメージ
     const lIdx = p.lands.findIndex(l=>l.instanceId===instId);
     if (lIdx === -1) return;
     p.lands.splice(lIdx, 1);
@@ -3890,25 +3890,25 @@ function activateChargedLand(player, instId) {
     if (land.chargeCard) p.exile.push(land.chargeCard);
     log(`${landCard.name} 還元: 土地デッキ底へ → スタックに積む`);
     G.stack.push({
-      name: `${landCard.name} 起動(2ダメージ)`,
+      name: `${landCard.name} 起動(3ダメージ)`,
       icon: landCard.icon || '✨',
       owner: player,
       resolve: () => {
         if (player === 0) {
           if (G.players[opp].field.length === 0) { log(`${landCard.name} 還元: 対象なしのためスキップ`); render(); updateHints(); continueStack(); return; }
           G.targetMode = { type:'opponentCreature', callback:(tgt) => {
-            applyDamageToCreature(opp, tgt.instId, 2, player);
-            log(`${landCard.name} 還元: 2ダメージ`, 'damage');
+            applyDamageToCreature(opp, tgt.instId, 3, player);
+            log(`${landCard.name} 還元: 3ダメージ`, 'damage');
             G.targetMode = null; render(); updateHints();
             continueStack();
           }};
-          log('対象を選択（2ダメージ）');
+          log('対象を選択（3ダメージ）');
           render(); updateHints();
         } else {
           const targets = G.players[opp].field;
           if (targets.length > 0) {
-            applyDamageToCreature(opp, targets[0].instanceId, 2, player);
-            log(`AI ${landCard.name} 還元: 2ダメージ`, 'damage');
+            applyDamageToCreature(opp, targets[0].instanceId, 3, player);
+            log(`AI ${landCard.name} 還元: 3ダメージ`, 'damage');
           }
           render(); updateHints();
         }
@@ -4424,7 +4424,7 @@ function aiDoActivateChargedLand(landInstId) {
   } else if (lc.chargedAbility === 'kaizouReturn') {
     if (!isOCActive(1) || land.tapped) return;
     land.tapped = true;
-    ai.mana.W = (ai.mana.W||0)+2;
+    ai.mana.W = (ai.mana.W||0)+3;
     const idx = ai.lands.findIndex(l=>l.instanceId===landInstId);
     if (idx !== -1) { ai.lands.splice(idx,1); ai.landDeck.push(land.cardId); }
     log(`AI ${lc.name} 還元: WW追加、土地デッキ底へ`, 'heal');
@@ -4442,11 +4442,11 @@ function aiDoActivateChargedLand(landInstId) {
       const tgt = mctsPickOption(targets, (sim, t) => {
         const s0 = sim.state.players[0];
         const st = s0.field.find(c=>c.id===t.instanceId);
-        if (st) { st.damage+=2; sim.simCheckDeath(0); } else s0.life-=2;
+        if (st) { st.damage+=3; sim.simCheckDeath(0); } else s0.life-=3;
       }) || targets[0];
       showAIThinking(false);
-      applyDamageToCreature(0, tgt.instanceId, 2, 1);
-      log(`AI ${lc.name} 還元: 2ダメージ → ${CARD_DB[tgt.cardId].name}`, 'damage');
+      applyDamageToCreature(0, tgt.instanceId, 3, 1);
+      log(`AI ${lc.name} 還元: 3ダメージ → ${CARD_DB[tgt.cardId].name}`, 'damage');
     }
     checkDeath(); render();
   } else if (lc.chargedAbility === 'buffWhiteCreature') {
@@ -4485,11 +4485,11 @@ function aiActivateChargedLands() {
         if (p1.deck.length) p1.hand.push(p1.deck.shift());
       } else if (lc.chargedAbility === 'kaizouReturn') {
         if (!sim.simIsOC(p1)||simLand.tapped) return;
-        p1.mana.W=(p1.mana.W||0)+2;
+        p1.mana.W=(p1.mana.W||0)+3;
         const ix=p1.lands.indexOf(simLand); if(ix!==-1){p1.lands.splice(ix,1);p1.landDeck.push(simLand.cardId);}
       } else if (lc.chargedAbility === 'damage2opponent') {
         const ix=p1.lands.indexOf(simLand); if(ix!==-1){p1.lands.splice(ix,1);p1.landDeck.push(lc.id);}
-        if (p0.field.length){const t=p0.field.reduce((a,b)=>sim.hp(b)<sim.hp(a)?b:a);t.damage+=2;sim.simCheckDeath(0);}else p0.life-=2;
+        if (p0.field.length){const t=p0.field.reduce((a,b)=>sim.hp(b)<sim.hp(a)?b:a);t.damage+=3;sim.simCheckDeath(0);}else p0.life-=3;
       } else if (lc.chargedAbility === 'buffWhiteCreature') {
         if (simLand.tapped) return; simLand.tapped=true;
         const ws=p1.field.filter(c=>CARD_DB[c.cardId].color==='W');
@@ -4679,15 +4679,15 @@ function aiPlaySpellEffect(card) {
       const tgt = mctsPickOption(targets, (sim, t) => {
         const p0 = sim.state.players[0], p1 = sim.state.players[1];
         const simTgt = p0.field.find(c => c.id === t.instanceId);
-        if (simTgt) simTgt.damage += 3;
-        else p0.life -= 3;
+        if (simTgt) simTgt.damage += 2;
+        else p0.life -= 2;
         if (p1.field.length > 0) {
           const ally = p1.field.reduce((a,b) => sim.hp(a) < sim.hp(b) ? a : b);
           ally.tempToughness = (ally.tempToughness||0)+1;
         }
       }) || targets[0];
-      applyDamageToCreature(0, tgt.instanceId, 3, 1);
-      log(`AI: ${card.name} でプレイヤークリーチャーに3ダメージ`, 'damage');
+      applyDamageToCreature(0, tgt.instanceId, 2, 1);
+      log(`AI: ${card.name} でプレイヤークリーチャーに2ダメージ`, 'damage');
       // Buff own weakest (most in danger) creature +0/+1 (永続)
       if (ai.field.length > 0) {
         const ally = ai.field.reduce((a,b) => getEffectiveToughness(1,b) < getEffectiveToughness(1,a) ? b : a);
@@ -6404,7 +6404,7 @@ class SimGame {
         if (p.deck.length) p.hand.push(p.deck.shift());
       } else if (lc.chargedAbility === 'kaizouReturn') {
         if (!this.simIsOC(p) || land.tapped) continue;
-        p.mana.W=(p.mana.W||0)+2;
+        p.mana.W=(p.mana.W||0)+3;
         const idx=p.lands.indexOf(land); if(idx!==-1){p.lands.splice(idx,1); p.landDeck.push(land.cardId);}
         break;
       } else if (lc.chargedAbility === 'damage2opponent') {
@@ -6475,7 +6475,7 @@ class SimGame {
     if (!this.canAfford(me,card.cost)) return -Infinity;
     if (card.effect==='junigeki' && opp.field.length) {
       const tgt=opp.field.reduce((a,b)=>this.hp(b)<this.hp(a)?b:a);
-      const kills=(tgt.damage+3)>=(CARD_DB[tgt.cardId].toughness+(tgt.tempToughness||0));
+      const kills=(tgt.damage+2)>=(CARD_DB[tgt.cardId].toughness+(tgt.tempToughness||0));
       return kills ? w.fieldPower*(CARD_DB[tgt.cardId].power||1)+w.fieldCount : w.fieldPower*0.5;
     }
     if (card.effect==='kaizen' && opp.field.length) {
@@ -6491,7 +6491,7 @@ class SimGame {
     if (card.effect==='junigeki') {
       if (opp.field.length) {
         const tgt=opp.field.reduce((a,b)=>this.hp(b)<this.hp(a)?b:a);
-        tgt.damage+=3;
+        tgt.damage+=2;
         if (me.field.length) { const ally=me.field.reduce((a,b)=>this.hp(a)<this.hp(b)?a:b); ally.tempToughness=(ally.tempToughness||0)+1; }
       } else opp.life-=3;
     } else if (card.effect==='kaizen') {
@@ -8449,21 +8449,21 @@ function runCardTests() {
     assert('effectivePower: バフ込みで1+2=3', effPow===3);
   });
 
-  // 11. 盾撃スタック解決: 3ダメージ + +0/+1(永続)
+  // 11. 盾撃スタック解決: 2ダメージ + +0/+1(永続)
   withState(()=>{
     const ownCreature = _testAddCreature(0,'shinmai_heishi');  // 1/2
     const oppCreature = _testAddCreature(1,'arestia');          // 5/5
     const dBefore = oppCreature.damage;
     // スタックに盾撃を直接積んで解決
     G.stack.push({ name:'盾撃', icon:'🛡️', owner:0, resolve:()=>{
-      applyDamageToCreature(1, oppCreature.instanceId, 3, 0);
+      applyDamageToCreature(1, oppCreature.instanceId, 2, 0);
       addPermanentBuff(0, ownCreature.instanceId, 0, 1);
     }});
     // スタック解決
     const fn = G.stack.pop().resolve;
     fn();
     const oC = G.players[1].field.find(x=>x.instanceId===oppCreature.instanceId);
-    assert('盾撃: 相手クリーチャーに3ダメージ', oC && oC.damage===dBefore+3);
+    assert('盾撃: 相手クリーチャーに2ダメージ', oC && oC.damage===dBefore+2);
     const effT = getEffectiveToughness(0, ownCreature);
     assert('盾撃: 自クリーチャーに+0/+1(永続)', effT === (CARD_DB['shinmai_heishi'].toughness + 1));
   });
