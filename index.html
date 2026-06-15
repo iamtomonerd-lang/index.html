@@ -2983,8 +2983,8 @@ function spawnCopyWithReducedToughness(player, instId) {
   const inst = G.players[player].field.find(c => c.instanceId === instId);
   if (!inst) return;
   const card = CARD_DB[inst.cardId];
-  const effT = getEffectiveToughness(player, inst);
-  if (effT <= 1) return;
+  const baseT = card.toughness; // 元のタフネス（バフ前）を参照
+  if (baseT <= 1) return;      // 基本タフネスが1以下ならコピー不可
   const newInstId = G.nextInstanceId++;
   const newInst = {
     cardId: inst.cardId,
@@ -2992,17 +2992,12 @@ function spawnCopyWithReducedToughness(player, instId) {
     tapped: false,
     damage: 0,
     summoningSickness: true,
-    _permanentBuffs: [],
-    _toughnessOffset: 0,
-    _ptSwap: inst._ptSwap ? {...inst._ptSwap} : null
+    sick: true
   };
   G.players[player].field.push(newInst);
-  // Set effective toughness to effT-1 via permanent buff
-  const toughnessDiff = (effT - 1) - card.toughness;
-  if (toughnessDiff !== 0) {
-    addPermanentBuff(player, newInstId, 0, toughnessDiff);
-  }
-  log(`${card.name}: タフネス${effT-1}のコピーを展開`, 'important');
+  // 基本タフネス-1 になるよう永続バフで調整
+  addPermanentBuff(player, newInstId, 0, -1);
+  log(`${card.name}: タフネス${baseT - 1}のコピーを展開`, 'important');
   fireETB(player, newInstId);
   render();
 }
@@ -3558,11 +3553,11 @@ function resolveSingleCombat(atkPlayer, atkInstId, kakutouTargetId, blockerInstI
       }
       if (blkCard.onBlock === 'damage2attackerAndCopy') {
         const blkInstNow = G.players[opp].field.find(c => c.instanceId === blockerInstId);
-        if (blkInstNow && getEffectiveToughness(opp, blkInstNow) > 1) {
+        if (blkInstNow && blkCard.toughness > 1) {
           if (opp === 0) {
+            const capInstId2 = blkInstNow.instanceId;
             triggerEffect(`${blkCard.name} コピー誘発`, blkCard.icon||'🛡️', opp, () => {
-              const effT = getEffectiveToughness(0, blkInstNow);
-              showModal(`${blkCard.name} コピー`, `<p>タフネス${effT-1}のコピーを出しますか？</p><button onclick="closeModal();G._awaitingModal=false;spawnCopyWithReducedToughness(0,${blkInstNow.instanceId});render();continueStack();">はい</button><button onclick="closeModal();G._awaitingModal=false;continueStack();">いいえ</button>`);
+              showModal(`${blkCard.name} コピー`, `<p>タフネス${blkCard.toughness - 1}のコピーを出しますか？</p><button onclick="closeModal();G._awaitingModal=false;spawnCopyWithReducedToughness(0,${capInstId2});render();continueStack();" style="margin:4px;padding:6px 12px;background:#4a9eff;border:none;border-radius:4px;color:#fff;cursor:pointer;">はい</button><button onclick="closeModal();G._awaitingModal=false;continueStack();" style="margin:4px;padding:6px 12px;background:#888;border:none;border-radius:4px;color:#fff;cursor:pointer;">いいえ</button>`);
               G._awaitingModal = true;
             });
           } else {
@@ -3572,14 +3567,14 @@ function resolveSingleCombat(atkPlayer, atkInstId, kakutouTargetId, blockerInstI
           }
         }
       }
-      // onBlockCopy: ブロック時コピー
+      // onBlockCopy: ブロック時コピー（元の基本タフネスが2以上の時のみ）
       if (blkCard.onBlockCopy) {
         const blkInstNow = G.players[opp].field.find(c => c.instanceId === blockerInstId);
-        if (blkInstNow && getEffectiveToughness(opp, blkInstNow) > 1) {
+        if (blkInstNow && blkCard.toughness > 1) {
           if (opp === 0) {
+            const capInstId = blkInstNow.instanceId;
             triggerEffect(`${blkCard.name} コピー誘発`, blkCard.icon||'🛡️', 0, () => {
-              const effT = getEffectiveToughness(0, blkInstNow);
-              showModal(`${blkCard.name} コピー`, `<p>タフネス${effT-1}のコピーを出しますか？</p><button onclick="closeModal();G._awaitingModal=false;spawnCopyWithReducedToughness(0,${blkInstNow.instanceId});render();continueStack();">はい</button><button onclick="closeModal();G._awaitingModal=false;continueStack();">いいえ</button>`);
+              showModal(`${blkCard.name} コピー`, `<p>タフネス${blkCard.toughness - 1}のコピーを出しますか？</p><button onclick="closeModal();G._awaitingModal=false;spawnCopyWithReducedToughness(0,${capInstId});render();continueStack();" style="margin:4px;padding:6px 12px;background:#4a9eff;border:none;border-radius:4px;color:#fff;cursor:pointer;">はい</button><button onclick="closeModal();G._awaitingModal=false;continueStack();" style="margin:4px;padding:6px 12px;background:#888;border:none;border-radius:4px;color:#fff;cursor:pointer;">いいえ</button>`);
               G._awaitingModal = true;
             });
           } else {
@@ -3618,28 +3613,12 @@ function resolveSingleCombat(atkPlayer, atkInstId, kakutouTargetId, blockerInstI
     G.players[opp].life -= atkPow;
     showFloatDamage(atkPow, opp === 0 ? 'player' : 'ai');
     log(`${atkCard.name} が${atkPow}ダメージ！`, 'damage');
-    // Arestia: 自クリーチャーの相手プレイヤーへのダメージ時、1追加ダメージ+コピー可
+    // Arestia: 自クリーチャーの相手プレイヤーへのダメージ時、1追加ダメージ（コピーはブロック時のみ）
     const atkHasArestia = G.players[atkPlayer].field.some(c => CARD_DB[c.cardId].id === 'arestia');
-    if (atkHasArestia && atkCard.id !== 'arestia') {
+    if (atkHasArestia) {
       G.players[opp].life -= 1;
       showLifeChange(opp, -1);
       log('アレスティア: +1ダメージ', 'damage');
-      const atkEffT = getEffectiveToughness(atkPlayer, atkInst);
-      if (atkEffT > 1 && atkPlayer === 0) {
-        triggerEffect(`${atkCard.name} コピー誘発(アレスティア)`, '⚡', atkPlayer, () => {
-          const effT2 = getEffectiveToughness(atkPlayer, atkInst);
-          if (effT2 > 1) {
-            showModal('アレスティア', `<p>${atkCard.name}のタフネス${effT2-1}のコピーを出しますか？</p><button onclick="closeModal();G._awaitingModal=false;spawnCopyWithReducedToughness(0,${atkInst.instanceId});render();continueStack();">はい</button><button onclick="closeModal();G._awaitingModal=false;continueStack();">いいえ</button>`);
-            G._awaitingModal = true;
-          } else {
-            continueStack();
-          }
-        });
-      } else if (atkEffT > 1 && atkPlayer === 1) {
-        triggerEffect(`${atkCard.name} コピー誘発(AI)`, '⚡', 1, () => {
-          spawnCopyWithReducedToughness(1, atkInst.instanceId);
-        });
-      }
     }
   }
 
