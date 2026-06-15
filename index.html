@@ -3579,6 +3579,20 @@ function resolveSingleCombat(atkPlayer, atkInstId, kakutouTargetId, blockerInstI
         triggerEffect(`${blkCard.name} ブロック誘発`, blkCard.icon||'✨', opp, () => {
           drawCard(opp);
           log(`${blkCard.name}: 1ドロー`);
+          // 「その後」: 同じスタック項目内でコピー処理も行う
+          if (blkCard.onBlockCopy) {
+            const blkInstNow = G.players[opp].field.find(c => c.instanceId === blockerInstId);
+            if (blkInstNow && blkCard.toughness > 1) {
+              if (opp === 0) {
+                const capInstId = blkInstNow.instanceId;
+                showModal(`${blkCard.name} コピー`, `<p>タフネス${blkCard.toughness - 1}のコピーを出しますか？</p><button onclick="closeModal();G._awaitingModal=false;spawnCopyWithReducedToughness(0,${capInstId});render();updateHints();" style="margin:4px;padding:6px 12px;background:#4a9eff;border:none;border-radius:4px;color:#fff;cursor:pointer;">はい</button><button onclick="closeModal();G._awaitingModal=false;updateHints();" style="margin:4px;padding:6px 12px;background:#888;border:none;border-radius:4px;color:#fff;cursor:pointer;">いいえ</button>`);
+                G._awaitingModal = true;
+                return;
+              } else {
+                spawnCopyWithReducedToughness(opp, blockerInstId);
+              }
+            }
+          }
           render();
         });
       }
@@ -3634,7 +3648,8 @@ function resolveSingleCombat(atkPlayer, atkInstId, kakutouTargetId, blockerInstI
         }
       }
       // onBlockCopy: ブロック時コピー（元の基本タフネスが2以上の時のみ）
-      if (blkCard.onBlockCopy) {
+      // draw1 の「その後」で既に処理されたら、ここではスキップ
+      if (blkCard.onBlockCopy && blkCard.onBlock !== 'draw1') {
         const blkInstNow = G.players[opp].field.find(c => c.instanceId === blockerInstId);
         if (blkInstNow && blkCard.toughness > 1) {
           const copyCount = typeof blkCard.onBlockCopy === 'number' ? blkCard.onBlockCopy : 1;
