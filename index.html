@@ -4769,6 +4769,12 @@ function aiPlaySpellEffect(card) {
       if (ai.field.length > 0) {
         const ally = ai.field.reduce((a,b) => getEffectiveToughness(1,b) < getEffectiveToughness(1,a) ? b : a);
         addPermanentBuff(1, ally.instanceId, 0, 1);
+        const newT = getEffectiveToughness(1, ai.field.find(c => c.instanceId === ally.instanceId));
+        if (player.field.length > 0) {
+          const weakest = player.field.reduce((a,b) => getEffectiveToughness(0,b) < getEffectiveToughness(0,a) ? b : a);
+          applyDamageToCreature(0, weakest.instanceId, newT, 1);
+          log(`AI: ${card.name} ■2: 相手クリーチャーに${newT}ダメージ`, 'damage');
+        }
       }
     }
   } else if (card.effect === 'kaizen') {
