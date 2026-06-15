@@ -1886,7 +1886,7 @@ const CARD_DB = {
   'kaizen': {
     id:'kaizen', name:'介善', type:'spell', color:'W',
     cost:{W:4}, icon:'✨', keywords:['Quick'],
-    text:'■相手クリーチャー1体に５ダメージ\n■相手クリーチャー1体を選ぶ。このターン、それは可能なら攻撃する\n■このターン、自分のクリーチャーがブロックする時、1枚引く\n■自分のクリーチャー全てのパワーとタフネスを入れ替え、そのクリーチャーが離れる時、代わりに元に戻る\n〈OC〉\n■自分の手札からマナ総量8以下のクリーチャーを出す。この能力によって出したクリーチャーはこのゲーム中、攻撃できない(ターン1:同名)',
+    text:'■相手クリーチャー2体にそれぞれ５ダメージ\n■自分のクリーチャー全て、このターンダメージで死なない（ダメージは引き継ぐ）\n〈OC〉\n■自分の手札からマナ総量8以下のクリーチャーを出す。この能力によって出したクリーチャーはこのゲーム中、攻撃できない(ターン1:同名)',
     effect:'kaizen'
   },
   // LANDS
@@ -2244,7 +2244,7 @@ function newInstance(cardId) {
     instanceId: G.nextInstanceId++, cardId,
     tapped: false, damage: 0, sick: false, chargeCard: null,
     tempPower: 0, tempToughness: 0, entryTurn: G ? G.turn : 1,
-    mustAttack: false
+    mustAttack: false, noDamageKill: false
   };
 }
 
@@ -2433,10 +2433,18 @@ function playCardFromHand(player, handIndex) {
           const newT = getEffectiveToughness(player, buffed);
           log(`${card.name} ■2: 自クリーチャー+0/+1(永続), タフネス${newT}分ダメージ`);
           p.graveyard.push(cardId);
-          G.players[opp].life -= newT;
-          showLifeChange(opp, -newT);
-          log(`${card.name} ■2: 相手プレイヤーに${newT}ダメージ`,'damage');
-          render(); updateHints(); continueStack();
+          const capturedNewT = newT;
+          if (G.players[opp].field.length === 0) {
+            log(`${card.name} ■2: 相手クリーチャーなし、タフネスダメージ無効`);
+            render(); updateHints(); continueStack(); return;
+          }
+          G.targetMode = { type:'opponentCreature', callback:(tgt2) => {
+            G.targetMode = null;
+            applyDamageToCreature(opp, tgt2.instId, capturedNewT, player);
+            log(`${card.name} ■2: 相手クリーチャーに${capturedNewT}ダメージ`, 'damage');
+            render(); updateHints(); continueStack();
+          }};
+          render(); updateHints();
         }};
         render(); updateHints();
       }});
@@ -2577,59 +2585,44 @@ function playKaizen(player, handIndex) {
   const opp = 1 - player;
 
   // ■効果を逆順にスタック積み（LIFOで上から順に解決）
-  // ■4 新: 自クリーチャーP/T入れ替え (最後に積む = 最後に解決)
-  G.stack.push({ name:`${card.name} ■4: 自クリーチャーP/T入れ替え`, icon:'✨', owner:player, fastResolve:true, resolve:() => {
-    const myField = G.players[player].field;
-    myField.forEach(inst => {
-      const effP = getEffectivePower(player, inst);
-      const effT = getEffectiveToughness(player, inst);
-      const powDiff = effT - effP;
-      const toughDiff = effP - effT;
-      if (powDiff !== 0 || toughDiff !== 0) {
-        addPermanentBuff(player, inst.instanceId, powDiff, toughDiff);
-      }
+  // ■2: ダメージ死亡無効付与 (最後に積む = 最後に解決)
+  G.stack.push({ name:`${card.name} ■2: ダメージ死亡無効付与`, icon:'✨', owner:player, fastResolve:true, resolve:() => {
+    G.players[player].field.forEach(inst => {
+      inst.noDamageKill = true;
     });
-    log(`${card.name} ■4: 自クリーチャーのP/T入れ替え`, 'important');
+    log(`${card.name} ■2: 自クリーチャー全て、このターンダメージで死なない`, 'important');
     render(); updateHints(); continueStack();
   }});
-  // ■4(OC): クリーチャー展開 (最後に積む = 最後に解決)
+  // OC: クリーチャー展開 (最後に積む = 最後に解決)
   if (ocAtCast) {
-    G.stack.push({ name:`${card.name} ■5(OC): クリーチャー展開`, icon:'✨', owner:player, fastResolve:true, resolve:() => {
+    G.stack.push({ name:`${card.name} OC: クリーチャー展開`, icon:'✨', owner:player, fastResolve:true, resolve:() => {
       p.graveyard.push(cardId);
       kaizenOCDeploy(player);
     }});
   }
-  // ■3: ブロック時1枚引く
-  G.stack.push({ name:`${card.name} ■3: ブロック時1ドロー`, icon:'✨', owner:player, fastResolve:true, resolve:() => {
-    if (!G.blockDrawActive) G.blockDrawActive = [false, false];
-    G.blockDrawActive[player] = true;
-    log(`${card.name} ■3: このターン、ブロック時1ドロー`);
-    if (!ocAtCast) p.graveyard.push(cardId);
-    render(); updateHints(); continueStack();
-  }});
-  // ■2: 相手クリーチャー1体を選ぶ、攻撃強制
-  G.stack.push({ name:`${card.name} ■2: 相手クリーチャー攻撃強制`, icon:'✨', owner:player, resolve:() => {
+  // ■1-2: 2体目 (push first = resolves second)
+  G.stack.push({ name:`${card.name} ■1-2: 相手クリーチャーに5ダメージ(2体目)`, icon:'✨', owner:player, resolve:() => {
     if (G.players[opp].field.length === 0) {
-      log(`${card.name} ■2: 対象なしのためスキップ`); continueStack(); return;
-    }
-    G.targetMode = { type:'opponentCreature', callback:(tgt) => {
-      G.targetMode = null;
-      const tc = G.players[opp].field.find(x=>x.instanceId===tgt.instId);
-      if (tc) { tc.mustAttack = true; G.mustAttackCreatures.add(tgt.instId); }
-      log(`${card.name} ■2: 攻撃強制`);
-      render(); updateHints(); continueStack();
-    }};
-    render(); updateHints();
-  }});
-  // ■1: 相手クリーチャー1体に5ダメージ (先に積む = 最初に解決)
-  G.stack.push({ name:`${card.name} ■1: 相手クリーチャーに5ダメージ`, icon:'✨', owner:player, resolve:() => {
-    if (G.players[opp].field.length === 0) {
-      log(`${card.name} ■1: 対象なしのためスキップ`); continueStack(); return;
+      log(`${card.name} ■1-2: 対象なしのためスキップ`); continueStack(); return;
     }
     G.targetMode = { type:'opponentCreature', callback:(tgt) => {
       G.targetMode = null;
       applyDamageToCreature(opp, tgt.instId, 5, player);
-      log(`${card.name} ■1: 5ダメージ`);
+      log(`${card.name} ■1-2: 5ダメージ`);
+      render(); updateHints(); continueStack();
+    }};
+    render(); updateHints();
+  }});
+  // ■1-1: 1体目 (push second = resolves first, LIFO)
+  G.stack.push({ name:`${card.name} ■1-1: 相手クリーチャーに5ダメージ(1体目)`, icon:'✨', owner:player, resolve:() => {
+    if (!ocAtCast) p.graveyard.push(cardId);
+    if (G.players[opp].field.length === 0) {
+      log(`${card.name} ■1-1: 対象なしのためスキップ`); continueStack(); return;
+    }
+    G.targetMode = { type:'opponentCreature', callback:(tgt) => {
+      G.targetMode = null;
+      applyDamageToCreature(opp, tgt.instId, 5, player);
+      log(`${card.name} ■1-1: 5ダメージ`);
       render(); updateHints(); continueStack();
     }};
     render(); updateHints();
@@ -3170,6 +3163,11 @@ function checkCreatureDeath(player, instId, sourcePlayer) {
   const permBuff = getPermanentBuff(c.instanceId);
   const toughness = card.toughness + (c.tempToughness||0) + permBuff.toughness + getCXBonus(player, c).toughness;
   const dead = c.damage >= toughness;
+  if (dead && c.noDamageKill) {
+    // ダメージ死亡無効: 死なずにダメージを引き継ぐ
+    log(`${card.name}: ダメージ死亡無効（介善■4）`);
+    return false;
+  }
   if (dead) {
     showDestroyAnimation(instId);
     p.field.splice(idx, 1);
@@ -3751,6 +3749,8 @@ function endTurn() {
     p.field.forEach(c => { c.tempPower = 0; c.tempToughness = 0; });
     p.mana = {R:0,U:0,G:0,W:0,B:0,C:0};
   });
+  G.players[0].field.forEach(c => { c.noDamageKill = false; });
+  G.players[1].field.forEach(c => { c.noDamageKill = false; });
   G.attackMode = false;
   G.blockMode = false;
   G.chargingMode = false;
@@ -4779,56 +4779,42 @@ function aiPlaySpellEffect(card) {
   checkDeath();
 }
 
-// AI介善: ■効果を上から順に処理（5ダメージ→攻撃強制→ブロックドロー→OC展開）
+// AI介善: ■効果を上から順に処理（5ダメージx2→ダメージ死亡無効→OC展開）
 function aiKaizenEffects() {
   const ai = G.players[1];
   const player = G.players[0];
   const ocAtCast = isOCActive(1);
-  const total = ocAtCast ? 4 : 3;
-  // 効果1: MCTSで最善クリーチャーに5ダメージ
+  const total = ocAtCast ? 3 : 2;
+  // 効果1-1: MCTSで最善クリーチャーに5ダメージ(1体目)
+  let tgt1 = null;
   if (player.field.length > 0) {
-    const tgt = mctsPickOption(player.field, (sim, t) => {
+    tgt1 = mctsPickOption(player.field, (sim, t) => {
       const p0 = sim.state.players[0];
       const simTgt = p0.field.find(c => c.id === t.instanceId);
       if (simTgt) { simTgt.damage += 5; sim.simCheckDeath(0); }
       else p0.life -= 5;
     }) || player.field[0];
-    showEffectStep('AI 介善', 1, total, `5ダメージ → ${CARD_DB[tgt.cardId].name}`);
-    applyDamageToCreature(0, tgt.instanceId, 5, 1);
+    showEffectStep('AI 介善', '1-1', total, `5ダメージ(1体目) → ${CARD_DB[tgt1.cardId].name}`);
+    applyDamageToCreature(0, tgt1.instanceId, 5, 1);
   } else {
-    log(`AI 介善 効果1/${total}: 対象なしのためスキップ`);
+    log(`AI 介善 効果1-1/${total}: 対象なしのためスキップ`);
   }
-  // 効果2: MCTSで攻撃強制対象を選択（生存クリーチャーから）
+  // 効果1-2: 2体目に5ダメージ
   if (player.field.length > 0) {
-    const tgt2 = mctsPickOption(player.field, (sim, t) => {
-      // 攻撃強制でそのクリーチャーが攻撃してくる想定でシミュレート
-      const p0 = sim.state.players[0], p1 = sim.state.players[1];
-      const simAtk = p0.field.find(c => c.id === t.instanceId);
-      if (simAtk) {
-        const atkPow = (CARD_DB[simAtk.cardId].power||0)+(simAtk.tempPower||0);
-        // 最善ブロッカーに当てる（ブロック可能なら）
-        const blk = p1.field.find(b => !b.tapped && sim._canFlyBlock(simAtk, b));
-        if (blk) {
-          const blkPow = (CARD_DB[blk.cardId].power||0)+(blk.tempPower||0);
-          blk.damage += atkPow; simAtk.damage += blkPow;
-          sim.simCheckDeath(0); sim.simCheckDeath(1);
-        } else {
-          p1.life -= atkPow;
-        }
-      }
-    }) || player.field[0];
-    showEffectStep('AI 介善', 2, total, `攻撃強制 → ${CARD_DB[tgt2.cardId].name}`);
-    tgt2.mustAttack = true; G.mustAttackCreatures.add(tgt2.instanceId);
+    const tgt2 = player.field.reduce((a,b) => {
+      return b !== tgt1 && (CARD_DB[b.cardId].power||0) > (CARD_DB[a.cardId].power||0) ? b : a;
+    });
+    showEffectStep('AI 介善', '1-2', total, `5ダメージ(2体目) → ${CARD_DB[tgt2.cardId].name}`);
+    applyDamageToCreature(0, tgt2.instanceId, 5, 1);
   } else {
-    log(`AI 介善 効果2/${total}: 対象なしのためスキップ`);
+    log(`AI 介善 効果1-2/${total}: 対象なしのためスキップ`);
   }
-  // 効果3（次の自分のターン開始時まで持続）
-  showEffectStep('AI 介善', 3, total, 'ブロック時1ドロー（次のAIターン開始まで）');
-  if (!G.blockDrawActive) G.blockDrawActive = [false, false];
-  G.blockDrawActive[1] = true;
-  // 効果4 (OC)
+  // ■2: ダメージ死亡無効
+  G.players[1].field.forEach(inst => { inst.noDamageKill = true; });
+  log('AI 介善 ■2: 自クリーチャーダメージ死亡無効', 'important');
+  // OC: クリーチャー展開
   if (ocAtCast) {
-    showEffectStep('AI 介善', 4, total, '〈OC〉クリーチャー展開');
+    showEffectStep('AI 介善', 'OC', total, '〈OC〉クリーチャー展開');
     kaizenOCDeploy(1);
   }
 }
@@ -4847,11 +4833,16 @@ function aiPlaySpell(card, handIndex) {
       const tgt = targets.reduce((a,b)=>getEffectivePower(0,b)>getEffectivePower(0,a)?b:a);
       applyDamageToCreature(0, tgt.instanceId, 2, 1);
       log(`AI: ${card.name} でプレイヤークリーチャーに2ダメージ`, 'damage');
-      // Buff own creature +0/+1
-      if (ai.field.length > 0) {
-        const ally = ai.field[0];
-        ally.tempToughness = (ally.tempToughness||0)+1;
-        G.tempBuffs.push({instanceId:ally.instanceId,power:0,toughness:1});
+    }
+    // Buff own creature +0/+1, then deal toughness damage to weakest opponent creature
+    if (ai.field.length > 0) {
+      const ally = ai.field.reduce((a,b)=>getEffectiveToughness(1,b)>getEffectiveToughness(1,a)?b:a);
+      addPermanentBuff(1, ally.instanceId, 0, 1);
+      const newT = getEffectiveToughness(1, ai.field.find(c => c.instanceId === ally.instanceId));
+      if (player.field.length > 0) {
+        const weakest = player.field.reduce((a,b) => getEffectiveToughness(0,b) < getEffectiveToughness(0,a) ? b : a);
+        applyDamageToCreature(0, weakest.instanceId, newT, 1);
+        log(`AI: ${card.name} ■2: 相手クリーチャーに${newT}ダメージ`, 'damage');
       }
     }
   } else if (card.effect === 'kaizen') {
