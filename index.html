@@ -1886,7 +1886,7 @@ const CARD_DB = {
   'kaizen': {
     id:'kaizen', name:'介善', type:'spell', color:'W',
     cost:{W:4}, icon:'✨', keywords:['Quick'],
-    text:'■相手クリーチャー2体にそれぞれ５ダメージ\n■自分のクリーチャー全て、このターン離れる時かわりにP/Tを元の状態に戻す（ダメージは引き継ぐ）\n〈OC〉\n■自分の手札からマナ総量8以下のクリーチャーを出す。この能力によって出したクリーチャーはこのゲーム中、攻撃できない(ターン1:同名)',
+    text:'■相手クリーチャー2体にそれぞれ５ダメージ\n■自分のクリーチャー全て、このターン離れる時かわりにP/Tを入れ替える（ダメージは引き継ぐ）\n〈OC〉\n■自分の手札からマナ総量8以下のクリーチャーを出す。この能力によって出したクリーチャーはこのゲーム中、攻撃できない(ターン1:同名)',
     effect:'kaizen'
   },
   // LANDS
@@ -3164,19 +3164,19 @@ function checkCreatureDeath(player, instId, sourcePlayer) {
   const toughness = card.toughness + (c.tempToughness||0) + permBuff.toughness + getCXBonus(player, c).toughness;
   const dead = c.damage >= toughness;
   if (dead && c.noDamageKill) {
-    // 介善■2 置き換え効果: 離れる代わりにP/Tを元の状態に戻す（ダメージは引き継ぐ）
+    // 介善■2 置き換え効果: 離れる代わりに現在のP/Tを入れ替える（ダメージは引き継ぐ）
     c.noDamageKill = false;
-    c.tempPower = 0;
-    c.tempToughness = 0;
-    G.permanentBuffs = G.permanentBuffs.filter(b => b.instanceId !== c.instanceId);
-    log(`${card.name}: 介善■2 — P/Tを元に戻す（ダメージ${c.damage}を引き継ぎ）`);
-    // リセット後の基本タフネスで再チェック
-    const baseToughness = card.toughness + getCXBonus(player, c).toughness;
-    if (c.damage >= baseToughness) {
+    const effP = getEffectivePower(player, c);
+    const effT = toughness; // すでに計算済み
+    // P/T入れ替えバフ: effT-effP をパワーに、effP-effT をタフネスに加算
+    addPermanentBuff(player, c.instanceId, effT - effP, effP - effT);
+    log(`${card.name}: 介善■2 — P/Tを入れ替え ${effP}/${effT} → ${effT}/${effP}（ダメージ${c.damage}を引き継ぎ）`);
+    // 入れ替え後の新タフネスで再チェック
+    if (c.damage >= effP) { // 新タフネス = 旧パワー
       showDestroyAnimation(instId);
       p.field.splice(idx, 1);
       p.graveyard.push(c.cardId);
-      log(`${card.name} が破壊された（P/Tリセット後）`, 'damage');
+      log(`${card.name} が破壊された（P/T入れ替え後）`, 'damage');
       return true;
     }
     return false;
