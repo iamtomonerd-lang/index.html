@@ -3349,7 +3349,7 @@ function endPhase() {
       c.mustAttack && canCreatureAttack(ap, c)
     );
     if (mustAtkers.length > 0) {
-      log(`⚠️ ${CARD_DB[mustAtkers[0].cardId].name} は攻撃しなければなりません（アレスティア効果）`, 'important');
+      log(`⚠️ ${CARD_DB[mustAtkers[0].cardId].name} は可能なら攻撃しなければなりません`, 'important');
       startSingleAttack(ap, mustAtkers[0].instanceId);
       return;
     }
@@ -3801,13 +3801,14 @@ function endTurn() {
   // Untap
   untapAll(ap);
 
-  // Clear mustAttack on ALL creatures (fresh each turn)
-  G.players[0].field.forEach(c => { c.mustAttack = false; G.mustAttackCreatures.delete(c.instanceId); });
-  G.players[1].field.forEach(c => { c.mustAttack = false; G.mustAttackCreatures.delete(c.instanceId); });
+  // 直前のターンを終えたプレイヤー(1-ap)のmustAttackをクリア。
+  // アクティブプレイヤー(ap)側はETBで付与された攻撃強制が残っているためクリアしない。
+  const prevAp = 1 - ap;
+  G.players[prevAp].field.forEach(c => { c.mustAttack = false; G.mustAttackCreatures.delete(c.instanceId); });
 
   // アレスティア passive: 相手がアレスティアを持つ → アクティブプレイヤーのクリーチャーはmustAttack
   // 両者アレスティアの場合も一方向のみ（アクティブ側に適用）
-  const opp = 1 - ap;
+  const opp = prevAp;
   const oppHasArestia = G.players[opp].field.some(c=>CARD_DB[c.cardId].id==='arestia');
   if (oppHasArestia) {
     G.players[ap].field.forEach(c => {
