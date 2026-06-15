@@ -1827,66 +1827,64 @@ const CARD_DB = {
   'shinmai_heishi': {
     id:'shinmai_heishi', name:'新米兵士', type:'creature', color:'W',
     cost:{W:1}, power:1, toughness:2, subtype:'人間(戦士)', icon:'🛡️',
-    keywords:[], text:'■ブロック時、このクリーチャーのタフネス-1されたコピーを出してもよい。ただし、このクリーチャーのタフネスが１なら出せない',
-    onBlockCopy:true
+    keywords:[], text:''
   },
   'ten_kara_shisha': {
     id:'ten_kara_shisha', name:'天からの使者', type:'creature', color:'W',
-    cost:{W:1,C:1}, power:1, toughness:2, subtype:'天使', icon:'👼',
-    keywords:['飛行'], text:'■飛行\n■出た時、相手のクリーチャー１体に1ダメージ\n■ブロック時、このクリーチャーのタフネス-1されたコピーを出してもよい。ただし、このクリーチャーのタフネスが１なら出せない',
-    flying:true, etb:'damage1opponent', onBlockCopy:true
+    cost:{W:1,C:1}, power:1, toughness:1, subtype:'天使', icon:'👼',
+    keywords:['飛行'], text:'■飛行\n■出た時、相手のクリーチャー１体に1ダメージ',
+    flying:true, etb:'damage1opponent'
   },
   'eiyuu_kouho': {
     id:'eiyuu_kouho', name:'英雄候補', type:'creature', color:'W',
-    cost:{W:1,C:1}, power:1, toughness:3, subtype:'人間(戦士)', icon:'⚔️',
+    cost:{W:1,C:3}, power:3, toughness:5, subtype:'人間(戦士)', icon:'⚔️',
     keywords:['格闘'], text:'■格闘\n■出た時、3ルック1(白)',
     kakutou:true, etb:'look3keep1white'
   },
   'serashia_heishi': {
     id:'serashia_heishi', name:'セラシアの兵士', type:'creature', color:'W',
-    cost:{W:1,C:1}, power:1, toughness:4, subtype:'人間(戦士)', icon:'🗡️',
-    keywords:[], text:'■出た時、相手クリーチャー１体選ぶ。次の相手のターン中、そのクリーチャーは可能なら攻撃する\n■ブロック時、1枚引く。その後、このクリーチャーのタフネス-1されたコピーを出してもよい。ただし、このクリーチャーのタフネスが１なら出せない',
-    etb:'mustAttackTarget', onBlock:'draw1', onBlockCopy:true
+    cost:{W:2,C:1}, power:2, toughness:5, subtype:'人間(戦士)', icon:'🗡️',
+    keywords:[], text:'■ブロック時、1枚引く',
+    onBlock:'draw1'
   },
   'serashia_junhei': {
     id:'serashia_junhei', name:'セラシアの盾兵', type:'creature', color:'W',
-    cost:{W:1,C:1}, power:1, toughness:4, subtype:'人間(戦士)', icon:'🛡️',
-    keywords:[], text:'■出た時、相手クリーチャー１体選ぶ。次の相手のターン中、そのクリーチャーは可能なら攻撃する\n■ブロック時、相手クリーチャー1体に2ダメージ。その後、このクリーチャーのタフネス-1されたコピーを出してもよい。ただし、このクリーチャーのタフネスが１なら出せない',
-    etb:'mustAttackTarget', onBlock:'damage2attackerAndCopy'
+    cost:{W:2,C:1}, power:1, toughness:5, subtype:'人間(戦士)', icon:'🛡️',
+    keywords:[], text:'■出た時、相手クリーチャー１体選ぶ。次の相手のターン中、そのクリーチャーは可能なら攻撃する\n■ブロック時、相手クリーチャー1体に2ダメージ',
+    etb:'mustAttackTarget', onBlock:'damage2attacker'
   },
   'serashia_souryo': {
     id:'serashia_souryo', name:'セラシアの僧侶', type:'creature', color:'W',
-    cost:{W:2,C:2}, power:2, toughness:6, subtype:'人間(戦士)', icon:'🙏',
-    keywords:['CX8'], text:'■出た時、相手のクリーチャー１体に3ダメージ\n■ブロック時、自分のライフを3回復。その後、ブロック時、このクリーチャーのタフネス-1されたコピーを出してもよい。ただし、このクリーチャーのタフネスが１なら出せない\n〈C8〉\n■ブロック時、自分のクリーチャー1体を+1/+1',
-    etb:'damage3opponent', onBlock:'gain3life', cx8Block:'buff1ally', onBlockCopy:true
+    cost:{W:3,C:2}, power:3, toughness:7, subtype:'人間(戦士)', icon:'🙏',
+    keywords:['CX8'], text:'■出た時、相手のクリーチャー１体に3ダメージ\n■ブロック時、自分のライフを3回復\n〈C8〉\n■ブロック時、自分のクリーチャー1体を+1/+1',
+    etb:'damage3opponent', onBlock:'gain3life', cx8Block:'buff1ally'
   },
   'bastian': {
     id:'bastian', name:'絶対守護 バスティオン', type:'creature', color:'W',
     cost:{W:4}, power:3, toughness:2, subtype:'人間(戦士)', icon:'🏰',
     keywords:['格闘','CX6','CX8','OC'],
-    text:'墓地\n［自分のクリーチャーのブロック時、コストを支払って出してもよい］\n■格闘\n■出た時、相手クリーチャー1体に2ダメージ\n〈C6〉\n■出た時、相手クリーチャー1体に3ダメージ\n〈C8〉\n■このクリーチャーは+3/+3される\n〈OC〉\n■このクリーチャーはタップしていてもブロックできる',
-    kakutou:true, vigilance:false, etb:'damage2opponent_always_cx6damage3', cx8Buff:true, ocBlockWhileTapped:true,
-    graveyardFlash:'ownCreatureBlocks'
+    text:'■格闘\n■出た時、相手クリーチャー1体に2ダメージ\n〈C6〉\n■出た時、相手クリーチャー1体に3ダメージ\n〈C8〉\n■このクリーチャーは+3/+3される\n〈OC〉\n■このクリーチャーはタップしていてもブロックできる',
+    kakutou:true, etb:'damage2opponent_always_cx6damage3', cx8Buff:true, ocBlockWhileTapped:true
   },
   'arestia': {
     id:'arestia', name:'戦乙女 アレスティア', type:'creature', color:'W',
-    cost:{W:3,C:5}, power:1, toughness:7, subtype:'人間(戦士)', icon:'⚡',
+    cost:{W:3,C:5}, power:5, toughness:5, subtype:'人間(戦士)', icon:'⚡',
     keywords:['還元'],
-    text:'［結晶１：〔■カウントダウン２■離れた時、Cが6以上あり、白を含む土地が3枚以上あれば「戦乙女　アレスティア」を出す。なければ、カウントダウンが1の状態で場に残る〕という効果を持つ「アレスティアの旗」というアーティファクトを1枚出す］\n■相手は可能なら攻撃する\n■相手クリーチャーのアタック時、自分のクリーチャー全てを＋1/＋1する\n■自分のクリーチャーのブロック時、相手プレイヤーへ1ダメージ。その後、そのクリーチャーのタフネス-1されたコピーを出してもよい。ただし、そのクリーチャーのタフネスが１なら出せない\n■起動（還元）：自分のクリーチャー1体をアンタップする。これは相手ターンのみ起動できる',
-    arestiaPassive:true, onAttackOpponent:'buff_all_own', crystalEtb:1,
+    text:'■相手は可能なら攻撃する\n■相手クリーチャーのアタック時、自分のクリーチャー全てを＋1/＋1する\n■自分のクリーチャーのブロック終了時、このバトル中自分のクリーチャーが破壊されていなければ、相手プレイヤーに2ダメージ\n■起動（還元）：自分のクリーチャー1体をアンタップする',
+    arestiaPassive:true, onAttackOpponent:'buff_all_own', onBlockEndDamage2:true,
     activated:'untapOwn'
   },
   // SPELLS
   'junigeki': {
     id:'junigeki', name:'盾撃', type:'spell', color:'W',
     cost:{W:1}, icon:'🛡️', keywords:['Quick'],
-    text:'■相手のクリーチャー1体に２ダメージ\n■自分のクリーチャー1体を+0/+1。そのクリーチャーのタフネス分のダメージを相手クリーチャー1体に与える',
+    text:'■相手のクリーチャー1体に2ダメージ\n■自分のクリーチャー1体を+0/+1',
     effect:'junigeki'
   },
   'kaizen': {
     id:'kaizen', name:'介善', type:'spell', color:'W',
     cost:{W:4}, icon:'✨', keywords:['Quick'],
-    text:'■相手クリーチャー2体にそれぞれ５ダメージ\n■自分のクリーチャー全て、このターン離れる時かわりにP/Tを入れ替える（ダメージは引き継ぐ）\n〈OC〉\n■自分の手札からマナ総量8以下のクリーチャーを出す。この能力によって出したクリーチャーはこのゲーム中、攻撃できない(ターン1:同名)',
+    text:'■相手クリーチャー1体に５ダメージ\n■相手クリーチャー1体を選ぶ。このターン、それは可能なら攻撃する\n■このターン、自分のクリーチャーがブロックする時、1枚引く\n〈OC〉\n■自分の手札からマナ総量8以下のクリーチャーを出す。この能力によって出したクリーチャーはこのゲーム中、攻撃できない(ターン1:同名)',
     effect:'kaizen'
   },
   // LANDS
@@ -1911,8 +1909,8 @@ const CARD_DB = {
   'kemono_heichi': {
     id:'kemono_heichi', name:'獣住む平地', type:'land', color:'W',
     produces:'W', icon:'🐾',
-    text:'■起動(タップ):白1マナ生成\n■起動(自身の還元):相手クリーチャー1体に3ダメージ。これはこの土地がチャージされているときのみ起動できる',
-    chargedAbility:'damage2opponent'
+    text:'■起動(タップ):白1マナ生成\n■起動(自身の還元):相手クリーチャー1体に5ダメージ。これはこの土地がチャージされているときのみ起動できる',
+    chargedAbility:'damage5opponent'
   },
   'serashia_miyako': {
     id:'serashia_miyako', name:'セラシアの都', type:'land', color:'C',
@@ -2114,6 +2112,8 @@ function initGame() {
     combatBlockersAlive: {},
     cantAttackPermanent: new Set(),
     kaizen_used_names: new Set(),
+    kaizenBlockDraw: -1, // 介善■3: このターンブロック時ドロー (playerインデックス or -1)
+
     // AI attack / player block phase
     playerBlockMode: false,
     aiCurrentAttackers: [],      // [{instId, targetType:'player'|'creature', targetInstId}]
@@ -2419,32 +2419,19 @@ function playCardFromHand(player, handIndex) {
       p.hand.splice(handIndex, 1);
       log(`${card.name} をスタックに積んだ`, 'important');
       const opp = 1-player;
-      // ■2: 自クリーチャー+0/+1(永続)、その後タフネス分ダメージ — 後から積む = 後で解決
-      G.stack.push({ name:`${card.name} ■2: 自クリーチャー+0/+1+タフネスダメージ`, icon:'🛡️', owner:player, fastResolve:true, resolve:() => {
+      // ■2: 自クリーチャー+0/+1(永続) — 後から積む = 後で解決
+      G.stack.push({ name:`${card.name} ■2: 自クリーチャー+0/+1`, icon:'🛡️', owner:player, fastResolve:true, resolve:() => {
         if (G.players[player].field.length === 0) {
           log(`${card.name} ■2: 対象なしのためスキップ`);
           p.graveyard.push(cardId);
           render(); updateHints(); continueStack(); return;
         }
-        G.targetMode = { type:'ownCreature', owner:player, callback:(tgt) => {
+        G.targetMode = { type:'ownCreature', sourcePlayer:player, callback:(tgt) => {
           G.targetMode = null;
           addPermanentBuff(player, tgt.instId, 0, 1);
-          const buffed = G.players[player].field.find(c=>c.instanceId===tgt.instId);
-          const newT = getEffectiveToughness(player, buffed);
-          log(`${card.name} ■2: 自クリーチャー+0/+1(永続), タフネス${newT}分ダメージ`);
+          log(`${card.name} ■2: 自クリーチャー+0/+1(永続)`);
           p.graveyard.push(cardId);
-          const capturedNewT = newT;
-          if (G.players[opp].field.length === 0) {
-            log(`${card.name} ■2: 相手クリーチャーなし、タフネスダメージ無効`);
-            render(); updateHints(); continueStack(); return;
-          }
-          G.targetMode = { type:'opponentCreature', callback:(tgt2) => {
-            G.targetMode = null;
-            applyDamageToCreature(opp, tgt2.instId, capturedNewT, player);
-            log(`${card.name} ■2: 相手クリーチャーに${capturedNewT}ダメージ`, 'damage');
-            render(); updateHints(); continueStack();
-          }};
-          render(); updateHints();
+          render(); updateHints(); continueStack();
         }};
         render(); updateHints();
       }});
@@ -2454,7 +2441,7 @@ function playCardFromHand(player, handIndex) {
           log(`${card.name} ■1: 対象なしのためスキップ`);
           continueStack(); return;
         }
-        G.targetMode = { type:'opponentCreature', callback:(tgt) => {
+        G.targetMode = { type:'opponentCreature', sourcePlayer:player, callback:(tgt) => {
           G.targetMode = null;
           applyDamageToCreature(opp, tgt.instId, 2, player);
           log(`${card.name} ■1: 相手クリーチャーに2ダメージ`);
@@ -2585,44 +2572,46 @@ function playKaizen(player, handIndex) {
   const opp = 1 - player;
 
   // ■効果を逆順にスタック積み（LIFOで上から順に解決）
-  // ■2: ダメージ死亡無効付与 (最後に積む = 最後に解決)
-  G.stack.push({ name:`${card.name} ■2: ダメージ死亡無効付与`, icon:'✨', owner:player, fastResolve:true, resolve:() => {
-    G.players[player].field.forEach(inst => {
-      inst.noDamageKill = true;
-    });
-    log(`${card.name} ■2: 自クリーチャー全て、このターンダメージで死なない`, 'important');
+  // ■3: このターン自クリーチャーブロック時1ドロー (最後に積む = 最後に解決)
+  G.stack.push({ name:`${card.name} ■3: ブロック時ドロー付与`, icon:'✨', owner:player, fastResolve:true, resolve:() => {
+    G.kaizenBlockDraw = player;
+    log(`${card.name} ■3: このターン、自クリーチャーがブロックする時1枚引く`, 'important');
     render(); updateHints(); continueStack();
   }});
-  // OC: クリーチャー展開 (最後に積む = 最後に解決)
+  // OC: クリーチャー展開
   if (ocAtCast) {
     G.stack.push({ name:`${card.name} OC: クリーチャー展開`, icon:'✨', owner:player, fastResolve:true, resolve:() => {
       p.graveyard.push(cardId);
       kaizenOCDeploy(player);
     }});
   }
-  // ■1-2: 2体目 (push first = resolves second)
-  G.stack.push({ name:`${card.name} ■1-2: 相手クリーチャーに5ダメージ(2体目)`, icon:'✨', owner:player, resolve:() => {
+  // ■2: 相手クリーチャー1体→このターン攻撃強制
+  G.stack.push({ name:`${card.name} ■2: 相手クリーチャー攻撃強制`, icon:'✨', owner:player, fastResolve:true, resolve:() => {
     if (G.players[opp].field.length === 0) {
-      log(`${card.name} ■1-2: 対象なしのためスキップ`); continueStack(); return;
+      log(`${card.name} ■2: 対象なし`); render(); updateHints(); continueStack(); return;
     }
-    G.targetMode = { type:'opponentCreature', callback:(tgt) => {
+    G.targetMode = { type:'opponentCreature', sourcePlayer:player, callback:(tgt) => {
       G.targetMode = null;
-      applyDamageToCreature(opp, tgt.instId, 5, player);
-      log(`${card.name} ■1-2: 5ダメージ`);
+      const tc = G.players[opp].field.find(c => c.instanceId === tgt.instId);
+      if (tc) {
+        tc.mustAttack = true;
+        G.mustAttackCreatures.add(tc.instanceId);
+        log(`${card.name} ■2: ${CARD_DB[tc.cardId].name} を攻撃強制`);
+      }
       render(); updateHints(); continueStack();
     }};
     render(); updateHints();
   }});
-  // ■1-1: 1体目 (push second = resolves first, LIFO)
-  G.stack.push({ name:`${card.name} ■1-1: 相手クリーチャーに5ダメージ(1体目)`, icon:'✨', owner:player, resolve:() => {
+  // ■1: 相手クリーチャー1体に5ダメージ (最後に積む = 最初に解決, LIFO)
+  G.stack.push({ name:`${card.name} ■1: 相手クリーチャーに5ダメージ`, icon:'✨', owner:player, resolve:() => {
     if (!ocAtCast) p.graveyard.push(cardId);
     if (G.players[opp].field.length === 0) {
-      log(`${card.name} ■1-1: 対象なしのためスキップ`); continueStack(); return;
+      log(`${card.name} ■1: 対象なし`); continueStack(); return;
     }
-    G.targetMode = { type:'opponentCreature', callback:(tgt) => {
+    G.targetMode = { type:'opponentCreature', sourcePlayer:player, callback:(tgt) => {
       G.targetMode = null;
       applyDamageToCreature(opp, tgt.instId, 5, player);
-      log(`${card.name} ■1-1: 5ダメージ`);
+      log(`${card.name} ■1: 5ダメージ`);
       render(); updateHints(); continueStack();
     }};
     render(); updateHints();
@@ -3625,42 +3614,12 @@ function resolveSingleCombat(atkPlayer, atkInstId, kakutouTargetId, blockerInstI
           render();
         });
       }
-      // 介善: ブロック側のブロック時ドローが有効なら1枚引く
-      if (G.blockDrawActive && G.blockDrawActive[opp]) {
-        triggerEffect('介善 誘発(ブロック時1ドロー)', '✨', opp, () => {
-          drawCard(opp); log('介善: ブロック時1ドロー');
+      // 介善■3: このターン自クリーチャーブロック時1ドロー
+      if (G.kaizenBlockDraw === opp) {
+        triggerEffect('介善 ■3 ブロック誘発', '✨', opp, () => {
+          drawCard(opp); log('介善 ■3: ブロック時1ドロー');
+          render();
         });
-      }
-      // アレスティア onBlockComplete: 削除 (アレスティアはonAttackCopyに変更)
-      // アレスティア ■3: 自分のクリーチャーのブロック時、相手プレイヤーへ1ダメージ。その後コピーを出してもよい
-      const defHasArestia = G.players[opp].field.some(c => CARD_DB[c.cardId].id === 'arestia');
-      if (defHasArestia) {
-        const blkInstNow2 = G.players[opp].field.find(c => c.instanceId === blockerInstId);
-        const capBlkId = blkInstNow2 ? blkInstNow2.instanceId : null;
-        const capAtkP = atkPlayer;
-        if (opp === 0) {
-          triggerEffect('アレスティア ■3 ブロック誘発', '⚡', 0, () => {
-            G.players[capAtkP].life -= 1;
-            showLifeChange(capAtkP, -1);
-            log('アレスティア ■3: 相手プレイヤーへ1ダメージ', 'damage');
-            if (blkInstNow2 && blkCard.toughness > 1) {
-              showModal('アレスティア ■3 コピー', `<p>${blkCard.name}のタフネス${blkCard.toughness - 1}のコピーを出しますか？</p><button onclick="closeModal();G._awaitingModal=false;spawnCopyWithReducedToughness(0,${capBlkId});render();continueStack();" style="margin:4px;padding:6px 12px;background:#4a9eff;border:none;border-radius:4px;color:#fff;cursor:pointer;">はい</button><button onclick="closeModal();G._awaitingModal=false;continueStack();" style="margin:4px;padding:6px 12px;background:#888;border:none;border-radius:4px;color:#fff;cursor:pointer;">いいえ</button>`);
-              G._awaitingModal = true;
-              return;
-            }
-            render();
-          });
-        } else {
-          triggerEffect('アレスティア ■3 ブロック誘発(AI)', '⚡', 1, () => {
-            G.players[capAtkP].life -= 1;
-            showLifeChange(capAtkP, -1);
-            log('アレスティア ■3(AI): 相手プレイヤーへ1ダメージ', 'damage');
-            if (blkInstNow2 && blkCard.toughness > 1) {
-              spawnCopyWithReducedToughness(1, blockerInstId);
-            }
-            render();
-          });
-        }
       }
     }
   } else {
@@ -3675,6 +3634,24 @@ function resolveSingleCombat(atkPlayer, atkInstId, kakutouTargetId, blockerInstI
 
   checkDeath();
   G.combatArrows = [];
+
+  // アレスティア ■3: ブロック終了時、このバトル中自クリーチャーが破壊されていなければ相手プレイヤーに2ダメージ
+  if (blockerInstId) {
+    const defHasArestia = G.players[opp].field.some(c => CARD_DB[c.cardId].id === 'arestia');
+    if (defHasArestia) {
+      const blockerSurvived = G.players[opp].field.some(c => c.instanceId === blockerInstId);
+      if (blockerSurvived) {
+        const capAtkP = atkPlayer;
+        triggerEffect('アレスティア ■3 ブロック終了誘発', '⚡', opp, () => {
+          G.players[capAtkP].life -= 2;
+          showLifeChange(capAtkP, -2);
+          log('アレスティア ■3: 相手プレイヤーへ2ダメージ', 'damage');
+          render();
+        });
+      }
+    }
+  }
+
   render();
   log('---');
 
@@ -3708,6 +3685,7 @@ function endTurn() {
   });
   G.players[0].field.forEach(c => { c.noDamageKill = false; });
   G.players[1].field.forEach(c => { c.noDamageKill = false; });
+  G.kaizenBlockDraw = -1;
   G.attackMode = false;
   G.blockMode = false;
   G.chargingMode = false;
@@ -3910,8 +3888,8 @@ function activateChargedLand(player, instId) {
     });
     renderStack();
     openPriorityWindow(opp, null, `${landCard.name} 還元起動`);
-  } else if (landCard.chargedAbility === 'damage2opponent') {
-    // kemono_heichi: 自身を土地デッキ底へ送り → 相手クリーチャーに3ダメージ
+  } else if (landCard.chargedAbility === 'damage5opponent') {
+    // kemono_heichi: 自身を土地デッキ底へ送り → 相手クリーチャーに5ダメージ
     const lIdx = p.lands.findIndex(l=>l.instanceId===instId);
     if (lIdx === -1) return;
     p.lands.splice(lIdx, 1);
@@ -3919,28 +3897,19 @@ function activateChargedLand(player, instId) {
     if (land.chargeCard) p.exile.push(land.chargeCard);
     log(`${landCard.name} 還元: 土地デッキ底へ → スタックに積む`);
     G.stack.push({
-      name: `${landCard.name} 起動(3ダメージ)`,
+      name: `${landCard.name} 起動(5ダメージ)`,
       icon: landCard.icon || '✨',
       owner: player,
       resolve: () => {
-        if (player === 0) {
-          if (G.players[opp].field.length === 0) { log(`${landCard.name} 還元: 対象なしのためスキップ`); render(); updateHints(); continueStack(); return; }
-          G.targetMode = { type:'opponentCreature', callback:(tgt) => {
-            applyDamageToCreature(opp, tgt.instId, 3, player);
-            log(`${landCard.name} 還元: 3ダメージ`, 'damage');
-            G.targetMode = null; render(); updateHints();
-            continueStack();
-          }};
-          log('対象を選択（3ダメージ）');
-          render(); updateHints();
-        } else {
-          const targets = G.players[opp].field;
-          if (targets.length > 0) {
-            applyDamageToCreature(opp, targets[0].instanceId, 3, player);
-            log(`AI ${landCard.name} 還元: 3ダメージ`, 'damage');
-          }
-          render(); updateHints();
-        }
+        if (G.players[opp].field.length === 0) { log(`${landCard.name} 還元: 対象なしのためスキップ`); render(); updateHints(); continueStack(); return; }
+        G.targetMode = { type:'opponentCreature', sourcePlayer:player, callback:(tgt) => {
+          applyDamageToCreature(opp, tgt.instId, 5, player);
+          log(`${landCard.name} 還元: 5ダメージ`, 'damage');
+          G.targetMode = null; render(); updateHints();
+          continueStack();
+        }};
+        log('対象を選択（5ダメージ）');
+        render(); updateHints();
       }
     });
     renderStack();
@@ -4489,7 +4458,7 @@ function aiDoActivateChargedLand(landInstId) {
     if (idx !== -1) { ai.lands.splice(idx,1); ai.landDeck.push(land.cardId); }
     log(`AI ${lc.name} 還元: WW追加、土地デッキ底へ`, 'heal');
     render();
-  } else if (lc.chargedAbility === 'damage2opponent') {
+  } else if (lc.chargedAbility === 'damage5opponent') {
     const idx = ai.lands.findIndex(l=>l.instanceId===landInstId);
     if (idx === -1) return;
     ai.lands.splice(idx,1);
@@ -4502,11 +4471,11 @@ function aiDoActivateChargedLand(landInstId) {
       const tgt = mctsPickOption(targets, (sim, t) => {
         const s0 = sim.state.players[0];
         const st = s0.field.find(c=>c.id===t.instanceId);
-        if (st) { st.damage+=3; sim.simCheckDeath(0); } else s0.life-=3;
+        if (st) { st.damage+=5; sim.simCheckDeath(0); } else s0.life-=5;
       }) || targets[0];
       showAIThinking(false);
-      applyDamageToCreature(0, tgt.instanceId, 3, 1);
-      log(`AI ${lc.name} 還元: 3ダメージ → ${CARD_DB[tgt.cardId].name}`, 'damage');
+      applyDamageToCreature(0, tgt.instanceId, 5, 1);
+      log(`AI ${lc.name} 還元: 5ダメージ → ${CARD_DB[tgt.cardId].name}`, 'damage');
     }
     checkDeath(); render();
   } else if (lc.chargedAbility === 'buffWhiteCreature') {
@@ -4547,9 +4516,9 @@ function aiActivateChargedLands() {
         if (!sim.simIsOC(p1)||simLand.tapped) return;
         p1.mana.W=(p1.mana.W||0)+3;
         const ix=p1.lands.indexOf(simLand); if(ix!==-1){p1.lands.splice(ix,1);p1.landDeck.push(simLand.cardId);}
-      } else if (lc.chargedAbility === 'damage2opponent') {
+      } else if (lc.chargedAbility === 'damage5opponent') {
         const ix=p1.lands.indexOf(simLand); if(ix!==-1){p1.lands.splice(ix,1);p1.landDeck.push(lc.id);}
-        if (p0.field.length){const t=p0.field.reduce((a,b)=>sim.hp(b)<sim.hp(a)?b:a);t.damage+=3;sim.simCheckDeath(0);}else p0.life-=3;
+        if (p0.field.length){const t=p0.field.reduce((a,b)=>sim.hp(b)<sim.hp(a)?b:a);t.damage+=5;sim.simCheckDeath(0);}else p0.life-=5;
       } else if (lc.chargedAbility === 'buffWhiteCreature') {
         if (simLand.tapped) return; simLand.tapped=true;
         const ws=p1.field.filter(c=>CARD_DB[c.cardId].color==='W');
@@ -6468,11 +6437,11 @@ class SimGame {
         p.mana.W=(p.mana.W||0)+3;
         const idx=p.lands.indexOf(land); if(idx!==-1){p.lands.splice(idx,1); p.landDeck.push(land.cardId);}
         break;
-      } else if (lc.chargedAbility === 'damage2opponent') {
+      } else if (lc.chargedAbility === 'damage5opponent') {
         const idx=p.lands.indexOf(land); if(idx===-1) continue;
         p.lands.splice(idx,1); p.landDeck.push(land.cardId);
-        if (opp.field.length) { const tgt=opp.field.reduce((a,b)=>this.hp(b)<this.hp(a)?b:a); tgt.damage+=2; this.simCheckDeath(1-ap); }
-        else opp.life-=2;
+        if (opp.field.length) { const tgt=opp.field.reduce((a,b)=>this.hp(b)<this.hp(a)?b:a); tgt.damage+=5; this.simCheckDeath(1-ap); }
+        else opp.life-=5;
         break;
       } else if (lc.chargedAbility === 'buffWhiteCreature') {
         if (land.tapped) continue;
@@ -8568,29 +8537,30 @@ function runCardTests() {
     const pb = getPermanentBuff(arst.instanceId);
     assert('Arestiaバフ: ターン終了後も永続バフが残る', pb.power===1 && pb.toughness===1);
     const eff = getEffectivePower(0, G.players[0].field[0]);
-    assert('Arestiaバフ: 実効パワーに反映(1+1=2)', eff===2);
+    assert('Arestiaバフ: 実効パワーに反映(5+1=6)', eff===6);
   });
 
-  // 15. 介善（新仕様）: ■1で相手クリーチャー2体にそれぞれ5ダメージ、■2でP/T入れ替え付与
+  // 15. 介善（新仕様）: ■1で相手クリーチャー1体に5ダメージ
   withState(()=>{
     G.players[0].hand = ['kaizen'];
     G.players[0].mana = {R:0,U:0,G:0,W:4,B:0,C:0};
-    const t1 = _testAddCreature(1,'shinmai_heishi'); // 1/2 ← 5ダメージ対象1
-    const t2 = _testAddCreature(1,'shinmai_heishi'); // 1/2 ← 5ダメージ対象2
+    const t1 = _testAddCreature(1,'shinmai_heishi'); // 1/2 ← 5ダメージ対象
+    const t2 = _testAddCreature(1,'shinmai_heishi'); // 1/2 ← 攻撃強制対象
     playKaizen(0, 0);
     assert('介善(非OC): 3つの効果がスタックに積まれる', G.stack.length===3);
-    // ■1-1 (1体目に5ダメージ) — 最上位が最初に解決
+    // ■1 (1体に5ダメージ) — 最上位が最初に解決
     G.stack.pop().resolve();
-    assert('介善 ■1-1: 解決時にtargetModeがセット', G.targetMode && G.targetMode.type==='opponentCreature');
+    assert('介善 ■1: 解決時にtargetModeがセット', G.targetMode && G.targetMode.type==='opponentCreature');
     G.targetMode.callback({instId: t1.instanceId});
-    assert('介善 ■1-1: 5ダメージで1体目破壊', !G.players[1].field.find(x=>x.instanceId===t1.instanceId));
-    // ■1-2 (2体目に5ダメージ)
+    assert('介善 ■1: 5ダメージで破壊', !G.players[1].field.find(x=>x.instanceId===t1.instanceId));
+    // ■2 (攻撃強制)
     G.stack.pop().resolve();
-    assert('介善 ■1-2: 解決時にtargetModeがセット', G.targetMode && G.targetMode.type==='opponentCreature');
+    assert('介善 ■2: 解決時にtargetModeがセット', G.targetMode && G.targetMode.type==='opponentCreature');
     G.targetMode.callback({instId: t2.instanceId});
-    assert('介善 ■1-2: 5ダメージで2体目破壊', !G.players[1].field.find(x=>x.instanceId===t2.instanceId));
-    // ■2 (自クリーチャーにP/T入れ替えの置き換え効果を付与)
+    assert('介善 ■2: 対象に攻撃強制フラグ', G.players[1].field.find(x=>x.instanceId===t2.instanceId)?.mustAttack===true);
+    // ■3 (kaizenBlockDraw)
     G.stack.pop().resolve();
+    assert('介善 ■3: kaizenBlockDrawがセット', G.kaizenBlockDraw===0);
     assert('介善: 墓地に置かれる', G.players[0].graveyard.includes('kaizen'));
   });
 
@@ -8600,17 +8570,17 @@ function runCardTests() {
     G.players[0].mana = {R:0,U:0,G:0,W:4,B:0,C:0};
     playKaizen(0, 0);
     assert('介善(対象なし): 3スタック積まれる', G.stack.length===3);
-    G.stack.pop().resolve(); // ■1-1: 対象なしスキップ
-    G.stack.pop().resolve(); // ■1-2: 対象なしスキップ
-    G.stack.pop().resolve(); // ■2: P/T入れ替え付与
+    G.stack.pop().resolve(); // ■1: 対象なしスキップ
+    G.stack.pop().resolve(); // ■2: 対象なしスキップ
+    G.stack.pop().resolve(); // ■3: kaizenBlockDraw設定
     assert('介善(対象なし): 墓地に置かれる', G.players[0].graveyard.includes('kaizen'));
   });
 
-  // 16a. 介善 ■2: 致死ダメージを受けると離れる代わりにP/Tが入れ替わる（ダメージ引き継ぎ）
+  // 16a. 介善■2: P/T入れ替え（旧テスト維持 — 旧noDamageKill機能は残存）
   withState(()=>{
     const c = _testAddCreature(0,'bastian'); // 3/2
-    c.noDamageKill = true;                   // 介善■2が付与した状態
-    applyDamageToCreature(0, c.instanceId, 2, 1); // タフネス2に致死ダメージ
+    c.noDamageKill = true;
+    applyDamageToCreature(0, c.instanceId, 2, 1);
     const alive = G.players[0].field.find(x=>x.instanceId===c.instanceId);
     assert('介善■2: 致死ダメージでも入れ替えで生存', !!alive);
     assert('介善■2: 入れ替え後パワー=元タフネス(2)', alive && getEffectivePower(0, alive)===2);
@@ -8619,31 +8589,24 @@ function runCardTests() {
     assert('介善■2: 置き換えは1回限り(フラグ解除)', alive && alive.noDamageKill===false);
   });
 
-  // 16b. 介善 ■2: 入れ替えても新タフネス以上のダメージなら破壊される
+  // 16b. 介善■2: 入れ替え後も致死なら破壊
   withState(()=>{
     const c = _testAddCreature(0,'bastian'); // 3/2
     c.noDamageKill = true;
-    applyDamageToCreature(0, c.instanceId, 3, 1); // 入れ替え後タフネス3以上 → 破壊
+    applyDamageToCreature(0, c.instanceId, 3, 1);
     assert('介善■2: 入れ替え後タフネス以上のダメージで破壊', !G.players[0].field.find(x=>x.instanceId===c.instanceId));
   });
 
-  // 16b. 介善ブロックドロー: 持続は次の自分のターン開始まで＆ブロック時にドロー
+  // 16c. 介善■3: ブロック時1ドロー
   withState(()=>{
-    G.blockDrawActive = [true, false]; // プレイヤーが介善を唱えた状態
-    // AIの攻撃をプレイヤーがブロック → プレイヤーが1枚引く
-    const atk = _testAddCreature(1,'arestia');         // 5/5 攻撃側(AI)
-    const blk = _testAddCreature(0,'serashia_souryo'); // 3/5 ブロッカー
+    G.kaizenBlockDraw = 0; // プレイヤー0が介善を唱えた状態
+    const atk = _testAddCreature(1,'shinmai_heishi'); // 1/2 攻撃側(AI)
+    const blk = _testAddCreature(0,'serashia_souryo'); // 3/7 ブロッカー
     G.players[0].deck = ['shinmai_heishi','shinmai_heishi'];
     G.players[0].hand = [];
     resolveSingleCombat(1, atk.instanceId, null, blk.instanceId);
-    drainStack(); // 介善スタック誘発を解決
+    drainStack();
     assert('介善持続: ブロック時にプレイヤーが1ドロー', G.players[0].hand.length===1);
-    // 相手ターン終了→自分のターン開始で効果失効
-    G.activePlayer = 1; // AIのターン中とする
-    G.activePlayer = 1 - G.activePlayer; // endTurn相当の切替
-    if (G.blockDrawActive[G.activePlayer]) G.blockDrawActive[G.activePlayer] = false;
-    assert('介善持続: 自分のターン開始で失効', G.blockDrawActive[0]===false);
-    assert('介善持続: 相手側のフラグには影響しない', G.blockDrawActive[1]===false);
   });
 
   // 17. getCXValue: 土地数 + チャージ数
@@ -8734,16 +8697,17 @@ function runCardTests() {
     assert('攻撃強制: ターンを終えた側のフラグはクリア', m && m.mustAttack===false);
   });
 
-  // 23. アレスティア ■3: 自分のクリーチャーのブロック時、相手プレイヤーへ1ダメージ
+  // 23. アレスティア ■3: ブロック終了時、ブロッカー生存なら相手プレイヤーへ2ダメージ
   withState(()=>{
     // P1が攻撃、P0(アレスティア所持側)がブロック
+    // shinmai_heishi(1/2)が攻撃 → serashia_souryo(3/7)がブロック → ブロッカー生存 → 2ダメージ
     const atk = _testAddCreature(1,'shinmai_heishi'); // 1/2 攻撃側
     _testAddCreature(0,'arestia');                    // アレスティア(防御側に存在)
-    const blk = _testAddCreature(0,'serashia_souryo'); // 2/6 ブロッカー
+    const blk = _testAddCreature(0,'serashia_souryo'); // 3/7 ブロッカー(生存)
     const lifeBefore = G.players[1].life;
     resolveSingleCombat(1, atk.instanceId, null, blk.instanceId);
     drainStack();
-    assert('アレスティア■3: ブロック時、攻撃側プレイヤーへ1ダメージ', G.players[1].life === lifeBefore - 1);
+    assert('アレスティア■3: ブロック終了後、攻撃側プレイヤーへ2ダメージ', G.players[1].life === lifeBefore - 2);
   });
 
   // ─────────────────────────────────────────────
