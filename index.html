@@ -1872,7 +1872,7 @@ const CARD_DB = {
     id:'arestia', name:'戦乙女 アレスティア', type:'creature', color:'W',
     cost:{W:3,C:5}, power:1, toughness:7, subtype:'人間(戦士)', icon:'⚡',
     keywords:['還元'],
-    text:'［結晶１：「■カウントダウン２■離れた時、「戦乙女　アレスティア」を出す」という効果を持つアーティファクトを出す］\n■相手は可能なら攻撃する\n■相手クリーチャーのアタック時、自分のクリーチャー全てを＋1/＋1する\n■自分のクリーチャーの相手プレイヤーへの攻撃時、１ダメージ。その後、このクリーチャーのタフネス-1されたコピーを出してもよい。ただし、このクリーチャーのタフネスが１なら出せない\n■起動（還元）：自分のクリーチャー1体をアンタップする',
+    text:'［結晶１：〔■カウントダウン２■離れた時、Cが6以上あり、白を含む土地が3枚以上あれば「戦乙女　アレスティア」を出す。なければ、カウントダウンが1の状態で場に残る〕という効果を持つ「アレスティアの旗」というアーティファクトを1枚出す］\n■相手は可能なら攻撃する\n■相手クリーチャーのアタック時、自分のクリーチャー全てを＋1/＋1する\n■自分のクリーチャーの相手プレイヤーに１ダメージを与える。その後、このクリーチャーのタフネス-1されたコピーを出してもよい。ただし、このクリーチャーのタフネスが１なら出せない\n■起動（還元）：自分のクリーチャー1体をアンタップする',
     arestiaPassive:true, onAttackOpponent:'buff_all_own', onAttackCopy:true, crystalEtb:1,
     activated:'untapOwn'
   },
@@ -2938,8 +2938,8 @@ function spawnCrystalArtifact(player, countdown, onLeaveType) {
   if (!G.players[player].artifacts) G.players[player].artifacts = [];
   const art = {
     instanceId: G.nextInstanceId++,
-    name: 'アレスティアの結晶',
-    icon: '💎',
+    name: 'アレスティアの旗',
+    icon: '🚩',
     countdown: countdown,
     onLeaveType: onLeaveType,
     owner: player
@@ -2953,15 +2953,27 @@ function spawnCrystalArtifact(player, countdown, onLeaveType) {
 function triggerArtifactLeave(player, art) {
   log(`${art.name}: 場を離れた`, 'important');
   if (art.onLeaveType === 'spawnArestia') {
-    if (G.players[player].field.length >= 5) {
-      log('アレスティアの結晶: フィールドが満杯のため召喚できません');
+    // 条件チェック: CX6以上 & 白を含む土地3枚以上
+    const cx = getCXValue(player);
+    const whiteLands = G.players[player].lands.filter(l => CARD_DB[l.cardId].color === 'W').length;
+    const canSpawn = cx >= 6 && whiteLands >= 3 && G.players[player].field.length < 5;
+    if (!canSpawn) {
+      if (G.players[player].field.length >= 5) {
+        log('アレスティアの旗: フィールドが満杯のため召喚できません');
+      } else {
+        // 条件不足: カウントダウン1で場に残る
+        art.countdown = 1;
+        G.players[player].artifacts.push(art);
+        log(`アレスティアの旗: 条件未達(CX${cx}/白土地${whiteLands}) → カウントダウン1で残留`, 'important');
+        render();
+      }
       return;
     }
     const inst = newInstance('arestia');
     inst.sick = true;
     inst.entryTurn = G.turn;
     G.players[player].field.push(inst);
-    log('アレスティアの結晶: 戦乙女 アレスティアを場に出した', 'important');
+    log('アレスティアの旗: 戦乙女 アレスティアを場に出した', 'important');
     fireETB(player, inst.instanceId);
     render();
   }
@@ -5179,7 +5191,7 @@ function renderField(player, zoneId) {
       artEl.innerHTML = `<div style="font-size:1.4em;text-align:center">${art.icon}</div>
         <div class="card-name" style="font-size:0.7em;text-align:center">${art.name}</div>
         <div style="text-align:center;font-size:0.85em;margin-top:4px">⏱ ${art.countdown}</div>`;
-      artEl.title = `${art.name}: カウントダウン${art.countdown}\n0になったらアレスティアを再召喚`;
+      artEl.title = `${art.name}: カウントダウン${art.countdown}\n0になったら、CX6以上&白土地3枚以上ならアレスティアを再召喚\n条件未達の場合はカウントダウン1で残留`;
       zone.appendChild(artEl);
     });
   }
