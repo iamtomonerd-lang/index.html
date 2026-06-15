@@ -2721,130 +2721,61 @@ function resolveETBEffect(player, instanceId) {
 
   if (card.etb === 'damage1opponent') {
     const targets = G.players[opp].field;
-    if (player === 0) {
-      if (targets.length === 0) { log(`${card.name} ETB: 対象なしのためスキップ`); continueStack(); return; }
-      G.targetMode = { type:'opponentCreature', callback:(tgt) => {
-        applyDamageToCreature(opp, tgt.instId, 1, player);
-        log(`${card.name} ETB: 対戦相手クリーチャーに1ダメージ`, 'damage');
-        G.targetMode = null; render(); updateHints();
-        continueStack();
-      }};
-      log(`${card.name} ETB: 対象を選択（1ダメージ）`);
-      render(); updateHints();
-    } else {
-      if (targets.length > 0) {
-        showAIThinking(true);
-        const tgt = mctsPickOption(targets, (sim, t) => {
-          const s0 = sim.state.players[0];
-          const st = s0.field.find(c=>c.id===t.instanceId);
-          if (st) { st.damage+=1; sim.simCheckDeath(0); } else s0.life-=1;
-        }) || targets[0];
-        showAIThinking(false);
-        applyDamageToCreature(opp, tgt.instanceId, 1, player);
-        log(`AI ${card.name} ETB: 1ダメージ → ${CARD_DB[tgt.cardId].name}`, 'damage');
-      }
-    }
+    if (targets.length === 0) { log(`${card.name} ETB: 対象なしのためスキップ`); continueStack(); return; }
+    G.targetMode = { type:'opponentCreature', sourcePlayer: player, callback:(tgt) => {
+      applyDamageToCreature(opp, tgt.instId, 1, player);
+      log(`${card.name} ETB: 対戦相手クリーチャーに1ダメージ`, 'damage');
+      G.targetMode = null; render(); updateHints();
+      continueStack();
+    }};
+    log(`${card.name} ETB: 対象を選択（1ダメージ）`);
+    render(); updateHints();
   } else if (card.etb === 'look3keep1white') {
     doLook3Keep1White(player);
   } else if (card.etb === 'mustAttackTarget') {
     const targets = G.players[opp].field;
-    if (player === 0) {
-      if (targets.length === 0) { log(`${card.name} ETB: 対象なしのためスキップ`); continueStack(); return; }
-      G.targetMode = { type:'opponentCreature', callback:(tgt) => {
-        const tc = G.players[opp].field.find(x=>x.instanceId===tgt.instId);
-        if (tc) { tc.mustAttack = true; G.mustAttackCreatures.add(tgt.instId); }
-        log(`${card.name} ETB: 対戦相手クリーチャーに攻撃強制`, 'important');
-        G.targetMode = null; render(); updateHints();
-        continueStack();
-      }};
-      log(`${card.name} ETB: 対象を選択（次ターン攻撃強制）`);
-      render(); updateHints();
-    } else {
-      if (targets.length > 0) {
-        // MCTSで「強制攻撃させると最も有利な」クリーチャーを選ぶ
-        showAIThinking(true);
-        const tgt = mctsPickOption(targets, (sim, t) => {
-          const s0 = sim.state.players[0], s1 = sim.state.players[1];
-          const simAtk = s0.field.find(c=>c.id===t.instanceId);
-          if (simAtk) {
-            const atkPow = (CARD_DB[simAtk.cardId].power||0)+(simAtk.tempPower||0);
-            const blk = s1.field.find(b=>!b.tapped&&sim._canFlyBlock(simAtk,b));
-            if (blk) {
-              const blkPow = (CARD_DB[blk.cardId].power||0)+(blk.tempPower||0);
-              simAtk.damage+=blkPow; blk.damage+=atkPow;
-              sim.simCheckDeath(0); sim.simCheckDeath(1);
-            } else s1.life-=atkPow;
-          }
-        }) || targets[0];
-        showAIThinking(false);
-        tgt.mustAttack = true; G.mustAttackCreatures.add(tgt.instanceId);
-        log(`AI ${card.name} ETB: 攻撃強制 → ${CARD_DB[tgt.cardId].name}`, 'important');
-      }
-    }
+    if (targets.length === 0) { log(`${card.name} ETB: 対象なしのためスキップ`); continueStack(); return; }
+    G.targetMode = { type:'opponentCreature', sourcePlayer: player, callback:(tgt) => {
+      const tc = G.players[opp].field.find(x=>x.instanceId===tgt.instId);
+      if (tc) { tc.mustAttack = true; G.mustAttackCreatures.add(tgt.instId); }
+      log(`${card.name} ETB: 対戦相手クリーチャーに攻撃強制`, 'important');
+      G.targetMode = null; render(); updateHints();
+      continueStack();
+    }};
+    log(`${card.name} ETB: 対象を選択（次ターン攻撃強制）`);
+    render(); updateHints();
   } else if (card.etb === 'damage3opponent') {
     const targets = G.players[opp].field;
-    if (player === 0) {
-      if (targets.length === 0) { log(`${card.name} ETB: 対象なしのためスキップ`); continueStack(); return; }
-      G.targetMode = { type:'opponentCreature', callback:(tgt) => {
-        applyDamageToCreature(opp, tgt.instId, 3, player);
-        log(`${card.name} ETB: 3ダメージ`, 'damage');
-        G.targetMode = null; render(); updateHints();
-        continueStack();
-      }};
-      log(`${card.name} ETB: 対象を選択（3ダメージ）`);
-      render(); updateHints();
-    } else {
-      if (targets.length > 0) {
-        showAIThinking(true);
-        const tgt = mctsPickOption(targets, (sim, t) => {
-          const s0 = sim.state.players[0];
-          const st = s0.field.find(c=>c.id===t.instanceId);
-          if (st) { st.damage+=3; sim.simCheckDeath(0); } else s0.life-=3;
-        }) || targets[0];
-        showAIThinking(false);
-        applyDamageToCreature(opp, tgt.instanceId, 3, player);
-        log(`AI ${card.name} ETB: 3ダメージ → ${CARD_DB[tgt.cardId].name}`, 'damage');
-      }
-    }
+    if (targets.length === 0) { log(`${card.name} ETB: 対象なしのためスキップ`); continueStack(); return; }
+    G.targetMode = { type:'opponentCreature', sourcePlayer: player, callback:(tgt) => {
+      applyDamageToCreature(opp, tgt.instId, 3, player);
+      log(`${card.name} ETB: 3ダメージ`, 'damage');
+      G.targetMode = null; render(); updateHints();
+      continueStack();
+    }};
+    log(`${card.name} ETB: 対象を選択（3ダメージ）`);
+    render(); updateHints();
   } else if (card.etb === 'damage2opponent_always_cx6damage3') {
     const hasCX6 = getCXValue(player) >= 6;
     const oppField = G.players[opp].field;
-    if (player === 0) {
-      if (oppField.length > 0) bastianChooseETB(inst.instanceId, hasCX6);
-    } else {
-      if (oppField.length > 0) {
-        const dmg = 2 + (hasCX6 ? 3 : 0);
-        showAIThinking(true);
-        const tgt = mctsPickOption(oppField, (sim, t) => {
-          const s0 = sim.state.players[0];
-          const st = s0.field.find(c=>c.id===t.instanceId);
-          if (st) { st.damage+=dmg; sim.simCheckDeath(0); } else s0.life-=dmg;
-        }) || oppField[0];
-        showAIThinking(false);
-        applyDamageToCreature(opp, tgt.instanceId, 2, player);
-        log(`AI ${card.name} ETB: 2ダメージ → ${CARD_DB[tgt.cardId].name}`, 'damage');
-        if (hasCX6) {
-          applyDamageToCreature(opp, tgt.instanceId, 3, player);
-          log(`AI ${card.name} C6 ETB: さらに3ダメージ`, 'damage');
-        }
-      }
-    }
+    if (oppField.length > 0) bastianChooseETB(inst.instanceId, hasCX6, player);
   }
 }
 
-function bastianChooseETB(instanceId, hasCX6Override) {
+function bastianChooseETB(instanceId, hasCX6Override, playerArg) {
   closeModal();
-  const hasCX6 = hasCX6Override !== undefined ? hasCX6Override : getCXValue(0) >= 6;
-  const opp = 1;
-  G.targetMode = { type:'opponentCreature', callback:(tgt) => {
-    applyDamageToCreature(opp, tgt.instId, 2, 0);
+  const src = playerArg !== undefined ? playerArg : 0;
+  const hasCX6 = hasCX6Override !== undefined ? hasCX6Override : getCXValue(src) >= 6;
+  const opp = 1 - src;
+  G.targetMode = { type:'opponentCreature', sourcePlayer: src, callback:(tgt) => {
+    applyDamageToCreature(opp, tgt.instId, 2, src);
     log('バスティオン 出た時: 2ダメージ', 'damage');
     G.targetMode = null;
     checkDeath();
     render(); updateHints();
     if (hasCX6 && G.players[opp].field.length > 0) {
-      G.targetMode = { type:'opponentCreature', callback:(tgt2) => {
-        applyDamageToCreature(opp, tgt2.instId, 3, 0);
+      G.targetMode = { type:'opponentCreature', sourcePlayer: src, callback:(tgt2) => {
+        applyDamageToCreature(opp, tgt2.instId, 3, src);
         log('バスティオン 出た時 CX6: 追加3ダメージ', 'damage');
         G.targetMode = null;
         checkDeath();
@@ -2853,6 +2784,7 @@ function bastianChooseETB(instanceId, hasCX6Override) {
       }};
       log('バスティオン 出た時 CX6: 3ダメージの対象を選択');
       render(); updateHints();
+      if (src === 1) { aiAutoPickTarget(); }
     } else {
       continueStack();
     }
@@ -4329,6 +4261,7 @@ function closePriorityAndResolve() {
     if (item.resolve) item.resolve();
     renderStack();
     render();
+    if (G.targetMode && G.targetMode.sourcePlayer === 1) { aiAutoPickTarget(); }
     if (G.targetMode || G._awaitingModal) return; // 非同期待機中 → continueStack()を待つ
     G._pendingCont = null;
     G._pendingReason = '';
@@ -4356,6 +4289,7 @@ function _resolveNextFast(cont, reason) {
   G._pendingReason = reason;
   if (item.resolve) item.resolve();
   renderStack(); render();
+  if (G.targetMode && G.targetMode.sourcePlayer === 1) { aiAutoPickTarget(); }
   if (G.targetMode || G._awaitingModal) return; // 非同期待機中
   G._pendingCont = null;
   G._pendingReason = '';
@@ -4369,6 +4303,30 @@ function _resolveNextFast(cont, reason) {
   } else if (cont) {
     setTimeout(cont, 50);
   }
+}
+
+function aiAutoPickTarget() {
+  if (!G.targetMode) return;
+  const tm = G.targetMode;
+  const src = tm.sourcePlayer !== undefined ? tm.sourcePlayer : G.activePlayer;
+  const opp = 1 - src;
+  let pool;
+  if (tm.type === 'opponentCreature') pool = G.players[opp].field;
+  else if (tm.type === 'ownCreature') pool = G.players[src].field;
+  else pool = [];
+  if (pool.length === 0) { G.targetMode = null; continueStack(); return; }
+  let target;
+  if (tm.aiPick) {
+    target = tm.aiPick(pool);
+  } else if (tm.type === 'opponentCreature') {
+    target = pool.reduce((best, c) =>
+      (CARD_DB[c.cardId].power||0)+(c.tempPower||0) > (CARD_DB[best.cardId].power||0)+(best.tempPower||0) ? c : best);
+  } else {
+    target = pool.reduce((best, c) =>
+      getEffectiveToughness(src, c) - c.damage < getEffectiveToughness(src, best) - best.damage ? c : best);
+  }
+  G.targetMode = null;
+  tm.callback({ instId: target.instanceId });
 }
 
 function aiHandlePriority() {
