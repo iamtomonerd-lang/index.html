@@ -1872,8 +1872,8 @@ const CARD_DB = {
     id:'arestia', name:'戦乙女 アレスティア', type:'creature', color:'W',
     cost:{W:3,C:5}, power:1, toughness:7, subtype:'人間(戦士)', icon:'⚡',
     keywords:['還元'],
-    text:'［結晶１：〔■カウントダウン２■離れた時、Cが6以上あり、白を含む土地が3枚以上あれば「戦乙女　アレスティア」を出す。なければ、カウントダウンが1の状態で場に残る〕という効果を持つ「アレスティアの旗」というアーティファクトを1枚出す］\n■相手は可能なら攻撃する\n■相手クリーチャーのアタック時、自分のクリーチャー全てを＋1/＋1する\n■自分のクリーチャーの相手プレイヤーに１ダメージを与える。その後、このクリーチャーのタフネス-1されたコピーを出してもよい。ただし、このクリーチャーのタフネスが１なら出せない\n■起動（還元）：自分のクリーチャー1体をアンタップする',
-    arestiaPassive:true, onAttackOpponent:'buff_all_own', onAttackCopy:true, crystalEtb:1,
+    text:'［結晶１：〔■カウントダウン２■離れた時、Cが6以上あり、白を含む土地が3枚以上あれば「戦乙女　アレスティア」を出す。なければ、カウントダウンが1の状態で場に残る〕という効果を持つ「アレスティアの旗」というアーティファクトを1枚出す］\n■相手は可能なら攻撃する\n■相手クリーチャーのアタック時、自分のクリーチャー全てを＋1/＋1する\n■自分のクリーチャーの相手プレイヤーへの1ダメージ。その後、このクリーチャーのタフネス-1されたコピーを出してもよい。ただし、このクリーチャーのタフネスが１なら出せない\n■起動（還元）：自分のクリーチャー1体をアンタップする。これは相手ターンのみ起動できる',
+    arestiaPassive:true, onAttackOpponent:'buff_all_own', crystalEtb:1,
     activated:'untapOwn'
   },
   // SPELLS
@@ -3697,12 +3697,26 @@ function resolveSingleCombat(atkPlayer, atkInstId, kakutouTargetId, blockerInstI
     G.players[opp].life -= atkPow;
     showFloatDamage(atkPow, opp === 0 ? 'player' : 'ai');
     log(`${atkCard.name} が${atkPow}ダメージ！`, 'damage');
-    // Arestia: 自クリーチャーの相手プレイヤーへのダメージ時、1追加ダメージ（コピーはブロック時のみ）
+    // Arestia: 自クリーチャーの相手プレイヤーへのダメージ時、+1ダメージ。その後、攻撃クリーチャーのタフネス-1コピーを出してもよい
     const atkHasArestia = G.players[atkPlayer].field.some(c => CARD_DB[c.cardId].id === 'arestia');
     if (atkHasArestia) {
       G.players[opp].life -= 1;
       showLifeChange(opp, -1);
       log('アレスティア: +1ダメージ', 'damage');
+      // その後: 攻撃クリーチャーのタフネス-1コピーを出してもよい
+      if (atkCard.toughness > 1) {
+        const capAtkInstId = atkInstId;
+        if (atkPlayer === 0) {
+          triggerEffect('アレスティア コピー誘発', '⚡', 0, () => {
+            showModal('アレスティア コピー', `<p>${atkCard.name}のタフネス${atkCard.toughness - 1}のコピーを出しますか？</p><button onclick="closeModal();G._awaitingModal=false;spawnCopyWithReducedToughness(0,${capAtkInstId});render();continueStack();" style="margin:4px;padding:6px 12px;background:#4a9eff;border:none;border-radius:4px;color:#fff;cursor:pointer;">はい</button><button onclick="closeModal();G._awaitingModal=false;continueStack();" style="margin:4px;padding:6px 12px;background:#888;border:none;border-radius:4px;color:#fff;cursor:pointer;">いいえ</button>`);
+            G._awaitingModal = true;
+          });
+        } else {
+          triggerEffect('アレスティア コピー誘発(AI)', '⚡', 1, () => {
+            spawnCopyWithReducedToughness(1, capAtkInstId);
+          });
+        }
+      }
     }
   }
 
