@@ -1845,8 +1845,8 @@ const CARD_DB = {
   'serashia_heishi': {
     id:'serashia_heishi', name:'セラシアの兵士', type:'creature', color:'W',
     cost:{W:1,C:1}, power:1, toughness:4, subtype:'人間(戦士)', icon:'🗡️',
-    keywords:[], text:'■ブロック時、1枚引く\n■ブロック時、このクリーチャーのタフネス-1されたコピーを出してもよい。ただし、このクリーチャーのタフネスが１なら出せない',
-    onBlock:'draw1', onBlockCopy:true
+    keywords:[], text:'■出た時、相手クリーチャー１体選ぶ。次の相手のターン中、そのクリーチャーは可能なら攻撃する\n■ブロック時、このクリーチャーのタフネス-1されたコピーを出してもよい。ただし、このクリーチャーのタフネスが１なら出せない。その後、このクリーチャーのタフネス-1されたコピーを出してもよい。ただし、このクリーチャーのタフネスが１なら出せない',
+    etb:'mustAttackTarget', onBlockCopy:2
   },
   'serashia_junhei': {
     id:'serashia_junhei', name:'セラシアの盾兵', type:'creature', color:'W',
@@ -3601,16 +3601,19 @@ function resolveSingleCombat(atkPlayer, atkInstId, kakutouTargetId, blockerInstI
       if (blkCard.onBlockCopy) {
         const blkInstNow = G.players[opp].field.find(c => c.instanceId === blockerInstId);
         if (blkInstNow && blkCard.toughness > 1) {
-          if (opp === 0) {
-            const capInstId = blkInstNow.instanceId;
-            triggerEffect(`${blkCard.name} コピー誘発`, blkCard.icon||'🛡️', 0, () => {
-              showModal(`${blkCard.name} コピー`, `<p>タフネス${blkCard.toughness - 1}のコピーを出しますか？</p><button onclick="closeModal();G._awaitingModal=false;spawnCopyWithReducedToughness(0,${capInstId});render();continueStack();" style="margin:4px;padding:6px 12px;background:#4a9eff;border:none;border-radius:4px;color:#fff;cursor:pointer;">はい</button><button onclick="closeModal();G._awaitingModal=false;continueStack();" style="margin:4px;padding:6px 12px;background:#888;border:none;border-radius:4px;color:#fff;cursor:pointer;">いいえ</button>`);
-              G._awaitingModal = true;
-            });
-          } else {
-            triggerEffect(`${blkCard.name} コピー誘発(AI)`, blkCard.icon||'🛡️', 1, () => {
-              spawnCopyWithReducedToughness(1, blockerInstId);
-            });
+          const copyCount = typeof blkCard.onBlockCopy === 'number' ? blkCard.onBlockCopy : 1;
+          for (let i = 0; i < copyCount; i++) {
+            if (opp === 0) {
+              const capInstId = blkInstNow.instanceId;
+              triggerEffect(`${blkCard.name} コピー誘発${copyCount > 1 ? ` (${i+1}/${copyCount})` : ''}`, blkCard.icon||'🛡️', 0, () => {
+                showModal(`${blkCard.name} コピー`, `<p>タフネス${blkCard.toughness - 1}のコピーを出しますか？</p><button onclick="closeModal();G._awaitingModal=false;spawnCopyWithReducedToughness(0,${capInstId});render();continueStack();" style="margin:4px;padding:6px 12px;background:#4a9eff;border:none;border-radius:4px;color:#fff;cursor:pointer;">はい</button><button onclick="closeModal();G._awaitingModal=false;continueStack();" style="margin:4px;padding:6px 12px;background:#888;border:none;border-radius:4px;color:#fff;cursor:pointer;">いいえ</button>`);
+                G._awaitingModal = true;
+              });
+            } else {
+              triggerEffect(`${blkCard.name} コピー誘発${copyCount > 1 ? ` (${i+1}/${copyCount})(AI)` : '(AI)'}`, blkCard.icon||'🛡️', 1, () => {
+                spawnCopyWithReducedToughness(1, blockerInstId);
+              });
+            }
           }
         }
       }
@@ -4105,10 +4108,13 @@ function resolveCombat() {
           });
         }
         if (blkCard.onBlockCopy) {
-          triggerEffect(`${blkCard.name} コピー誘発(AI)`, blkCard.icon||'🛡️', 1, () => {
-            const blkNow = ai.field.find(c=>c.instanceId===_blkId);
-            if (blkNow && getEffectiveToughness(1, blkNow) > 1) { spawnCopyWithReducedToughness(1, _blkId); }
-          });
+          const copyCount = typeof blkCard.onBlockCopy === 'number' ? blkCard.onBlockCopy : 1;
+          for (let i = 0; i < copyCount; i++) {
+            triggerEffect(`${blkCard.name} コピー誘発${copyCount > 1 ? ` (${i+1}/${copyCount})(AI)` : '(AI)'}`, blkCard.icon||'🛡️', 1, () => {
+              const blkNow = ai.field.find(c=>c.instanceId===_blkId);
+              if (blkNow && getEffectiveToughness(1, blkNow) > 1) { spawnCopyWithReducedToughness(1, _blkId); }
+            });
+          }
         }
         if (blkCard.onBlock === 'draw1') {
           triggerEffect(`${blkCard.name} ブロック誘発(1ドロー)`, blkCard.icon||'✨', 1, () => {
