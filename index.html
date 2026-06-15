@@ -8398,6 +8398,7 @@ function runCardTests() {
     while (G.stack.length > 0 && limit-- > 0) {
       const item = G.stack.pop();
       if (item.resolve) item.resolve();
+      if (G.targetMode && G.targetMode.sourcePlayer === 1) aiAutoPickTarget();
     }
   }
 
