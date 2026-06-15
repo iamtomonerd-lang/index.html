@@ -2374,6 +2374,23 @@ function playCardFromHand(player, handIndex) {
   // 非ターンプレイヤーはQuickのみスタックに積める
   if (G.stack.length > 0 && !isMyTurn && !isQuick) { log('スタック処理中は唱えられません（非ターンプレイヤーはQuickのみ対応可）'); return; }
 
+  // 結晶のみ宣言: 本体コストが払えなくても crystalEtb 分の白マナがあれば旗だけ出せる
+  if (card.crystalEtb && player === 0 && !canAfford(player, card.cost)) {
+    const crystalCost = card.crystalEtb;
+    const canPayCrystalOnly = (p.mana.W || 0) >= crystalCost;
+    if (canPayCrystalOnly) {
+      G._awaitingModal = true;
+      showModal(`${card.name} 結晶宣言`,
+        `<p>白${crystalCost}マナを支払い、カウントダウン2の旗アーティファクトを出しますか？<br><small>（本体コストを払わず旗のみ展開。旗離脱時にCX≥6かつ白土地≥3なら再召喚）</small></p>
+        <button onclick="closeModal();G._awaitingModal=false;declareCrystalOnly(${player},${handIndex});" style="margin:4px;padding:6px 14px;background:#c0a020;border:none;border-radius:4px;color:#fff;cursor:pointer;">旗を出す（白${crystalCost}）</button>
+        <button onclick="closeModal();G._awaitingModal=false;" style="margin:4px;padding:6px 14px;background:#555;border:none;border-radius:4px;color:#fff;cursor:pointer;">キャンセル</button>`
+      );
+      return;
+    }
+    log('マナが足りません');
+    return;
+  }
+
   if (!canAfford(player, card.cost)) { log('マナが足りません'); return; }
 
   if (card.type === 'spell') {
@@ -2932,6 +2949,19 @@ function modalPeekReturn() {
 
 function addPermanentBuff(player, instanceId, power, toughness) {
   G.permanentBuffs.push({instanceId, power, toughness});
+}
+
+function declareCrystalOnly(player, handIndex) {
+  const p = G.players[player];
+  if (handIndex < 0 || handIndex >= p.hand.length) return;
+  const cardId = p.hand[handIndex];
+  const card = CARD_DB[cardId];
+  if (!card || !card.crystalEtb) return;
+  const crystalCost = card.crystalEtb;
+  if ((p.mana.W || 0) < crystalCost) { log('白マナが足りません'); return; }
+  p.mana.W -= crystalCost;
+  log(`${card.name} 結晶宣言：白${crystalCost}マナを支払い、アレスティアの旗を展開`, 'important');
+  spawnCrystalArtifact(player, 2, 'spawnArestia');
 }
 
 function spawnCrystalArtifact(player, countdown, onLeaveType) {
