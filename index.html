@@ -1872,7 +1872,7 @@ const CARD_DB = {
     id:'arestia', name:'戦乙女 アレスティア', type:'creature', color:'W',
     cost:{W:3,C:5}, power:1, toughness:7, subtype:'人間(戦士)', icon:'⚡',
     keywords:['還元'],
-    text:'［結晶１：〔■カウントダウン２■離れた時、Cが6以上あり、白を含む土地が3枚以上あれば「戦乙女　アレスティア」を出す。なければ、カウントダウンが1の状態で場に残る〕という効果を持つ「アレスティアの旗」というアーティファクトを1枚出す］\n■相手は可能なら攻撃する\n■相手クリーチャーのアタック時、自分のクリーチャー全てを＋1/＋1する\n■自分のクリーチャーのブロック時、そのクリーチャーのタフネス-1されたコピーを出してもよい。ただし、そのクリーチャーのタフネスが１なら出せない\n■起動（還元）：自分のクリーチャー1体をアンタップする。これは相手ターンのみ起動できる',
+    text:'［結晶１：〔■カウントダウン２■離れた時、Cが6以上あり、白を含む土地が3枚以上あれば「戦乙女　アレスティア」を出す。なければ、カウントダウンが1の状態で場に残る〕という効果を持つ「アレスティアの旗」というアーティファクトを1枚出す］\n■相手は可能なら攻撃する\n■相手クリーチャーのアタック時、自分のクリーチャー全てを＋1/＋1する\n■自分のクリーチャーのブロック時、相手プレイヤーへ1ダメージ。その後、そのクリーチャーのタフネス-1されたコピーを出してもよい。ただし、そのクリーチャーのタフネスが１なら出せない\n■起動（還元）：自分のクリーチャー1体をアンタップする。これは相手ターンのみ起動できる',
     arestiaPassive:true, onAttackOpponent:'buff_all_own', crystalEtb:1,
     activated:'untapOwn'
   },
@@ -1886,7 +1886,7 @@ const CARD_DB = {
   'kaizen': {
     id:'kaizen', name:'介善', type:'spell', color:'W',
     cost:{W:4}, icon:'✨', keywords:['Quick'],
-    text:'■相手クリーチャー2体にそれぞれ５ダメージ\n■自分のクリーチャー全て、このターンダメージで死なない（ダメージは引き継ぐ）\n〈OC〉\n■自分の手札からマナ総量8以下のクリーチャーを出す。この能力によって出したクリーチャーはこのゲーム中、攻撃できない(ターン1:同名)',
+    text:'■相手クリーチャー2体にそれぞれ５ダメージ\n■自分のクリーチャー全て、このターン離れる時かわりにP/Tを元の状態に戻す（ダメージは引き継ぐ）\n〈OC〉\n■自分の手札からマナ総量8以下のクリーチャーを出す。この能力によって出したクリーチャーはこのゲーム中、攻撃できない(ターン1:同名)',
     effect:'kaizen'
   },
   // LANDS
@@ -3164,8 +3164,21 @@ function checkCreatureDeath(player, instId, sourcePlayer) {
   const toughness = card.toughness + (c.tempToughness||0) + permBuff.toughness + getCXBonus(player, c).toughness;
   const dead = c.damage >= toughness;
   if (dead && c.noDamageKill) {
-    // ダメージ死亡無効: 死なずにダメージを引き継ぐ
-    log(`${card.name}: ダメージ死亡無効（介善■4）`);
+    // 介善■2 置き換え効果: 離れる代わりにP/Tを元の状態に戻す（ダメージは引き継ぐ）
+    c.noDamageKill = false;
+    c.tempPower = 0;
+    c.tempToughness = 0;
+    G.permanentBuffs = G.permanentBuffs.filter(b => b.instanceId !== c.instanceId);
+    log(`${card.name}: 介善■2 — P/Tを元に戻す（ダメージ${c.damage}を引き継ぎ）`);
+    // リセット後の基本タフネスで再チェック
+    const baseToughness = card.toughness + getCXBonus(player, c).toughness;
+    if (c.damage >= baseToughness) {
+      showDestroyAnimation(instId);
+      p.field.splice(idx, 1);
+      p.graveyard.push(c.cardId);
+      log(`${card.name} が破壊された（P/Tリセット後）`, 'damage');
+      return true;
+    }
     return false;
   }
   if (dead) {
@@ -3687,22 +3700,34 @@ function resolveSingleCombat(atkPlayer, atkInstId, kakutouTargetId, blockerInstI
         });
       }
       // アレスティア onBlockComplete: 削除 (アレスティアはonAttackCopyに変更)
-      // アレスティア ■3: 自分のクリーチャーがブロックした時、そのクリーチャーのタフネス-1コピーを出してもよい
+      // アレスティア ■3: 自分のクリーチャーのブロック時、相手プレイヤーへ1ダメージ。その後コピーを出してもよい
       const defHasArestia = G.players[opp].field.some(c => CARD_DB[c.cardId].id === 'arestia');
       if (defHasArestia) {
         const blkInstNow2 = G.players[opp].field.find(c => c.instanceId === blockerInstId);
-        if (blkInstNow2 && blkCard.toughness > 1) {
-          const capBlkId = blkInstNow2.instanceId;
-          if (opp === 0) {
-            triggerEffect('アレスティア ■3 コピー誘発', '⚡', 0, () => {
+        const capBlkId = blkInstNow2 ? blkInstNow2.instanceId : null;
+        const capAtkP = atkPlayer;
+        if (opp === 0) {
+          triggerEffect('アレスティア ■3 ブロック誘発', '⚡', 0, () => {
+            G.players[capAtkP].life -= 1;
+            showLifeChange(capAtkP, -1);
+            log('アレスティア ■3: 相手プレイヤーへ1ダメージ', 'damage');
+            if (blkInstNow2 && blkCard.toughness > 1) {
               showModal('アレスティア ■3 コピー', `<p>${blkCard.name}のタフネス${blkCard.toughness - 1}のコピーを出しますか？</p><button onclick="closeModal();G._awaitingModal=false;spawnCopyWithReducedToughness(0,${capBlkId});render();continueStack();" style="margin:4px;padding:6px 12px;background:#4a9eff;border:none;border-radius:4px;color:#fff;cursor:pointer;">はい</button><button onclick="closeModal();G._awaitingModal=false;continueStack();" style="margin:4px;padding:6px 12px;background:#888;border:none;border-radius:4px;color:#fff;cursor:pointer;">いいえ</button>`);
               G._awaitingModal = true;
-            });
-          } else {
-            triggerEffect('アレスティア ■3 コピー誘発(AI)', '⚡', 1, () => {
-              spawnCopyWithReducedToughness(1, capBlkId);
-            });
-          }
+              return;
+            }
+            render();
+          });
+        } else {
+          triggerEffect('アレスティア ■3 ブロック誘発(AI)', '⚡', 1, () => {
+            G.players[capAtkP].life -= 1;
+            showLifeChange(capAtkP, -1);
+            log('アレスティア ■3(AI): 相手プレイヤーへ1ダメージ', 'damage');
+            if (blkInstNow2 && blkCard.toughness > 1) {
+              spawnCopyWithReducedToughness(1, blockerInstId);
+            }
+            render();
+          });
         }
       }
     }
