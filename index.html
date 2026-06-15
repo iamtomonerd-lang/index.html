@@ -2365,26 +2365,35 @@ function playCardFromHand(player, handIndex) {
   const isQuick = card.keywords && card.keywords.includes('Quick');
 
   const inPriorityWindow = G.awaitingPriority;
-  // ターンプレイヤーは優先権ウィンドウ中も通常通り使える
-  // 非ターンプレイヤーはQuickのみ
-  if (!isMyTurn && !isQuick) { log('非ターンプレイヤーはQuickのみ使用できます'); return; }
-  // メインフェイズ外では優先権ウィンドウ中のみ許可（ターンプレイヤーは何でも、非ターンはQuick）
-  if (!inMain && !isQuick && !inPriorityWindow) { log('メインフェイズ以外ではカードをプレイできません'); return; }
-  if (!inMain && !isQuick && !isMyTurn) { log('非ターンプレイヤーはQuickのみ使用できます'); return; }
-  // 非ターンプレイヤーはQuickのみスタックに積める
-  if (G.stack.length > 0 && !isMyTurn && !isQuick) { log('スタック処理中は唱えられません（非ターンプレイヤーはQuickのみ対応可）'); return; }
+  // Quick は常に使用可能（対象有無に関わらず）
+  if (isQuick) {
+    // Quick は優先権ウィンドウなしでも使用可能
+  } else {
+    // 非Quick: 通常のルール適用
+    // ターンプレイヤーは優先権ウィンドウ中も通常通り使える
+    // 非ターンプレイヤーはQuickのみ
+    if (!isMyTurn) { log('非ターンプレイヤーはQuickのみ使用できます'); return; }
+    // メインフェイズ外では優先権ウィンドウ中のみ許可
+    if (!inMain && !inPriorityWindow) { log('メインフェイズ以外ではカードをプレイできません'); return; }
+    // スタック処理中は注意
+    if (G.stack.length > 0) { log('スタック処理中は唱えられません（Quickのみ対応可）'); return; }
+  }
 
-  // 結晶のみ宣言: 本体コストが払えなくても crystalEtb 分の白マナがあれば旗だけ出せる
-  if (card.crystalEtb && player === 0 && !canAfford(player, card.cost)) {
+  // 結晶カード: 本体コストの有無に関わらず、crystalEtb があれば結晶宣言の選択肢を提示
+  if (card.crystalEtb && player === 0) {
     const crystalCost = card.crystalEtb;
-    const canPayCrystalOnly = (p.mana.W || 0) >= crystalCost;
-    if (canPayCrystalOnly) {
+    const canPayCrystal = (p.mana.W || 0) >= crystalCost;
+    const canPayFull = canAfford(player, card.cost);
+    if (canPayCrystal || canPayFull) {
       G._awaitingModal = true;
-      showModal(`${card.name} 結晶宣言`,
-        `<p>白${crystalCost}マナを支払い、カウントダウン2の旗アーティファクトを出しますか？<br><small>（本体コストを払わず旗のみ展開。旗離脱時にCX≥6かつ白土地≥3なら再召喚）</small></p>
-        <button onclick="closeModal();G._awaitingModal=false;declareCrystalOnly(${player},${handIndex});" style="margin:4px;padding:6px 14px;background:#c0a020;border:none;border-radius:4px;color:#fff;cursor:pointer;">旗を出す（白${crystalCost}）</button>
-        <button onclick="closeModal();G._awaitingModal=false;" style="margin:4px;padding:6px 14px;background:#555;border:none;border-radius:4px;color:#fff;cursor:pointer;">キャンセル</button>`
-      );
+      let modalText = `<p>このカードをどのようにプレイしますか？</p>`;
+      if (canPayFull) {
+        modalText += `<button onclick="closeModal();G._awaitingModal=false;playCardFromHandAfterCrystal(${player},${handIndex});" style="margin:4px;padding:6px 14px;background:#4a9eff;border:none;border-radius:4px;color:#fff;cursor:pointer;">本体をプレイ（${costToString(card.cost)}）</button>`;
+      }
+      if (canPayCrystal) {
+        modalText += `<button onclick="closeModal();G._awaitingModal=false;declareCrystalOnly(${player},${handIndex});" style="margin:4px;padding:6px 14px;background:#c0a020;border:none;border-radius:4px;color:#fff;cursor:pointer;">旗のみ宣言（白${crystalCost}）</button>`;
+      }
+      showModal(`${card.name}`, modalText);
       return;
     }
     log('マナが足りません');
@@ -2960,8 +2969,11 @@ function declareCrystalOnly(player, handIndex) {
   const crystalCost = card.crystalEtb;
   if ((p.mana.W || 0) < crystalCost) { log('白マナが足りません'); return; }
   p.mana.W -= crystalCost;
+  p.hand.splice(handIndex, 1);
+  p.graveyard.push(cardId);
   log(`${card.name} 結晶宣言：白${crystalCost}マナを支払い、アレスティアの旗を展開`, 'important');
   spawnCrystalArtifact(player, 2, 'spawnArestia');
+  render();
 }
 
 function spawnCrystalArtifact(player, countdown, onLeaveType) {
