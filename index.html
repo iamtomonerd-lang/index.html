@@ -1845,8 +1845,8 @@ const CARD_DB = {
   'serashia_heishi': {
     id:'serashia_heishi', name:'セラシアの兵士', type:'creature', color:'W',
     cost:{W:1,C:1}, power:1, toughness:4, subtype:'人間(戦士)', icon:'🗡️',
-    keywords:[], text:'■出た時、相手クリーチャー１体選ぶ。次の相手のターン中、そのクリーチャーは可能なら攻撃する\n■ブロック時、このクリーチャーのタフネス-1されたコピーを出してもよい。ただし、このクリーチャーのタフネスが１なら出せない。その後、このクリーチャーのタフネス-1されたコピーを出してもよい。ただし、このクリーチャーのタフネスが１なら出せない',
-    etb:'mustAttackTarget', onBlockCopy:2
+    keywords:[], text:'■出た時、相手クリーチャー１体選ぶ。次の相手のターン中、そのクリーチャーは可能なら攻撃する\n■ブロック時、1枚引く。その後、このクリーチャーのタフネス-1されたコピーを出してもよい。ただし、このクリーチャーのタフネスが１なら出せない',
+    etb:'mustAttackTarget', onBlock:'draw1', onBlockCopy:true
   },
   'serashia_junhei': {
     id:'serashia_junhei', name:'セラシアの盾兵', type:'creature', color:'W',
