@@ -5177,9 +5177,11 @@ function renderHand(player, zoneId) {
       const isMain = G.phase === 'main' && G.activePlayer === player;
       const isQuick = card.keywords && card.keywords.includes('Quick');
       const affordable = card.type !== 'land' && canAfford(player, card.cost);
+      // 結晶宣言のみ可能な場合（白マナ1枚で宣言できる）
+      const canDeclCrystal = !!(card.crystalEtb && (G.players[player].mana.W || 0) >= card.crystalEtb);
       const fieldFull = card.type === 'creature' && G.players[player].field.length >= 5;
       const inPriorityWindow = G.awaitingPriority;
-      const canPlay = affordable && !fieldFull && (
+      const canPlay = (affordable || canDeclCrystal) && !fieldFull && (
         isMain ||
         isQuick ||
         (inPriorityWindow && G.activePlayer === player)
@@ -5266,9 +5268,11 @@ function renderField(player, zoneId) {
     zone.appendChild(slotEl);
   }
 
-  // アーティファクト表示（フィールドの後ろに追加）
+  // アーティファクト表示（field-slotとして盤面に組み込む）
   if (p.artifacts && p.artifacts.length > 0) {
     p.artifacts.forEach(art => {
+      const slotEl = document.createElement('div');
+      slotEl.className = 'field-slot';
       const artEl = document.createElement('div');
       artEl.className = 'card artifact-card';
       artEl.style.cssText = 'background:linear-gradient(135deg,#3a2c6a,#5a4090);border:2px solid #a080e0;position:relative;cursor:default;';
@@ -5276,7 +5280,8 @@ function renderField(player, zoneId) {
         <div class="card-name" style="font-size:0.7em;text-align:center">${art.name}</div>
         <div style="text-align:center;font-size:0.85em;margin-top:4px">⏱ ${art.countdown}</div>`;
       artEl.title = `${art.name}: カウントダウン${art.countdown}\n0になったら、CX6以上&白土地3枚以上ならアレスティアを再召喚\n条件未達の場合はカウントダウン1で残留`;
-      zone.appendChild(artEl);
+      slotEl.appendChild(artEl);
+      zone.appendChild(slotEl);
     });
   }
 }
