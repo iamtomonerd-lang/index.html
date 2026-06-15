@@ -3003,6 +3003,7 @@ function spawnCopyWithReducedToughness(player, instId) {
     addPermanentBuff(player, newInstId, 0, toughnessDiff);
   }
   log(`${card.name}: タフネス${effT-1}のコピーを展開`, 'important');
+  fireETB(player, newInstId);
   render();
 }
 
