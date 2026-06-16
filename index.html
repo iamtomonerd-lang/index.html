@@ -244,31 +244,38 @@ body {
 .stack-entry.next-resolve { outline: 1px solid rgba(240,200,60,0.55); outline-offset: 1px; }
 #stack-empty-msg { font-size: 8px; color: #282840; text-align: center; padding: 6px 0; }
 
-/* 中央フェイズ表示バー (col 2-14, 行 五) */
-#player-turn-info {
+/* 中央ヒントバー (col 1-12, 行 五) */
+#center-hint-bar {
   grid-column: 1 / 13; grid-row: 5;
   background: rgba(6,6,20,0.88);
   border-top: 1px solid rgba(80,80,160,0.3);
   border-bottom: 1px solid rgba(80,80,160,0.3);
-  display: flex; align-items: center; justify-content: center; gap: 8px; padding: 0 10px;
-  flex-wrap: nowrap; overflow: hidden; z-index: 3;
-  position: relative;
+  display: flex; align-items: center; justify-content: center;
+  overflow: hidden; z-index: 3;
 }
-#player-turn-info #turn-indicator { font-size: 12px; font-weight: 700; color: #aaaaff; white-space: nowrap; }
-#player-turn-info .sep { width: 1px; background: #333366; align-self: stretch; margin: 4px 2px; }
-#player-turn-info .phase-display { font-size: 12px; padding: 2px 8px; color: #ccccff; font-weight: 600; }
-#player-turn-info #mana-display-wrap { font-size: 10px; gap: 2px; }
-/* アクションヒント: 中央バー全体を覆うオーバーレイ */
+/* アクションヒント */
 #action-hint {
   display: none;
-  position: absolute; inset: 0;
-  background: rgba(5,6,28,0.97);
-  border: none;
+  width: 100%; height: 100%;
   align-items: center; justify-content: center;
   font-size: 12px; font-weight: 600;
   padding: 0 16px; white-space: nowrap; overflow: hidden;
-  text-overflow: ellipsis; z-index: 10;
+  text-overflow: ellipsis;
 }
+
+/* ターン・フェイズ (col 5-9, 行 九) */
+#player-turn-info {
+  grid-column: 5 / 9; grid-row: 9;
+  background: rgba(8,38,8,0.55);
+  border-top: 1px solid rgba(25,100,25,0.1);
+  display: flex; align-items: center; justify-content: center; gap: 5px; padding: 0 6px;
+  flex-wrap: nowrap; overflow: hidden;
+}
+#player-turn-info #turn-indicator { font-size: 11px; font-weight: 700; color: #aaaaff; white-space: nowrap; }
+#player-turn-info .sep { width: 1px; background: #2a4a2a; align-self: stretch; margin: 4px 1px; }
+#player-turn-info .phase-display { font-size: 11px; padding: 2px 5px; color: #ccccff; }
+#player-turn-info #mana-display-wrap { font-size: 9px; gap: 2px; }
+.mana-display { font-size: 9px; }
 
 /* 自分GYボタン (col 1, 行 六) */
 #player-gy-btn-cell {
@@ -1760,6 +1767,12 @@ button.danger:hover { background: #6a2a2a; }
     </div>
 
     <!-- ターン・フェイズ・マナ (col 5-8, 行 八) -->
+    <!-- 中央ヒントバー (col 1-12, 行 五) -->
+    <div id="center-hint-bar">
+      <div id="action-hint"></div>
+    </div>
+
+    <!-- ターン・フェイズ・マナ (col 5-9, 行 九) -->
     <div id="player-turn-info">
       <div id="turn-indicator">ターン 1</div>
       <div class="sep"></div>
@@ -1769,7 +1782,6 @@ button.danger:hover { background: #6a2a2a; }
         <div class="mana-display" id="mana-display"></div>
         <div style="font-size:8px;color:#555;" id="mana-untapped-label"></div>
       </div>
-      <div id="action-hint"></div>
     </div>
 
     <!-- 自分のアバター (col 9-12, 行 七-八) -->
