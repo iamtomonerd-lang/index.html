@@ -1618,7 +1618,7 @@ button.danger:hover { background: #6a2a2a; }
           transform="rotate(-90 50 50)" class="cx-track-fill"
           style="transition: stroke-dashoffset 0.4s ease;"/>
         <text id="opp-cx-text" x="50" y="46" class="cx-value-text">0</text>
-        <text x="50" y="66" class="cx-label-text">CX</text>
+        <text x="50" y="66" class="cx-label-text">C</text>
       </svg>
     </div>
 
@@ -1724,7 +1724,7 @@ button.danger:hover { background: #6a2a2a; }
           transform="rotate(-90 50 50)" class="cx-track-fill"
           style="transition: stroke-dashoffset 0.4s ease;"/>
         <text id="player-cx-text" x="50" y="46" class="cx-value-text">0</text>
-        <text x="50" y="66" class="cx-label-text">CX</text>
+        <text x="50" y="66" class="cx-label-text">C</text>
       </svg>
     </div>
 
@@ -2000,13 +2000,13 @@ const CARD_DB = {
   'serashia_souryo': {
     id:'serashia_souryo', name:'セラシアの僧侶', type:'creature', color:'W',
     cost:{W:3,C:2}, power:3, toughness:7, subtype:'人間(戦士)', icon:'🙏',
-    keywords:['CX8'], text:'■出た時、相手のクリーチャー１体に3ダメージ\n■ブロック時、自分のライフを3回復\n〈C8〉\n■ブロック時、自分のクリーチャー1体を+1/+1',
+    keywords:['C8'], text:'■出た時、相手のクリーチャー１体に3ダメージ\n■ブロック時、自分のライフを3回復\n〈C8〉\n■ブロック時、自分のクリーチャー1体を+1/+1',
     etb:'damage3opponent', onBlock:'gain3life', cx8Block:'buff1ally'
   },
   'bastian': {
     id:'bastian', name:'絶対守護 バスティオン', type:'creature', color:'W',
     cost:{W:4}, power:3, toughness:2, subtype:'人間(戦士)', icon:'🏰',
-    keywords:['格闘','CX6','CX8','OC'],
+    keywords:['格闘','C6','C8','OC'],
     text:'■格闘\n■出た時、相手クリーチャー1体に2ダメージ\n〈C6〉\n■出た時、相手クリーチャー1体に3ダメージ\n〈C8〉\n■このクリーチャーは+3/+3される\n〈OC〉\n■このクリーチャーはタップしていてもブロックできる',
     kakutou:true, etb:'damage2opponent_always_cx6damage3', cx8Buff:true, ocBlockWhileTapped:true
   },
@@ -2909,13 +2909,13 @@ function bastianChooseETB(instanceId, hasCX6Override, playerArg) {
     if (hasCX6 && G.players[opp].field.length > 0) {
       G.targetMode = { type:'opponentCreature', sourcePlayer: src, callback:(tgt2) => {
         applyDamageToCreature(opp, tgt2.instId, 3, src);
-        log('バスティオン 出た時 CX6: 追加3ダメージ', 'damage');
+        log('バスティオン 出た時 C6: 追加3ダメージ', 'damage');
         G.targetMode = null;
         checkDeath();
         render(); updateHints();
         continueStack();
       }};
-      log('バスティオン 出た時 CX6: 3ダメージの対象を選択');
+      log('バスティオン 出た時 C6: 3ダメージの対象を選択');
       render(); updateHints();
       if (src === 1) { aiAutoPickTarget(); }
     } else {
@@ -3748,17 +3748,17 @@ function resolveSingleCombat(atkPlayer, atkInstId, kakutouTargetId, blockerInstI
         }
       }
       if (blkCard.cx8Block === 'buff1ally' && getCXValue(opp) >= 8) {
-        triggerEffect(`${blkCard.name} CX8ブロック誘発`, blkCard.icon||'✨', opp, () => {
+        triggerEffect(`${blkCard.name} C8ブロック誘発`, blkCard.icon||'✨', opp, () => {
           if (opp === 0) {
             G.targetMode = { type:'ownCreature', owner:0, callback:(tgt) => {
               addPermanentBuff(0, tgt.instId, 1, 1);
-              log(`${blkCard.name} CX8: 味方+1/+1`, 'important');
+              log(`${blkCard.name} C8: 味方+1/+1`, 'important');
               G.targetMode = null; render(); updateHints();
               continueStack();
             }};
           } else {
             const ally = G.players[1].field.find(c=>c.instanceId!==blockerInstId);
-            if (ally) { addPermanentBuff(1, ally.instanceId, 1, 1); log(`AI ${blkCard.name} CX8: 味方+1/+1`,'important'); }
+            if (ally) { addPermanentBuff(1, ally.instanceId, 1, 1); log(`AI ${blkCard.name} C8: 味方+1/+1`,'important'); }
           }
           render();
         });
@@ -4263,9 +4263,9 @@ function resolveCombat() {
           });
         }
         if (blkCard.cx8Block === 'buff1ally' && getCXValue(1) >= 8) {
-          triggerEffect(`${blkCard.name} CX8ブロック誘発`, blkCard.icon||'✨', 1, () => {
+          triggerEffect(`${blkCard.name} C8ブロック誘発`, blkCard.icon||'✨', 1, () => {
             const allies = ai.field.filter(c=>c.instanceId!==_blkId);
-            if (allies.length > 0) { addPermanentBuff(1, allies[0].instanceId, 1, 1); log(`AI ${blkCard.name} CX8ブロック: 味方+1/+1`); }
+            if (allies.length > 0) { addPermanentBuff(1, allies[0].instanceId, 1, 1); log(`AI ${blkCard.name} C8ブロック: 味方+1/+1`); }
           });
         }
         if (G.blockDrawActive && G.blockDrawActive[1]) {
@@ -5372,7 +5372,7 @@ function renderField(player, zoneId) {
       artEl.innerHTML = `<div style="font-size:1.4em;text-align:center">${art.icon}</div>
         <div class="card-name" style="font-size:0.7em;text-align:center">${art.name}</div>
         <div style="text-align:center;font-size:0.85em;margin-top:4px">⏱ ${art.countdown}</div>`;
-      artEl.title = `${art.name}: カウントダウン${art.countdown}\n0になったら、CX6以上&白土地3枚以上ならアレスティアを再召喚\n条件未達の場合はカウントダウン1で残留`;
+      artEl.title = `${art.name}: カウントダウン${art.countdown}\n0になったら、C6以上&白土地3枚以上ならアレスティアを再召喚\n条件未達の場合はカウントダウン1で残留`;
       slotEl.appendChild(artEl);
       zone.appendChild(slotEl);
     });
@@ -5999,8 +5999,8 @@ const KEYWORD_DEFS = {
   '飛行': '飛行を持たないクリーチャーにブロックされない',
   '還元': '墓地のカードをコストに起動する能力',
   'Quick': '相手ターン・戦闘中でも使用できる',
-  'CX6': '墓地が6枚以上のとき効果が発動',
-  'CX8': '墓地が8枚以上のとき効果が発動',
+  'C6': 'C値が6以上のとき効果が発動',
+  'C8': 'C値が8以上のとき効果が発動',
   'OC': '墓地が12枚以上のとき効果が発動',
 };
 
@@ -6090,8 +6090,8 @@ function updateThresholdGauge() {
   const fillEl = document.getElementById('threshold-fill');
   const countEl = document.getElementById('threshold-count');
   if (!labelEl || !fillEl) return;
-  const cx6 = cx >= 6 ? '🟡CX6✓' : 'CX6✗';
-  const cx8 = cx >= 8 ? '🟠CX8✓' : 'CX8✗';
+  const cx6 = cx >= 6 ? '🟡C6✓' : 'C6✗';
+  const cx8 = cx >= 8 ? '🟠C8✓' : 'C8✗';
   const oc  = cx >= 10 ? '🔴OC✓'  : 'OC✗';
   labelEl.textContent = `${cx6} ${cx8} ${oc}`;
   if (countEl) countEl.textContent = `${cx}/10`;
@@ -9040,7 +9040,7 @@ function updateHomeRecord() {
 const TUTORIAL_PAGES = [
   { title: 'ゲームの目的', body: '相手のライフを<b style="color:#aaaaff">20から0</b>にすれば勝利です。<br>毎ターン土地が2枚自動で置かれます。<br>土地をタップしてマナを出し、手札のカードをプレイしましょう。' },
   { title: '戦闘', body: 'メインフェイズに自分の<b style="color:#aaaaff">クリーチャーをクリック</b>して攻撃宣言します。<br>相手は<b style="color:#aaaaff">ブロック</b>で防御できます。<br>カードの<b style="color:#aaaaff">パワー/タフネス</b>で戦闘の結果が決まります。' },
-  { title: '特殊ルール', body: '<b style="color:#aaaaff">チャージ</b>: 手札を土地に置いてCX値をアップできます。<br><b style="color:#aaaaff">CX6/CX8/OC</b>に到達すると強力な効果が解放されます。<br><b style="color:#aaaaff">優先権</b>により、クイック呪文(盾撃)は相手ターンでも使えます。' },
+  { title: '特殊ルール', body: '<b style="color:#aaaaff">チャージ</b>: 手札を土地に置いてC値をアップできます。<br><b style="color:#aaaaff">C6/C8/OC</b>に到達すると強力な効果が解放されます。<br><b style="color:#aaaaff">優先権</b>により、クイック呪文(盾撃)は相手ターンでも使えます。' },
   { title: '画面の見方', body: '<b style="color:#aaaaff">上部バナー</b>: 現在の処理が表示されます。<br><b style="color:#aaaaff">中央バー</b>: CXゲージとスタックを確認できます。<br>カードを<b style="color:#aaaaff">長押し(スマホ)</b>または<b style="color:#aaaaff">右クリック(PC)</b>すると効果が表示されます。' },
 ];
 let tutCurrentPage = 0;
