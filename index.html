@@ -57,7 +57,16 @@ body {
 #board {
   display: grid;
   grid-template-columns: repeat(16, 1fr);
-  grid-template-rows: 44px 44px 26px 1fr 1fr 26px 44px 44px 155px;
+  grid-template-rows:
+    min(44px, 8vh)
+    min(44px, 8vh)
+    min(26px, 5vh)
+    1fr
+    1fr
+    min(26px, 5vh)
+    min(44px, 8vh)
+    min(44px, 8vh)
+    min(155px, 22vh);
   flex: 1;
   overflow: hidden;
   position: relative;
