@@ -3479,6 +3479,8 @@ function resolveSingleCombat(atkPlayer, atkInstId, kakutouTargetId, blockerInstI
     if (atkPlayer === 1) setTimeout(() => continueAIAttack(), 300);
     return;
   }
+  // アレスティア■3用: バトル開始時の防御側フィールドをスナップショット
+  const defFieldBefore = G.players[opp].field.map(c => c.instanceId);
   const atkCard = CARD_DB[atkInst.cardId];
   const atkPow = getEffectivePower(atkPlayer, atkInst);
 
@@ -3635,12 +3637,13 @@ function resolveSingleCombat(atkPlayer, atkInstId, kakutouTargetId, blockerInstI
   checkDeath();
   G.combatArrows = [];
 
-  // アレスティア ■3: ブロック終了時、このバトル中自クリーチャーが破壊されていなければ相手プレイヤーに2ダメージ
+  // アレスティア ■3: ブロック終了時、このバトル中自クリーチャーが1体も破壊されていなければ相手プレイヤーに2ダメージ
+  // (アレスティア自身が死んでいれば field.some で引っかからず自動的に不発)
   if (blockerInstId) {
     const defHasArestia = G.players[opp].field.some(c => CARD_DB[c.cardId].id === 'arestia');
     if (defHasArestia) {
-      const blockerSurvived = G.players[opp].field.some(c => c.instanceId === blockerInstId);
-      if (blockerSurvived) {
+      const noOwnCreatureDied = defFieldBefore.every(id => G.players[opp].field.some(c => c.instanceId === id));
+      if (noOwnCreatureDied) {
         const capAtkP = atkPlayer;
         triggerEffect('アレスティア ■3 ブロック終了誘発', '⚡', opp, () => {
           G.players[capAtkP].life -= 2;
@@ -8697,17 +8700,27 @@ function runCardTests() {
     assert('攻撃強制: ターンを終えた側のフラグはクリア', m && m.mustAttack===false);
   });
 
-  // 23. アレスティア ■3: ブロック終了時、ブロッカー生存なら相手プレイヤーへ2ダメージ
+  // 23. アレスティア ■3: ブロック終了時、バトル中自クリーチャーが死んでいなければ2ダメージ
   withState(()=>{
-    // P1が攻撃、P0(アレスティア所持側)がブロック
     // shinmai_heishi(1/2)が攻撃 → serashia_souryo(3/7)がブロック → ブロッカー生存 → 2ダメージ
-    const atk = _testAddCreature(1,'shinmai_heishi'); // 1/2 攻撃側
+    const atk = _testAddCreature(1,'shinmai_heishi'); // 1/2 攻撃側(1ダメージ与える)
     _testAddCreature(0,'arestia');                    // アレスティア(防御側に存在)
     const blk = _testAddCreature(0,'serashia_souryo'); // 3/7 ブロッカー(生存)
     const lifeBefore = G.players[1].life;
     resolveSingleCombat(1, atk.instanceId, null, blk.instanceId);
     drainStack();
-    assert('アレスティア■3: ブロック終了後、攻撃側プレイヤーへ2ダメージ', G.players[1].life === lifeBefore - 2);
+    assert('アレスティア■3: 自クリーチャー全生存 → 2ダメージ', G.players[1].life === lifeBefore - 2);
+  });
+  // 23b. アレスティア■3: ブロッカーが死亡した場合は不発
+  withState(()=>{
+    // arestia(5/5)が攻撃 → shinmai_heishi(1/2)がブロック → ブロッカー破壊 → 不発
+    const atk = _testAddCreature(1,'arestia'); // 5/5 攻撃側
+    _testAddCreature(0,'arestia');             // アレスティア(防御側に存在)
+    const blk = _testAddCreature(0,'shinmai_heishi'); // 1/2 ブロッカー(死亡)
+    const lifeBefore = G.players[1].life;
+    resolveSingleCombat(1, atk.instanceId, null, blk.instanceId);
+    drainStack();
+    assert('アレスティア■3: 自クリーチャー死亡 → 不発', G.players[1].life === lifeBefore);
   });
 
   // ─────────────────────────────────────────────
