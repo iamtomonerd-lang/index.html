@@ -5474,11 +5474,10 @@ function updateCXRings() {
     const svg = ring.closest('svg');
     if (svg) drawTicks(svg, cxVal, isOC, isPlayer);
   }
-  const pMe = G.players[me], pOpp = G.players[opp];
-  const meCX = pMe ? pMe.cx : 0;
-  const oppCX = pOpp ? pOpp.cx : 0;
-  const meOC = meCX >= 8;
-  const oppOC = oppCX >= 8;
+  const meCX = G.players[me] ? getCXValue(me) : 0;
+  const oppCX = G.players[opp] ? getCXValue(opp) : 0;
+  const meOC = isOCActive(me);
+  const oppOC = isOCActive(opp);
   updateRing('player-cx-ring', 'player-cx-text', 'player-cx-area', meCX, meOC, true);
   updateRing('opp-cx-ring', 'opp-cx-text', 'opp-cx-area', oppCX, oppOC, false);
 }
