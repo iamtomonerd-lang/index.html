@@ -132,20 +132,27 @@ body {
 
 /* カード情報ゾーン (col 13-16, 行 一-二) */
 #card-info-zone {
-  grid-column: 13 / 17; grid-row: 1 / 3;
-  background: rgba(5,6,20,0.78);
-  border-left: 1px solid rgba(50,70,150,0.25);
-  border-bottom: 1px solid rgba(50,70,150,0.12);
+  grid-column: 13 / 17; grid-row: 1 / 10;
+  background: transparent;
+  border-left: 1px solid rgba(50,70,150,0.15);
   overflow-y: auto; overflow-x: hidden; padding: 6px;
   font-size: 9px; color: #aaa;
-  display: flex; flex-direction: column; align-items: flex-start; gap: 3px;
+  display: flex; flex-direction: column; align-items: flex-start; gap: 4px;
+  z-index: 2; pointer-events: none;
+  transition: background 0.2s;
 }
-#card-info-zone .cdp-placeholder { color: #333355; font-size: 9px; }
-#card-info-zone .cdp-title { font-size: 11px; font-weight: 700; color: #ccccff; }
-#card-info-zone .cdp-type { font-size: 9px; color: #7788aa; }
-#card-info-zone .cdp-pt { font-size: 12px; font-weight: 700; color: #ffddaa; }
-#card-info-zone .cdp-kw { font-size: 10px; color: #ffcc44; }
-#card-info-zone .cdp-text { font-size: 10px; color: #bbbbcc; line-height: 1.5; white-space: pre-wrap; margin-top: 2px; }
+#card-info-zone.has-card {
+  background: rgba(4,5,18,0.97);
+  border-left-color: rgba(50,70,150,0.5);
+  pointer-events: auto;
+  z-index: 15;
+}
+#card-info-zone .cdp-placeholder { color: #22224a; font-size: 9px; }
+#card-info-zone .cdp-title { font-size: 13px; font-weight: 700; color: #ccccff; }
+#card-info-zone .cdp-type { font-size: 10px; color: #7788aa; }
+#card-info-zone .cdp-pt { font-size: 16px; font-weight: 700; color: #ffddaa; }
+#card-info-zone .cdp-kw { font-size: 11px; color: #ffcc44; }
+#card-info-zone .cdp-text { font-size: 11px; color: #ccccdd; line-height: 1.6; white-space: pre-wrap; margin-top: 4px; }
 
 /* 相手の土地 (col 1-12, 行 三) */
 #ai-lands-row {
@@ -833,11 +840,11 @@ button.danger:hover { background: #6a2a2a; }
   z-index: 670; /* モーダル(100)・デッキ構築(550)より上: ルック中・構築中も見える */
 }
 
-/* ── リタイアボタン（対戦中右上） ── */
+/* ── リタイアボタン（対戦中左上） ── */
 #btn-retire {
   display: none;
   position: fixed;
-  top: 4px; right: 4px;
+  top: 4px; left: 4px;
   z-index: 60;
   background: rgba(40,10,10,0.85);
   border: 1px solid #884444;
@@ -5975,9 +5982,9 @@ function showCardDetail(cardId, x, y) {
     ${kwHtml}
     <div class="cdp-text">${(card.text || '(テキストなし)').replace(/\\n/g, '\n')}</div>
   `;
-  // カード情報ゾーン(右上グリッド)に表示
+  // カード情報ゾーン(右グリッド)に表示
   const zone = document.getElementById('card-info-zone');
-  if (zone) zone.innerHTML = html;
+  if (zone) { zone.innerHTML = html; zone.classList.add('has-card'); }
   // 互換: 浮動パネルは非表示のまま
   const panel = document.getElementById('card-detail-panel');
   if (panel) panel.style.display = 'none';
@@ -5987,7 +5994,7 @@ function hideCardDetail() {
   const panel = document.getElementById('card-detail-panel');
   if (panel) { panel.style.display = 'none'; panel._shownCardId = null; }
   const zone = document.getElementById('card-info-zone');
-  if (zone) zone.innerHTML = '<div class="cdp-placeholder">右クリックでカード詳細</div>';
+  if (zone) { zone.innerHTML = '<div class="cdp-placeholder">右クリックでカード詳細</div>'; zone.classList.remove('has-card'); }
 }
 
 // ============================================================
