@@ -831,25 +831,7 @@ button.danger:hover { background: #6a2a2a; }
 
 /* ── Card Detail Panel ── */
 /* ── 処理状況バナー: 画面上部中央に現在の処理を表示 ── */
-#status-banner {
-  display: none;
-  position: fixed;
-  top: 6px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 70;
-  background: rgba(8,8,22,0.92);
-  border: 1px solid rgba(96,96,255,0.4);
-  border-radius: 8px;
-  padding: 6px 18px;
-  font-size: 14px;
-  white-space: nowrap;
-  max-width: 90vw;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  pointer-events: none;
-  box-shadow: 0 2px 12px rgba(0,0,0,0.5);
-}
+#status-banner { display: none !important; }
 
 #card-detail-panel {
   display: none;
