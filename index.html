@@ -84,8 +84,8 @@ body {
 .cx-area {
   display: flex; align-items: center; justify-content: center; padding: 6px;
 }
-.cx-ring-svg { width: 100%; height: 100%; max-width: 86px; max-height: 86px; }
-.cx-value-text { font-size: 22px; font-weight: 900; fill: #eee; dominant-baseline: middle; text-anchor: middle; }
+.cx-ring-svg { width: 100%; height: 100%; }
+.cx-value-text { font-size: 28px; font-weight: 900; fill: #eee; dominant-baseline: middle; text-anchor: middle; }
 .cx-label-text { font-size: 9px; fill: #777; text-anchor: middle; dominant-baseline: middle; }
 .cx-area.oc-active .cx-track-fill { filter: drop-shadow(0 0 5px #aaffaa); }
 
@@ -5451,6 +5451,24 @@ function renderInfoBar() {
 function updateCXRings() {
   const me = NET_MY_IDX, opp = 1 - me;
   const circumference = 251.3;
+  function drawTicks(svg) {
+    // Remove old ticks
+    svg.querySelectorAll('.cx-tick').forEach(el => el.remove());
+    const cx = 50, cy = 50, r = 40;
+    for (let i = 0; i < 10; i++) {
+      const angle = (i * 36 - 90) * Math.PI / 180;
+      const x1 = cx + (r - 4) * Math.cos(angle);
+      const y1 = cy + (r - 4) * Math.sin(angle);
+      const x2 = cx + (r + 4) * Math.cos(angle);
+      const y2 = cy + (r + 4) * Math.sin(angle);
+      const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      line.setAttribute('x1', x1); line.setAttribute('y1', y1);
+      line.setAttribute('x2', x2); line.setAttribute('y2', y2);
+      line.setAttribute('stroke', '#555'); line.setAttribute('stroke-width', '1.5');
+      line.classList.add('cx-tick');
+      svg.appendChild(line);
+    }
+  }
   function updateRing(ringId, textId, areaId, cx, isOC) {
     const ring = document.getElementById(ringId);
     const text = document.getElementById(textId);
@@ -5460,6 +5478,8 @@ function updateCXRings() {
     ring.style.strokeDashoffset = offset;
     text.textContent = cx;
     if (area) area.classList.toggle('oc-active', isOC);
+    const svg = ring.closest('svg');
+    if (svg) drawTicks(svg);
   }
   const pMe = G.players[me], pOpp = G.players[opp];
   const meCX = pMe ? pMe.cx : 0;
