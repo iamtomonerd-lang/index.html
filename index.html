@@ -327,12 +327,14 @@ body {
 .player-row .land-card { width: 30px; height: 42px; font-size: 16px; border-radius: 3px; }
 .player-row .land-card .land-name { display: none; }
 
-/* 自分のCXエリア (col 1-4, 行 八-九) */
+/* 自分のCXエリア (col 1-4, 行 八-十) */
 #player-cx-area {
-  grid-column: 1 / 5; grid-row: 8 / 10;
+  grid-column: 1 / 5; grid-row: 8 / 11;
   background: rgba(8,38,8,0.45);
   border-right: 1px solid rgba(25,100,25,0.2);
   border-top: 1px solid rgba(25,100,25,0.15);
+  z-index: 2; pointer-events: none;
+  padding: 2px;
 }
 
 /* 自分のカウント (col 5-8, 行 八) */
