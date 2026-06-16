@@ -130,22 +130,31 @@ body {
 #opp-avatar .avatar-label { font-size: 8px; color: #886666; letter-spacing: 0.5px; }
 #ai-thinking { position: absolute; bottom: 3px; font-size: 9px; color: #aaf; animation: pulse 1s infinite; display: none; }
 
-/* カード情報ゾーン (col 13-16, 行 一-二) */
-#card-info-zone {
+/* 右パネル (col 13-16, 行 一-九) */
+#right-panel {
   grid-column: 13 / 17; grid-row: 1 / 10;
-  background: transparent;
-  border-left: 1px solid rgba(50,70,150,0.15);
+  display: flex; flex-direction: column;
+  background: #1a1a2e; border-left: 1px solid #333;
+  overflow: hidden;
+}
+#right-panel-tabs {
+  display: flex; border-bottom: 1px solid #333; flex-shrink: 0;
+}
+.rp-tab {
+  flex: 1; padding: 8px; background: none; border: none;
+  color: #888; cursor: pointer; font-size: 12px; min-height: unset;
+}
+.rp-tab.active { color: #fff; border-bottom: 2px solid #4af; }
+.rp-tab:hover { background: rgba(255,255,255,0.05); box-shadow: none; }
+.rp-pane { display: none; flex: 1; overflow: auto; }
+.rp-pane.active { display: flex; flex-direction: column; flex: 1; }
+
+/* カード情報ゾーン (右パネル内) */
+#card-info-zone {
   overflow-y: auto; overflow-x: hidden; padding: 6px;
   font-size: 9px; color: #aaa;
-  display: flex; flex-direction: column; align-items: flex-start; gap: 4px;
-  z-index: 2; pointer-events: none;
-  transition: background 0.2s;
-}
-#card-info-zone.has-card {
-  background: rgba(4,5,18,0.97);
-  border-left-color: rgba(50,70,150,0.5);
+  flex-direction: column; align-items: flex-start; gap: 4px;
   pointer-events: auto;
-  z-index: 15;
 }
 #card-info-zone .cdp-placeholder { color: #22224a; font-size: 9px; }
 #card-info-zone .cdp-title { font-size: 13px; font-weight: 700; color: #ccccff; }
@@ -153,6 +162,13 @@ body {
 #card-info-zone .cdp-pt { font-size: 16px; font-weight: 700; color: #ffddaa; }
 #card-info-zone .cdp-kw { font-size: 11px; color: #ffcc44; }
 #card-info-zone .cdp-text { font-size: 11px; color: #ccccdd; line-height: 1.6; white-space: pre-wrap; margin-top: 4px; }
+
+/* ログ右ペイン */
+#log-right { flex: 1; overflow-y: auto; padding: 6px 8px; font-size: 11px; color: #7788aa; scrollbar-width: thin; scrollbar-color: #2a2a4a transparent; }
+#log-right p { margin: 2px 0; line-height: 1.4; }
+#log-right p.important { color: #ffcc44; }
+#log-right p.damage { color: #ff6644; }
+#log-right p.heal { color: #44ff88; }
 
 /* 相手の土地 (col 1-12, 行 三) */
 #ai-lands-row {
@@ -204,11 +220,10 @@ body {
   height: min(118px, calc(100% - 6px)); width: auto; aspect-ratio: 7 / 10;
 }
 
-/* スタックカラム (col 13-16, 行 三-八) */
-#stack-column {
-  grid-column: 13 / 17; grid-row: 3 / 9;
-  background: rgba(4,4,22,0.88); border-left: 1px solid rgba(50,70,150,0.3);
-  display: flex; flex-direction: column; padding: 5px 3px; overflow: hidden; gap: 3px;
+/* スタックペイン (右パネル内) */
+#stack-pane {
+  background: rgba(4,4,22,0.88);
+  flex-direction: column; padding: 5px 3px; overflow: hidden; gap: 3px;
 }
 #stack-column-header {
   font-size: 8px; color: #4455aa; text-align: center; padding-bottom: 4px;
@@ -1655,9 +1670,24 @@ button.danger:hover { background: #6a2a2a; }
       <span id="ai-thinking">⚙ 考え中...</span>
     </div>
 
-    <!-- カード情報ゾーン (col 13-16, 行 一-二) -->
-    <div id="card-info-zone">
-      <div class="cdp-placeholder">右クリックでカード詳細</div>
+    <!-- 右パネル (col 13-16, 行 一-九) -->
+    <div id="right-panel">
+      <div id="right-panel-tabs">
+        <button class="rp-tab active" onclick="switchRightPanel('stack')">Stack</button>
+        <button class="rp-tab" onclick="switchRightPanel('card')">Card</button>
+        <button class="rp-tab" onclick="switchRightPanel('log')">Log</button>
+      </div>
+      <div id="stack-pane" class="rp-pane active">
+        <div id="stack-column-header">STACK</div>
+        <div id="stack-entries"></div>
+        <div id="stack-empty-msg">スタック空</div>
+      </div>
+      <div id="card-info-zone" class="rp-pane">
+        <div class="cdp-placeholder">右クリックでカード詳細</div>
+      </div>
+      <div id="right-log-pane" class="rp-pane">
+        <div id="log-right"></div>
+      </div>
     </div>
 
     <!-- 相手の土地 (col 1-12, 行 三) -->
@@ -1679,13 +1709,6 @@ button.danger:hover { background: #6a2a2a; }
     <div id="ai-field-row" class="board-row ai-row">
       <div id="ai-field" class="field-zone" style="flex:1;"></div>
       <div id="ai-balloon"></div>
-    </div>
-
-    <!-- スタックカラム (col 13-16, 行 三-八) -->
-    <div id="stack-column">
-      <div id="stack-column-header">STACK</div>
-      <div id="stack-entries"></div>
-      <div id="stack-empty-msg">スタック空</div>
     </div>
 
     <!-- 自分GYボタン (col 1, 行 五) -->
@@ -5940,6 +5963,14 @@ function log(msg, type) {
   p.textContent = msg;
   el.appendChild(p);
   el.scrollTop = el.scrollHeight;
+  const logRight = document.getElementById('log-right');
+  if (logRight) {
+    const p2 = document.createElement('p');
+    if (type) p2.className = type;
+    p2.textContent = msg;
+    logRight.appendChild(p2);
+    logRight.scrollTop = logRight.scrollHeight;
+  }
   if (type === 'important' || type === 'damage') {
     _recentImportantLogs.push({msg, type});
     if (_recentImportantLogs.length > 3) _recentImportantLogs.shift();
@@ -5966,6 +5997,18 @@ function kwTipHtml(kw) {
   return `<span class="kw-tip" data-def="${def}">${kw}</span>`;
 }
 
+function switchRightPanel(tab) {
+  document.querySelectorAll('.rp-tab').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.rp-pane').forEach(p => p.classList.remove('active'));
+  const paneId = tab === 'stack' ? 'stack-pane' : tab === 'card' ? 'card-info-zone' : 'right-log-pane';
+  const pane = document.getElementById(paneId);
+  if (pane) pane.classList.add('active');
+  // find matching tab button by onclick attribute
+  document.querySelectorAll('.rp-tab').forEach(b => {
+    if (b.getAttribute('onclick') && b.getAttribute('onclick').includes(`'${tab}'`)) b.classList.add('active');
+  });
+}
+
 function showCardDetail(cardId, x, y) {
   const card = CARD_DB[cardId];
   if (!card) return;
@@ -5982,9 +6025,10 @@ function showCardDetail(cardId, x, y) {
     ${kwHtml}
     <div class="cdp-text">${(card.text || '(テキストなし)').replace(/\\n/g, '\n')}</div>
   `;
-  // カード情報ゾーン(右グリッド)に表示
+  // カード情報ゾーン(右パネル)に表示
   const zone = document.getElementById('card-info-zone');
-  if (zone) { zone.innerHTML = html; zone.classList.add('has-card'); }
+  if (zone) { zone.innerHTML = html; }
+  switchRightPanel('card');
   // 互換: 浮動パネルは非表示のまま
   const panel = document.getElementById('card-detail-panel');
   if (panel) panel.style.display = 'none';
@@ -5994,7 +6038,8 @@ function hideCardDetail() {
   const panel = document.getElementById('card-detail-panel');
   if (panel) { panel.style.display = 'none'; panel._shownCardId = null; }
   const zone = document.getElementById('card-info-zone');
-  if (zone) { zone.innerHTML = '<div class="cdp-placeholder">右クリックでカード詳細</div>'; zone.classList.remove('has-card'); }
+  if (zone) { zone.innerHTML = '<div class="cdp-placeholder">右クリックでカード詳細</div>'; }
+  switchRightPanel('stack');
 }
 
 // ============================================================
