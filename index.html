@@ -1870,7 +1870,7 @@ const CARD_DB = {
     id:'arestia', name:'戦乙女 アレスティア', type:'creature', color:'W',
     cost:{W:3,C:5}, power:5, toughness:5, subtype:'人間(戦士)', icon:'⚡',
     keywords:['還元'],
-    text:'■相手は可能なら攻撃する\n■相手クリーチャーのアタック時、自分のクリーチャー全てを＋1/＋1する\n■自分のクリーチャーのブロック終了時、このバトル中自分のクリーチャーが破壊されていなければ、相手プレイヤーに2ダメージ\n■起動（還元）：自分のクリーチャー1体をアンタップする',
+    text:'■相手は可能なら攻撃する\n■相手クリーチャーのアタック時、自分のクリーチャー全てを＋1/＋1する\n■自分のクリーチャーのブロック終了時、このバトル中自分のクリーチャーが破壊されていなければ、相手プレイヤーに2ダメージ\n■起動（還元）：自分のクリーチャー1体をアンタップする。これは相手ターンのみ起動できる',
     arestiaPassive:true, onAttackOpponent:'buff_all_own', onBlockEndDamage2:true,
     activated:'untapOwn'
   },
@@ -5511,7 +5511,8 @@ function handleFieldClick(player, instId) {
       }
       const untappedLands = G.players[actP].lands.filter(l => !l.tapped);
       const hasTapped = G.players[actP].field.some(c => c.instanceId !== instId && c.tapped);
-      const canKaizou = untappedLands.length > 0 && hasTapped;
+      const isOpponentTurn = G.activePlayer !== actP;
+      const canKaizou = untappedLands.length > 0 && hasTapped && isOpponentTurn;
       const html = `
         <p style="margin-bottom:10px;">${card.name} の使用方法を選択:</p>
         <button onclick="closeModal(); startSingleAttack(${actP},'${instId}');" style="width:100%;margin-bottom:8px;padding:8px;${canAtk?'':'opacity:0.4;cursor:not-allowed;'}" ${canAtk?'':'disabled'}>⚔️ 攻撃する</button>
