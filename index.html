@@ -252,11 +252,23 @@ body {
   border-bottom: 1px solid rgba(80,80,160,0.3);
   display: flex; align-items: center; justify-content: center; gap: 8px; padding: 0 10px;
   flex-wrap: nowrap; overflow: hidden; z-index: 3;
+  position: relative;
 }
 #player-turn-info #turn-indicator { font-size: 12px; font-weight: 700; color: #aaaaff; white-space: nowrap; }
 #player-turn-info .sep { width: 1px; background: #333366; align-self: stretch; margin: 4px 2px; }
 #player-turn-info .phase-display { font-size: 12px; padding: 2px 8px; color: #ccccff; font-weight: 600; }
 #player-turn-info #mana-display-wrap { font-size: 10px; gap: 2px; }
+/* アクションヒント: 中央バー全体を覆うオーバーレイ */
+#action-hint {
+  display: none;
+  position: absolute; inset: 0;
+  background: rgba(5,6,28,0.97);
+  border: none;
+  align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 600;
+  padding: 0 16px; white-space: nowrap; overflow: hidden;
+  text-overflow: ellipsis; z-index: 10;
+}
 
 /* 自分GYボタン (col 1, 行 六) */
 #player-gy-btn-cell {
@@ -1242,7 +1254,6 @@ button.danger:hover { background: #6a2a2a; }
 #controls-btns { gap: 10px; flex-wrap: nowrap; }
 #controls-btns button { padding: 8px 16px; font-size: 18px; }
 #btn-end-phase { padding: 10px 20px; font-size: 20px; font-weight: 700; }
-/* action-hint は #board 上部中央に固定 */
 #controls-btns button[onclick="showTrainingPanel()"],
 #controls-btns button[onclick="showDebugPanel()"] { font-size: 12px; padding: 6px 10px; }
 
@@ -1776,6 +1787,7 @@ button.danger:hover { background: #6a2a2a; }
         <div class="mana-display" id="mana-display"></div>
         <div style="font-size:8px;color:#555;" id="mana-untapped-label"></div>
       </div>
+      <div id="action-hint"></div>
     </div>
 
     <!-- 自分のアバター (col 9-12, 行 七-八) -->
@@ -1800,7 +1812,7 @@ button.danger:hover { background: #6a2a2a; }
           <button onclick="confirmStartMulligan()" style="padding:8px 10px;background:#2a2a8a;border:1px solid #6060ff;color:#fff;border-radius:6px;font-size:13px;cursor:pointer;">確認（<span id="mulligan-count">0</span>枚入替）</button>
           <button onclick="skipStartMulligan()" style="padding:8px 10px;background:#2a2a2a;border:1px solid #555;color:#ccc;border-radius:6px;font-size:13px;cursor:pointer;">しない</button>
         </div>
-        <div id="action-hint"></div>
+        <div id="action-hint-compat" style="display:none;"></div>
         <div id="debug-freeze-warn" style="display:none;font-size:9px;color:#ffaa44;padding:3px 4px;background:#1a1400;border:1px solid #554400;border-radius:3px;cursor:pointer;" onclick="showDebugPanel()"></div>
       </div>
       <!-- ID互換のため非表示 -->
@@ -5945,7 +5957,7 @@ function updateHints() {
   } else {
     hint.textContent = '';
   }
-  hint.style.display = hint.innerHTML ? 'block' : 'none';
+  hint.style.display = hint.innerHTML ? 'flex' : 'none';
 
   // 画面上部の処理状況バナーにも同じ内容を表示
   const banner = document.getElementById('status-banner');
