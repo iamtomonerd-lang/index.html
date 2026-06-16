@@ -60,13 +60,13 @@ body {
   grid-template-rows:
     min(44px, 8vh)
     min(44px, 8vh)
-    min(90px, 12vh)
+    min(50px, 7vh)
     minmax(0, 1fr)
     min(26px, 4vh)
     minmax(0, 1fr)
-    min(90px, 12vh)
-    min(44px, 8vh)
-    min(44px, 8vh)
+    min(50px, 7vh)
+    min(60px, 9vh)
+    min(60px, 9vh)
     min(155px, 22vh);
   flex: 1;
   overflow: hidden;
@@ -178,9 +178,9 @@ body {
   border-bottom: 1px solid rgba(100,25,25,0.2) !important;
   padding: 2px 6px; display: flex !important; align-items: center;
 }
-#ai-lands-row .land-zone { min-height: 0; gap: 4px; padding: 0; flex-wrap: nowrap; overflow: hidden; align-items: center; }
-.ai-row .land-card { width: 58px; height: 82px; font-size: 22px; border-radius: 4px; }
-.ai-row .land-card .land-name { display: block; font-size: 7px; }
+#ai-lands-row .land-zone { min-height: 0; gap: 3px; padding: 0; flex-wrap: nowrap; overflow: hidden; align-items: center; }
+.ai-row .land-card { width: 30px; height: 42px; font-size: 16px; border-radius: 3px; }
+.ai-row .land-card .land-name { display: none; }
 
 /* 相手GYボタン (col 1, 行 四) */
 #opp-gy-btn-cell {
@@ -304,9 +304,9 @@ body {
   border-top: 1px solid rgba(25,100,25,0.2) !important;
   padding: 2px 6px; display: flex !important; align-items: center;
 }
-#player-lands-row .land-zone { min-height: 0; gap: 4px; padding: 0; flex-wrap: nowrap; overflow: hidden; align-items: center; }
-.player-row .land-card { width: 58px; height: 82px; font-size: 22px; border-radius: 4px; }
-.player-row .land-card .land-name { display: block; font-size: 7px; }
+#player-lands-row .land-zone { min-height: 0; gap: 3px; padding: 0; flex-wrap: nowrap; overflow: hidden; align-items: center; }
+.player-row .land-card { width: 30px; height: 42px; font-size: 16px; border-radius: 3px; }
+.player-row .land-card .land-name { display: none; }
 
 /* 自分のCXエリア (col 1-4, 行 八-九) */
 #player-cx-area {
@@ -326,21 +326,8 @@ body {
 #player-counts .info-cell-label { color: #668866; }
 #player-counts .info-cell-value { color: #aaccaa; }
 
-/* ターン・フェイズ・マナ表示 (col 5-8, 行 八) */
-#player-turn-info {
-  grid-column: 5 / 9; grid-row: 8;
-  background: rgba(8,38,8,0.55);
-  border-top: 1px solid rgba(25,100,25,0.1);
-  display: flex; align-items: center; justify-content: center; gap: 5px; padding: 0 6px;
-  flex-wrap: nowrap; overflow: hidden;
-}
-#player-turn-info #turn-indicator { font-size: 11px; font-weight: 700; white-space: nowrap; }
-#player-turn-info .sep { width: 1px; background: #2a4a2a; align-self: stretch; margin: 5px 1px; }
-#player-turn-info .phase-display { font-size: 11px; padding: 2px 5px; }
-#player-turn-info #mana-display-wrap { font-size: 8px; gap: 2px; }
-.mana-display { font-size: 9px; }
 
-/* 自分のアバター (col 9-12, 行 七-八) */
+/* 自分のアバター (col 9-12, 行 八-九) */
 #player-avatar {
   grid-column: 9 / 13; grid-row: 8 / 10;
   background: linear-gradient(145deg, rgba(8,55,8,0.65), rgba(4,32,4,0.85));
@@ -5466,43 +5453,46 @@ function renderInfoBar() {
 function updateCXRings() {
   const me = NET_MY_IDX, opp = 1 - me;
   const circumference = 251.3;
-  function drawTicks(svg) {
-    // Remove old ticks
+  function drawTicks(svg, cxVal, isOC, isPlayer) {
     svg.querySelectorAll('.cx-tick').forEach(el => el.remove());
-    const cx = 50, cy = 50, r = 40;
+    const CX = 50, CY = 50, r = 40;
+    const activeColor = isOC ? '#aaffaa' : (isPlayer ? '#55ee55' : '#ee5555');
     for (let i = 0; i < 10; i++) {
       const angle = (i * 36 - 90) * Math.PI / 180;
-      const x1 = cx + (r - 4) * Math.cos(angle);
-      const y1 = cy + (r - 4) * Math.sin(angle);
-      const x2 = cx + (r + 4) * Math.cos(angle);
-      const y2 = cy + (r + 4) * Math.sin(angle);
+      const x1 = CX + (r - 5) * Math.cos(angle);
+      const y1 = CY + (r - 5) * Math.sin(angle);
+      const x2 = CX + (r + 5) * Math.cos(angle);
+      const y2 = CY + (r + 5) * Math.sin(angle);
       const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
       line.setAttribute('x1', x1); line.setAttribute('y1', y1);
       line.setAttribute('x2', x2); line.setAttribute('y2', y2);
-      line.setAttribute('stroke', '#555'); line.setAttribute('stroke-width', '1.5');
+      const active = i < cxVal;
+      line.setAttribute('stroke', active ? activeColor : '#333');
+      line.setAttribute('stroke-width', active ? '2.5' : '1');
+      line.setAttribute('stroke-linecap', 'round');
       line.classList.add('cx-tick');
       svg.appendChild(line);
     }
   }
-  function updateRing(ringId, textId, areaId, cx, isOC) {
+  function updateRing(ringId, textId, areaId, cxVal, isOC, isPlayer) {
     const ring = document.getElementById(ringId);
     const text = document.getElementById(textId);
     const area = document.getElementById(areaId);
     if (!ring || !text) return;
-    const offset = circumference * (1 - Math.min(cx, 10) / 10);
+    const offset = circumference * (1 - Math.min(cxVal, 10) / 10);
     ring.style.strokeDashoffset = offset;
-    text.textContent = cx;
+    text.textContent = cxVal;
     if (area) area.classList.toggle('oc-active', isOC);
     const svg = ring.closest('svg');
-    if (svg) drawTicks(svg);
+    if (svg) drawTicks(svg, cxVal, isOC, isPlayer);
   }
   const pMe = G.players[me], pOpp = G.players[opp];
   const meCX = pMe ? pMe.cx : 0;
   const oppCX = pOpp ? pOpp.cx : 0;
   const meOC = meCX >= 8;
   const oppOC = oppCX >= 8;
-  updateRing('player-cx-ring', 'player-cx-text', 'player-cx-area', meCX, meOC);
-  updateRing('opp-cx-ring', 'opp-cx-text', 'opp-cx-area', oppCX, oppOC);
+  updateRing('player-cx-ring', 'player-cx-text', 'player-cx-area', meCX, meOC, true);
+  updateRing('opp-cx-ring', 'opp-cx-text', 'opp-cx-area', oppCX, oppOC, false);
 }
 
 function renderStack() {
