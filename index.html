@@ -60,10 +60,10 @@ body {
   grid-template-rows:
     min(44px, 8vh)
     min(44px, 8vh)
-    min(26px, 5vh)
+    min(90px, 12vh)
     1fr
     1fr
-    min(26px, 5vh)
+    min(90px, 12vh)
     min(44px, 8vh)
     min(44px, 8vh)
     min(155px, 22vh);
@@ -136,11 +136,16 @@ body {
   background: rgba(5,6,20,0.78);
   border-left: 1px solid rgba(50,70,150,0.25);
   border-bottom: 1px solid rgba(50,70,150,0.12);
-  overflow: hidden; padding: 6px;
-  font-size: 9px; color: #666;
-  display: flex; align-items: flex-start; justify-content: flex-start;
+  overflow-y: auto; overflow-x: hidden; padding: 6px;
+  font-size: 9px; color: #aaa;
+  display: flex; flex-direction: column; align-items: flex-start; gap: 3px;
 }
 #card-info-zone .cdp-placeholder { color: #333355; font-size: 9px; }
+#card-info-zone .cdp-title { font-size: 11px; font-weight: 700; color: #ccccff; }
+#card-info-zone .cdp-type { font-size: 9px; color: #7788aa; }
+#card-info-zone .cdp-pt { font-size: 12px; font-weight: 700; color: #ffddaa; }
+#card-info-zone .cdp-kw { font-size: 10px; color: #ffcc44; }
+#card-info-zone .cdp-text { font-size: 10px; color: #bbbbcc; line-height: 1.5; white-space: pre-wrap; margin-top: 2px; }
 
 /* 相手の土地 (col 1-12, 行 三) */
 #ai-lands-row {
@@ -149,9 +154,9 @@ body {
   border-bottom: 1px solid rgba(100,25,25,0.2) !important;
   padding: 2px 6px; display: flex !important; align-items: center;
 }
-#ai-lands-row .land-zone { min-height: 0; gap: 3px; padding: 0; flex-wrap: nowrap; overflow: hidden; }
-.ai-row .land-card { width: 22px; height: 18px; font-size: 10px; border-radius: 2px; }
-.ai-row .land-card .land-name { display: none; }
+#ai-lands-row .land-zone { min-height: 0; gap: 4px; padding: 0; flex-wrap: nowrap; overflow: hidden; align-items: center; }
+.ai-row .land-card { width: 58px; height: 82px; font-size: 22px; border-radius: 4px; }
+.ai-row .land-card .land-name { display: block; font-size: 7px; }
 
 /* 相手GYボタン (col 1, 行 四) */
 #opp-gy-btn-cell {
@@ -262,9 +267,9 @@ body {
   border-top: 1px solid rgba(25,100,25,0.2) !important;
   padding: 2px 6px; display: flex !important; align-items: center;
 }
-#player-lands-row .land-zone { min-height: 0; gap: 3px; padding: 0; flex-wrap: nowrap; overflow: hidden; }
-.player-row .land-card { width: 24px; height: 20px; font-size: 11px; border-radius: 2px; }
-.player-row .land-card .land-name { display: none; }
+#player-lands-row .land-zone { min-height: 0; gap: 4px; padding: 0; flex-wrap: nowrap; overflow: hidden; align-items: center; }
+.player-row .land-card { width: 58px; height: 82px; font-size: 22px; border-radius: 4px; }
+.player-row .land-card .land-name { display: block; font-size: 7px; }
 
 /* 自分のCXエリア (col 1-4, 行 七-八) */
 #player-cx-area {
@@ -741,7 +746,7 @@ button.danger:hover { background: #6a2a2a; }
   position: fixed;
   right: 0;
   top: 0;
-  bottom: 0;
+  bottom: calc(min(44px, 8vh) * 2 + min(155px, 22vh));
   width: 240px;
   z-index: 60;
   display: flex;
@@ -924,7 +929,24 @@ button.danger:hover { background: #6a2a2a; }
 #turn-indicator { font-size: 11px; color: #666; }
 .highlight { background: rgba(255,255,100,0.05); border-radius: 4px; }
 .sep { width: 1px; background: var(--border); align-self: stretch; margin: 0 2px; }
-#action-hint { font-size: 11px; color: #aaaaff; }
+#action-hint {
+  position: absolute;
+  top: 4px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  background: rgba(8, 10, 32, 0.92);
+  border: 1px solid rgba(60, 80, 180, 0.6);
+  border-radius: 0 0 8px 8px;
+  padding: 4px 18px;
+  font-size: 11px;
+  color: #aaaaff;
+  white-space: nowrap;
+  pointer-events: none;
+  max-width: 70%;
+  text-align: center;
+  display: none;
+}
 
 /* ── 1. カード詳細パネル (スタイルは #card-detail-panel ブロックで定義) ── */
 #card-detail-panel .cdp-title { font-size: 13px; font-weight: 700; color: #aaaaff; margin-bottom: 4px; }
@@ -1196,7 +1218,7 @@ button.danger:hover { background: #6a2a2a; }
 #controls-btns { gap: 10px; flex-wrap: nowrap; }
 #controls-btns button { padding: 8px 16px; font-size: 18px; }
 #btn-end-phase { padding: 10px 20px; font-size: 20px; font-weight: 700; }
-#action-hint   { display: none !important; }
+/* action-hint は #board 上部中央に固定 */
 #controls-btns button[onclick="showTrainingPanel()"],
 #controls-btns button[onclick="showDebugPanel()"] { font-size: 12px; padding: 6px 10px; }
 
@@ -5868,6 +5890,7 @@ function updateHints() {
   } else {
     hint.textContent = '';
   }
+  hint.style.display = hint.innerHTML ? 'block' : 'none';
 
   // 画面上部の処理状況バナーにも同じ内容を表示
   const banner = document.getElementById('status-banner');
@@ -5939,30 +5962,32 @@ function kwTipHtml(kw) {
 function showCardDetail(cardId, x, y) {
   const card = CARD_DB[cardId];
   if (!card) return;
-  const panel = document.getElementById('card-detail-panel');
   let ptStr = card.type === 'creature' ? `<div class="cdp-pt">${card.power}/${card.toughness}</div>` : '';
   let costStr = card.cost ? ` [${costToString(card.cost)}]` : '';
   let kwHtml = '';
   if (card.keywords && card.keywords.length) {
     kwHtml = `<div class="cdp-kw">${card.keywords.map(kwTipHtml).join(' ')}</div>`;
   }
-  panel.innerHTML = `
-    <div class="cdp-title">${card.icon} ${card.name}${costStr}</div>
-    <div class="cdp-type">${card.type === 'creature' ? card.subtype : card.type} (${card.color})</div>
+  const html = `
+    <div class="cdp-title">${card.icon || ''} ${card.name}${costStr}</div>
+    <div class="cdp-type">${card.type === 'creature' ? (card.subtype || 'クリーチャー') : card.type} (${card.color})</div>
     ${ptStr}
     ${kwHtml}
     <div class="cdp-text">${(card.text || '(テキストなし)').replace(/\\n/g, '\n')}</div>
   `;
-  panel.style.display = 'block';
-  panel.style.top   = '8px';
-  panel.style.right = '8px';
-  panel.style.left  = 'auto';
+  // カード情報ゾーン(右上グリッド)に表示
+  const zone = document.getElementById('card-info-zone');
+  if (zone) zone.innerHTML = html;
+  // 互換: 浮動パネルは非表示のまま
+  const panel = document.getElementById('card-detail-panel');
+  if (panel) panel.style.display = 'none';
 }
 
 function hideCardDetail() {
   const panel = document.getElementById('card-detail-panel');
-  panel.style.display = 'none';
-  panel._shownCardId = null;
+  if (panel) { panel.style.display = 'none'; panel._shownCardId = null; }
+  const zone = document.getElementById('card-info-zone');
+  if (zone) zone.innerHTML = '<div class="cdp-placeholder">右クリックでカード詳細</div>';
 }
 
 // ============================================================
