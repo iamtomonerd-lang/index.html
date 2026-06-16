@@ -57,7 +57,7 @@ body {
 #board {
   display: grid;
   grid-template-columns: repeat(15, 1fr) 155px;
-  grid-template-rows: 32px 26px 24px 1fr 1fr 42px 1fr 1fr 150px;
+  grid-template-rows: 30px 22px 22px 1fr 1fr 46px 1fr 1fr 185px;
   flex: 1;
   overflow: hidden;
   position: relative;
@@ -82,13 +82,13 @@ body {
 /* ── AI情報ストリップ ── */
 #ai-info-strip {
   grid-column: 1 / 16; grid-row: 1;
-  background: rgba(50,8,8,0.75);
-  border-bottom: 1px solid rgba(140,35,35,0.25);
-  padding: 0 12px; gap: 10px;
+  background: linear-gradient(90deg, rgba(80,8,8,0.85) 0%, rgba(40,8,8,0.7) 100%);
+  border-bottom: 1px solid rgba(180,40,40,0.3);
+  padding: 0 14px; gap: 12px;
   display: flex; align-items: center;
 }
-#ai-info-strip .life-display { font-size: 18px; text-shadow: 0 0 8px #ff4444; }
-#ai-info-strip .info-count { font-size: 10px; color: #cc8888; }
+#ai-info-strip .life-display { font-size: 20px; text-shadow: 0 0 10px #ff4444; font-weight: 900; }
+#ai-info-strip .info-count { font-size: 11px; color: #dd9999; font-weight: 600; }
 
 /* ── AI手札行 ── */
 #ai-hand-row {
@@ -116,16 +116,17 @@ body {
 /* ── AIフィールド ── */
 #ai-field-row {
   grid-column: 1 / 16; grid-row: 4 / 6;
-  padding: 6px 10px;
+  padding: 8px 12px;
   position: relative;
-  border-bottom: 1px solid rgba(80,60,15,0.25);
+  border-bottom: 1px solid rgba(180,40,40,0.2);
+  background: radial-gradient(ellipse 80% 60% at 50% 50%, rgba(80,10,10,0.18) 0%, transparent 100%);
 }
 #ai-field-row .field-zone {
   height: 100%;
   justify-content: center;
   align-items: center;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 8px;
   padding: 0;
 }
 
@@ -151,15 +152,16 @@ body {
 /* ── PLフィールド ── */
 #player-field-row {
   grid-column: 1 / 16; grid-row: 7 / 9;
-  padding: 6px 10px;
-  border-top: 1px solid rgba(80,60,15,0.25);
+  padding: 8px 12px;
+  border-top: 1px solid rgba(40,160,40,0.2);
+  background: radial-gradient(ellipse 80% 60% at 50% 50%, rgba(10,60,10,0.18) 0%, transparent 100%);
 }
 #player-field-row .field-zone {
   height: 100%;
   justify-content: center;
   align-items: center;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 8px;
   padding: 0;
 }
 
@@ -186,41 +188,47 @@ body {
 /* ── PLアクションバー ── */
 #player-action-bar {
   flex-shrink: 0;
-  background: rgba(8,22,8,0.88);
-  border-top: 1px solid rgba(35,100,35,0.25);
-  padding: 0 10px; gap: 6px;
+  background: linear-gradient(90deg, rgba(8,30,8,0.92) 0%, rgba(8,20,8,0.88) 100%);
+  border-top: 1px solid rgba(40,160,40,0.3);
+  padding: 0 12px; gap: 8px;
   display: flex; align-items: center;
   flex-wrap: nowrap; overflow: visible;
-  height: 42px; min-height: 42px;
+  height: 46px; min-height: 46px;
 }
-#player-action-bar .life-display { font-size: 18px; text-shadow: 0 0 8px #44ff88; }
-#player-action-bar .info-count { font-size: 10px; color: #88cc88; }
-#player-action-bar .sep { width: 1px; background: #254525; align-self: stretch; margin: 4px 2px; }
+#player-action-bar .life-display { font-size: 20px; text-shadow: 0 0 10px #44ff88; font-weight: 900; }
+#player-action-bar .info-count { font-size: 11px; color: #99dd99; font-weight: 600; }
+#player-action-bar .sep { width: 1px; background: #2a5a2a; align-self: stretch; margin: 5px 2px; }
 
 /* ── PL手札 ── */
 #player-hand-row {
   flex: 1;
   overflow: visible;
-  background: rgba(5,12,4,0.4) !important;
-  border-top: 1px solid rgba(30,55,15,0.2) !important;
+  background: rgba(4,10,4,0.5) !important;
+  border-top: 1px solid rgba(30,80,20,0.25) !important;
 }
 #player-hand.hand-zone {
   height: 100%;
   justify-content: center;
   align-items: flex-end;
   gap: 0;
-  padding: 6px 12px 4px;
+  padding: 6px 16px 6px;
   overflow: visible;
   min-height: 0;
   flex-shrink: 0;
 }
 #player-hand .card {
-  margin-right: 4px;
+  width: 90px;
+  height: 130px;
+  margin-right: 6px;
   transition: transform 0.15s, margin 0.15s, z-index 0s;
   flex-shrink: 0;
 }
+#player-hand .card .card-art { font-size: 42px; }
+#player-hand .card .card-name { font-size: 10px; }
+#player-hand .card .card-pt { font-size: 14px; }
+#player-hand .card .card-cost { font-size: 10px; }
 #player-hand .card:hover {
-  transform: translateY(-14px) scale(1.12);
+  transform: translateY(-20px) scale(1.15);
   z-index: 30;
 }
 #player-hand .card:last-child { margin-right: 0; }
@@ -312,9 +320,9 @@ body {
 
 /* ── カード ── */
 .card {
-  width: 72px;
-  height: 104px;
-  border-radius: 5px;
+  width: 82px;
+  height: 118px;
+  border-radius: 7px;
   border: 1.5px solid var(--border);
   cursor: pointer;
   position: relative;
@@ -324,19 +332,23 @@ body {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  font-size: 9px;
+  font-size: 10px;
 }
-.card:hover { transform: translateY(-5px) scale(1.06); z-index: 20; }
-.card.selected { box-shadow: 0 0 0 2px #ffff44, 0 0 14px #ffff44; }
-.card.tapped { transform: rotate(15deg); opacity: 0.85; margin-right: 12px; }
-.card.tapped:hover { transform: rotate(15deg) translateY(-5px) scale(1.06); }
+.card:hover { transform: translateY(-6px) scale(1.07); z-index: 20; }
+.card.selected { box-shadow: 0 0 0 2px #ffff44, 0 0 18px #ffff44; }
+.card.tapped { transform: rotate(15deg); opacity: 0.85; margin-right: 16px; }
+.card.tapped:hover { transform: rotate(15deg) translateY(-6px) scale(1.07); }
 .card.tapped .card-pt { transform: rotate(-15deg); transform-origin: center bottom; }
 .card.face-down { background: linear-gradient(135deg, #1a1a3a 25%, #0d0d22 75%); }
-.card.face-down::after { content: '🎴'; font-size: 32px; position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); }
-.card.playable { box-shadow: 0 0 10px #44ff44; border-color: #44ff44; }
-.card.attackable { box-shadow: 0 0 10px #ff8800; border-color: #ff8800; cursor: crosshair; }
-.card.blockable { box-shadow: 0 0 10px #ff4488; border-color: #ff4488; cursor: crosshair; }
-.card.targetable { box-shadow: 0 0 10px #ff44ff; border-color: #ff44ff; cursor: crosshair; }
+.card.face-down::after { content: '🎴'; font-size: 38px; position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); }
+.card.playable { box-shadow: 0 0 12px #44ff44; border-color: #44ff44; }
+.card.attackable { animation: goldPulse 1.2s ease-in-out infinite; border-color: #ffcc00; cursor: crosshair; }
+@keyframes goldPulse {
+  0%,100% { box-shadow: 0 0 8px #ffaa00, 0 0 0px #ffcc0000; }
+  50%      { box-shadow: 0 0 18px #ffcc00, 0 0 32px #ffaa0066; }
+}
+.card.blockable { box-shadow: 0 0 12px #ff4488; border-color: #ff4488; cursor: crosshair; }
+.card.targetable { box-shadow: 0 0 12px #ff44ff; border-color: #ff44ff; cursor: crosshair; }
 .card.damaged { animation: shake 0.35s; }
 .card.dying { animation: die 0.5s forwards; }
 /* ダメージフラッシュ: 赤くフラッシュ */
@@ -386,18 +398,19 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 26px;
-  border-bottom: 1px solid rgba(255,255,255,0.1);
+  font-size: 36px;
+  border-bottom: 1px solid rgba(255,255,255,0.12);
+  position: relative;
 }
 .card-bottom {
-  padding: 2px 3px;
-  background: rgba(0,0,0,0.65);
+  padding: 3px 4px;
+  background: rgba(0,0,0,0.72);
 }
-.card-name { font-size: 7px; font-weight: 700; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.card-type-line { font-size: 6px; color: #999; }
-.card-pt { font-size: 9px; font-weight: 700; text-align: right; margin-top: 1px; }
-.card-cost { position: absolute; top: 2px; right: 2px; font-size: 7px; background: rgba(0,0,0,0.85); border-radius: 3px; padding: 1px 3px; }
-.card-keywords { font-size: 6px; color: #ffcc44; }
+.card-name { font-size: 9px; font-weight: 700; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.card-type-line { font-size: 7px; color: #aaa; }
+.card-pt { font-size: 12px; font-weight: 900; text-align: right; margin-top: 1px; letter-spacing: -0.5px; }
+.card-cost { position: absolute; top: 3px; right: 3px; font-size: 9px; background: rgba(0,0,0,0.88); border-radius: 4px; padding: 1px 4px; font-weight: 700; }
+.card-keywords { font-size: 7px; color: #ffcc44; font-weight: 600; }
 .damage-counter {
   position: absolute;
   top: 3px;
@@ -426,22 +439,22 @@ body {
 }
 
 /* ── カード色テーマ ── */
-.color-R { background: linear-gradient(160deg, #2a0a0a, #1a0505); border-color: #883333; }
-.color-R .card-art { color: #ff6633; }
-.color-U { background: linear-gradient(160deg, #0a0a2a, #05051a); border-color: #333388; }
-.color-U .card-art { color: #4488ff; }
-.color-G { background: linear-gradient(160deg, #0a1a0a, #051005); border-color: #338833; }
-.color-G .card-art { color: #44cc44; }
-.color-W { background: linear-gradient(160deg, #1e1e12, #141408); border-color: #888844; }
-.color-W .card-art { color: #eeeebb; }
-.color-B { background: linear-gradient(160deg, #14091a, #0a0510); border-color: #554455; }
-.color-B .card-art { color: #aa66cc; }
-.color-C { background: linear-gradient(160deg, #1a1a1a, #0d0d0d); border-color: #555555; }
-.color-C .card-art { color: #aaaaaa; }
+.color-R { background: linear-gradient(160deg, #38100a, #1e0606); border-color: #aa4433; }
+.color-R .card-art { color: #ff7744; text-shadow: 0 0 8px #ff440044; }
+.color-U { background: linear-gradient(160deg, #0a0e38, #05071e); border-color: #3344aa; }
+.color-U .card-art { color: #5599ff; text-shadow: 0 0 8px #4488ff44; }
+.color-G { background: linear-gradient(160deg, #0a1e0a, #051206); border-color: #33aa33; }
+.color-G .card-art { color: #55dd55; text-shadow: 0 0 8px #44cc4444; }
+.color-W { background: linear-gradient(160deg, #24221a, #161410); border-color: #aaaa55; }
+.color-W .card-art { color: #ffffcc; text-shadow: 0 0 8px #eeeebb44; }
+.color-B { background: linear-gradient(160deg, #1a0a22, #0e0614); border-color: #664466; }
+.color-B .card-art { color: #cc77ee; text-shadow: 0 0 8px #aa66cc44; }
+.color-C { background: linear-gradient(160deg, #1e1e1e, #101010); border-color: #666666; }
+.color-C .card-art { color: #cccccc; }
 
 /* ── 土地カード ── */
 .land-card {
-  width: 68px; height: 50px;
+  width: 74px; height: 54px;
   border-radius: 5px;
   border: 2px solid var(--border);
   cursor: pointer;
@@ -500,7 +513,7 @@ body {
   flex-shrink: 0;
 }
 .field-slot {
-  width: 72px; height: 104px;
+  width: 82px; height: 118px;
   border: 1px dashed #252540;
   border-radius: 7px;
   display: flex;
@@ -607,25 +620,26 @@ body {
 }
 #controls-btns { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
 button {
-  background: rgba(20,20,40,0.85);
-  border: 1px solid #3a3a6a;
+  background: rgba(25,25,50,0.9);
+  border: 1px solid #4a4a7a;
   color: var(--text);
-  padding: 5px 10px;
-  border-radius: 5px;
+  padding: 7px 13px;
+  border-radius: 7px;
   cursor: pointer;
   font-family: inherit;
-  font-size: 12px;
+  font-size: 13px;
   transition: background 0.15s, box-shadow 0.15s;
   white-space: nowrap;
+  min-height: 34px;
 }
-button:hover { background: #2a2a4a; box-shadow: 0 0 6px rgba(96,96,255,0.3); }
+button:hover { background: #2a2a5a; box-shadow: 0 0 8px rgba(96,96,255,0.35); }
 button:disabled { opacity: 0.35; cursor: default; }
 button.primary {
-  background: linear-gradient(135deg, #3a3aaa, #2a2a8a);
-  border-color: var(--accent);
+  background: linear-gradient(135deg, #4040bb, #2a2a99);
+  border-color: #7070ff;
   color: #eeeeff;
   font-weight: 700;
-  font-size: 13px;
+  font-size: 14px;
   padding: 6px 16px;
   box-shadow: 0 0 10px rgba(96,96,255,0.4);
 }
