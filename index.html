@@ -56,245 +56,297 @@ body {
 /* ── ボード: 16×9 CSS Grid + 荒野背景 ── */
 #board {
   display: grid;
-  grid-template-columns: repeat(15, 1fr) 155px;
-  grid-template-rows: 30px 22px 22px 1fr 1fr 46px 1fr 1fr 185px;
+  grid-template-columns: repeat(16, 1fr);
+  grid-template-rows: 44px 44px 26px 1fr 1fr 26px 44px 44px 155px;
   flex: 1;
   overflow: hidden;
   position: relative;
   background:
-    radial-gradient(ellipse 70% 40% at 15% 60%, rgba(25,42,8,0.55) 0%, transparent 65%),
-    radial-gradient(ellipse 55% 38% at 85% 38%, rgba(42,30,8,0.45) 0%, transparent 55%),
-    radial-gradient(ellipse 100% 30% at 50% 50%, rgba(18,14,4,0.3) 0%, transparent 80%),
-    linear-gradient(175deg, #1c1408 0%, #100d05 35%, #080c04 65%, #0c1006 100%);
+    radial-gradient(ellipse 100% 5% at 50% 50%, rgba(130,100,30,0.22) 0%, transparent 100%),
+    radial-gradient(ellipse 60% 45% at 18% 18%, rgba(65,42,10,0.32) 0%, transparent 70%),
+    radial-gradient(ellipse 55% 40% at 82% 82%, rgba(18,42,10,0.28) 0%, transparent 65%),
+    linear-gradient(180deg, #1c1208 0%, #120e06 30%, #0a0e05 70%, #0e1308 100%);
 }
 
-/* ── ゾーンラベル非表示 ── */
 .zone-label { display: none !important; }
+.board-row { background: transparent !important; border: none !important; border-radius: 0 !important; gap: 0 !important; }
 
-/* ── board-row: 枠なし・フラット ── */
-.board-row {
-  background: transparent !important;
-  border: none !important;
-  border-radius: 0 !important;
-  gap: 0 !important;
+/* ── CXリング共通 ── */
+.cx-area {
+  display: flex; align-items: center; justify-content: center; padding: 6px;
+}
+.cx-ring-svg { width: 100%; height: 100%; max-width: 86px; max-height: 86px; }
+.cx-value-text { font-size: 22px; font-weight: 900; fill: #eee; dominant-baseline: middle; text-anchor: middle; }
+.cx-label-text { font-size: 9px; fill: #777; text-anchor: middle; dominant-baseline: middle; }
+.cx-area.oc-active .cx-track-fill { filter: drop-shadow(0 0 5px #aaffaa); }
+
+/* 相手のCXエリア (col 1-4, 行 一-二) */
+#opp-cx-area {
+  grid-column: 1 / 5; grid-row: 1 / 3;
+  background: rgba(40,8,8,0.45);
+  border-right: 1px solid rgba(120,30,30,0.2);
+  border-bottom: 1px solid rgba(120,30,30,0.15);
 }
 
-/* ── AI情報ストリップ ── */
-#ai-info-strip {
-  grid-column: 1 / 16; grid-row: 1;
-  background: linear-gradient(90deg, rgba(80,8,8,0.85) 0%, rgba(40,8,8,0.7) 100%);
-  border-bottom: 1px solid rgba(180,40,40,0.3);
-  padding: 0 14px; gap: 12px;
-  display: flex; align-items: center;
+/* 相手のカウント (col 5-8, 行 一) */
+#opp-counts {
+  grid-column: 5 / 9; grid-row: 1;
+  background: rgba(55,8,8,0.65);
+  border-bottom: 1px solid rgba(120,30,30,0.15);
+  display: flex; align-items: center; justify-content: space-around; padding: 0 4px;
 }
-#ai-info-strip .life-display { font-size: 20px; text-shadow: 0 0 10px #ff4444; font-weight: 900; }
-#ai-info-strip .info-count { font-size: 11px; color: #dd9999; font-weight: 600; }
+.info-cell { display: flex; flex-direction: column; align-items: center; gap: 1px; }
+.info-cell-label { font-size: 8px; color: #886666; }
+.info-cell-value { font-size: 15px; font-weight: 700; color: #ccaaaa; line-height: 1; }
 
-/* ── AI手札行 ── */
+/* AI手札ゾーン (col 5-8, 行 二) - AIのカードを描画するため残す */
 #ai-hand-row {
-  grid-column: 1 / 16; grid-row: 2;
+  grid-column: 5 / 9; grid-row: 2;
   overflow: hidden;
-  background: transparent !important;
-  justify-content: center;
-  padding: 2px 8px;
+  background: rgba(40,8,8,0.35) !important;
+  display: flex !important; align-items: center; justify-content: center; padding: 2px;
 }
-#ai-hand .card {
-  width: 20px; height: 26px;
-  margin-right: -8px;
-  border-radius: 3px;
-}
+#ai-hand .card { width: 18px; height: 24px; margin-right: -6px; border-radius: 2px; }
 
-/* ── AI土地行 ── */
-#ai-lands-row {
-  grid-column: 1 / 16; grid-row: 3;
-  padding: 2px 10px;
+/* 相手のアバター (col 9-12, 行 一-二) */
+#opp-avatar {
+  grid-column: 9 / 13; grid-row: 1 / 3;
+  background: linear-gradient(145deg, rgba(70,10,10,0.65), rgba(35,6,6,0.85));
+  border-left: 1px solid rgba(160,40,40,0.2);
+  border-bottom: 1px solid rgba(120,30,30,0.15);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  position: relative; gap: 3px;
 }
-#ai-lands-row .land-zone { min-height: 0; gap: 3px; padding: 0; }
-.ai-row .land-card { width: 24px; height: 18px; font-size: 11px; border-radius: 3px; }
+#opp-avatar #ai-life { font-size: 28px; font-weight: 900; text-shadow: 0 0 14px #ff4444; }
+#opp-avatar .avatar-label { font-size: 8px; color: #886666; letter-spacing: 0.5px; }
+#ai-thinking { position: absolute; bottom: 3px; font-size: 9px; color: #aaf; animation: pulse 1s infinite; display: none; }
+
+/* カード情報ゾーン (col 13-16, 行 一-二) */
+#card-info-zone {
+  grid-column: 13 / 17; grid-row: 1 / 3;
+  background: rgba(5,6,20,0.78);
+  border-left: 1px solid rgba(50,70,150,0.25);
+  border-bottom: 1px solid rgba(50,70,150,0.12);
+  overflow: hidden; padding: 6px;
+  font-size: 9px; color: #666;
+  display: flex; align-items: flex-start; justify-content: flex-start;
+}
+#card-info-zone .cdp-placeholder { color: #333355; font-size: 9px; }
+
+/* 相手の土地 (col 1-12, 行 三) */
+#ai-lands-row {
+  grid-column: 1 / 13; grid-row: 3;
+  background: rgba(38,8,8,0.42) !important;
+  border-bottom: 1px solid rgba(100,25,25,0.2) !important;
+  padding: 2px 6px; display: flex !important; align-items: center;
+}
+#ai-lands-row .land-zone { min-height: 0; gap: 3px; padding: 0; flex-wrap: nowrap; overflow: hidden; }
+.ai-row .land-card { width: 22px; height: 18px; font-size: 10px; border-radius: 2px; }
 .ai-row .land-card .land-name { display: none; }
 
-/* ── AIフィールド ── */
+/* 相手GYボタン (col 1, 行 四) */
+#opp-gy-btn-cell {
+  grid-column: 1; grid-row: 4;
+  background: rgba(40,8,8,0.52); border-right: 1px solid rgba(100,25,25,0.2);
+  display: flex; align-items: center; justify-content: center; padding: 3px;
+}
+#opp-gy-btn-cell button {
+  width: 100%; height: 100%; font-size: 9px; padding: 2px 1px; line-height: 1.3;
+  background: rgba(60,10,10,0.7); border-color: #663333; text-align: center;
+  white-space: pre-line; min-height: unset;
+}
+
+/* 相手除外ボタン (col 2, 行 四) */
+#opp-exile-btn-cell {
+  grid-column: 2; grid-row: 4;
+  background: rgba(30,10,20,0.52); border-right: 1px solid rgba(80,30,60,0.2);
+  display: flex; align-items: center; justify-content: center; padding: 3px;
+}
+#opp-exile-btn-cell button {
+  width: 100%; height: 100%; font-size: 9px; padding: 2px 1px; line-height: 1.3;
+  background: rgba(50,10,30,0.7); border-color: #553355; text-align: center;
+  white-space: pre-line; min-height: unset;
+}
+
+/* 相手フィールド (col 3-12, 行 四) */
 #ai-field-row {
-  grid-column: 1 / 16; grid-row: 4 / 6;
-  padding: 8px 12px;
-  position: relative;
-  border-bottom: 1px solid rgba(180,40,40,0.2);
-  background: radial-gradient(ellipse 80% 60% at 50% 50%, rgba(80,10,10,0.18) 0%, transparent 100%);
+  grid-column: 3 / 13; grid-row: 4;
+  padding: 4px 8px; position: relative;
+  border-bottom: 1px solid rgba(110,90,20,0.18);
+  background: radial-gradient(ellipse 80% 70% at 50% 50%, rgba(80,12,12,0.14) 0%, transparent 100%);
 }
 #ai-field-row .field-zone {
-  height: 100%;
-  justify-content: center;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-  padding: 0;
+  height: 100%; justify-content: center; align-items: center;
+  flex-wrap: nowrap; gap: 6px; padding: 0; overflow: visible;
+}
+#ai-field-row .field-slot, #ai-field-row .card {
+  height: min(118px, calc(100% - 6px)); width: auto; aspect-ratio: 7 / 10;
 }
 
-/* ── 中央バー ── */
-#info-bar {
-  grid-column: 1 / 16; grid-row: 6;
-  background: rgba(6,6,16,0.92);
-  border-top: 1px solid rgba(55,45,8,0.5);
-  border-bottom: 1px solid rgba(55,45,8,0.5);
-  padding: 0 10px; gap: 6px;
-  display: flex; align-items: center;
-  flex-wrap: nowrap; overflow: hidden;
+/* スタックカラム (col 13-16, 行 三-八) */
+#stack-column {
+  grid-column: 13 / 17; grid-row: 3 / 9;
+  background: rgba(4,4,22,0.88); border-left: 1px solid rgba(50,70,150,0.3);
+  display: flex; flex-direction: column; padding: 5px 3px; overflow: hidden; gap: 3px;
 }
-#info-bar #turn-indicator { font-size: 11px; white-space: nowrap; font-weight: 700; }
-#info-bar .phase-display  { font-size: 11px; padding: 2px 8px; }
-#info-bar .sep            { width: 1px; background: #2c2808; align-self: stretch; margin: 4px 2px; }
-#threshold-gauge-wrap { gap: 4px; }
-#threshold-gauge-wrap .threshold-gauge-label { font-size: 9px; }
-#mana-display-wrap { flex-direction: row; gap: 4px; align-items: center; }
-#mana-display-wrap > div:last-child { font-size: 9px; color: #555; }
-#stack-area { display: none; }
+#stack-column-header {
+  font-size: 8px; color: #4455aa; text-align: center; padding-bottom: 4px;
+  border-bottom: 1px solid rgba(50,70,150,0.2); flex-shrink: 0;
+  letter-spacing: 1px; font-weight: 700; text-transform: uppercase;
+}
+#stack-entries {
+  flex: 1; display: flex; flex-direction: column; justify-content: flex-end;
+  gap: 3px; overflow-y: auto; overflow-x: hidden;
+}
+.stack-entry {
+  font-size: 8px; padding: 3px 4px; border-radius: 3px; border-left: 2px solid;
+  line-height: 1.3; word-break: break-all; flex-shrink: 0;
+}
+.stack-entry.player-entry { background: rgba(15,30,70,0.8); border-color: #2255bb; color: #7799ee; }
+.stack-entry.ai-entry { background: rgba(70,15,15,0.8); border-color: #bb2222; color: #ee7777; }
+.stack-entry.next-resolve { outline: 1px solid rgba(240,200,60,0.55); outline-offset: 1px; }
+#stack-empty-msg { font-size: 8px; color: #282840; text-align: center; padding: 6px 0; }
 
-/* ── PLフィールド ── */
+/* 自分GYボタン (col 1, 行 五) */
+#player-gy-btn-cell {
+  grid-column: 1; grid-row: 5;
+  background: rgba(8,35,8,0.52); border-right: 1px solid rgba(25,100,25,0.2);
+  display: flex; align-items: center; justify-content: center; padding: 3px;
+}
+#player-gy-btn-cell button {
+  width: 100%; height: 100%; font-size: 9px; padding: 2px 1px; line-height: 1.3;
+  background: rgba(10,50,10,0.7); border-color: #336633; text-align: center;
+  white-space: pre-line; min-height: unset;
+}
+
+/* 自分除外ボタン (col 2, 行 五) */
+#player-exile-btn-cell {
+  grid-column: 2; grid-row: 5;
+  background: rgba(8,20,30,0.52); border-right: 1px solid rgba(20,60,80,0.2);
+  display: flex; align-items: center; justify-content: center; padding: 3px;
+}
+#player-exile-btn-cell button {
+  width: 100%; height: 100%; font-size: 9px; padding: 2px 1px; line-height: 1.3;
+  background: rgba(10,25,45,0.7); border-color: #224455; text-align: center;
+  white-space: pre-line; min-height: unset;
+}
+
+/* 自分フィールド (col 3-12, 行 五) */
 #player-field-row {
-  grid-column: 1 / 16; grid-row: 7 / 9;
-  padding: 8px 12px;
-  border-top: 1px solid rgba(40,160,40,0.2);
-  background: radial-gradient(ellipse 80% 60% at 50% 50%, rgba(10,60,10,0.18) 0%, transparent 100%);
+  grid-column: 3 / 13; grid-row: 5;
+  padding: 4px 8px; position: relative;
+  border-top: 1px solid rgba(110,90,20,0.18);
+  background: radial-gradient(ellipse 80% 70% at 50% 50%, rgba(10,65,10,0.14) 0%, transparent 100%);
 }
 #player-field-row .field-zone {
-  height: 100%;
-  justify-content: center;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-  padding: 0;
+  height: 100%; justify-content: center; align-items: center;
+  flex-wrap: nowrap; gap: 6px; padding: 0; overflow: visible;
+}
+#player-field-row .field-slot, #player-field-row .card {
+  height: min(118px, calc(100% - 6px)); width: auto; aspect-ratio: 7 / 10;
 }
 
-/* ── プレイヤー下部エリア（土地・アクション・手札） ── */
-#player-bottom-area {
-  grid-column: 1 / 17; grid-row: 9;
-  display: flex;
-  flex-direction: column;
-  overflow: visible;
-  min-height: 0;
-}
-
-/* ── PL土地行 ── */
+/* 自分の土地 (col 1-12, 行 六) */
 #player-lands-row {
-  padding: 2px 10px;
-  background: rgba(6,14,4,0.45) !important;
-  border-top: 1px solid rgba(35,60,15,0.25) !important;
-  flex-shrink: 0;
+  grid-column: 1 / 13; grid-row: 6;
+  background: rgba(8,38,8,0.42) !important;
+  border-top: 1px solid rgba(25,100,25,0.2) !important;
+  padding: 2px 6px; display: flex !important; align-items: center;
 }
-#player-lands-row .land-zone { min-height: 0; gap: 3px; padding: 0; }
-.player-row .land-card { width: 26px; height: 20px; font-size: 12px; border-radius: 3px; }
+#player-lands-row .land-zone { min-height: 0; gap: 3px; padding: 0; flex-wrap: nowrap; overflow: hidden; }
+.player-row .land-card { width: 24px; height: 20px; font-size: 11px; border-radius: 2px; }
 .player-row .land-card .land-name { display: none; }
 
-/* ── PLアクションバー ── */
-#player-action-bar {
-  flex-shrink: 0;
-  background: linear-gradient(90deg, rgba(8,30,8,0.92) 0%, rgba(8,20,8,0.88) 100%);
-  border-top: 1px solid rgba(40,160,40,0.3);
-  padding: 0 12px; gap: 8px;
-  display: flex; align-items: center;
-  flex-wrap: nowrap; overflow: visible;
-  height: 46px; min-height: 46px;
+/* 自分のCXエリア (col 1-4, 行 七-八) */
+#player-cx-area {
+  grid-column: 1 / 5; grid-row: 7 / 9;
+  background: rgba(8,38,8,0.45);
+  border-right: 1px solid rgba(25,100,25,0.2);
+  border-top: 1px solid rgba(25,100,25,0.15);
 }
-#player-action-bar .life-display { font-size: 20px; text-shadow: 0 0 10px #44ff88; font-weight: 900; }
-#player-action-bar .info-count { font-size: 11px; color: #99dd99; font-weight: 600; }
-#player-action-bar .sep { width: 1px; background: #2a5a2a; align-self: stretch; margin: 5px 2px; }
 
-/* ── PL手札 ── */
+/* 自分のカウント (col 5-8, 行 七) */
+#player-counts {
+  grid-column: 5 / 9; grid-row: 7;
+  background: rgba(8,45,8,0.65);
+  border-top: 1px solid rgba(25,100,25,0.15);
+  display: flex; align-items: center; justify-content: space-around; padding: 0 4px;
+}
+#player-counts .info-cell-label { color: #668866; }
+#player-counts .info-cell-value { color: #aaccaa; }
+
+/* ターン・フェイズ・マナ表示 (col 5-8, 行 八) */
+#player-turn-info {
+  grid-column: 5 / 9; grid-row: 8;
+  background: rgba(8,38,8,0.55);
+  border-top: 1px solid rgba(25,100,25,0.1);
+  display: flex; align-items: center; justify-content: center; gap: 5px; padding: 0 6px;
+  flex-wrap: nowrap; overflow: hidden;
+}
+#player-turn-info #turn-indicator { font-size: 11px; font-weight: 700; white-space: nowrap; }
+#player-turn-info .sep { width: 1px; background: #2a4a2a; align-self: stretch; margin: 5px 1px; }
+#player-turn-info .phase-display { font-size: 11px; padding: 2px 5px; }
+#player-turn-info #mana-display-wrap { font-size: 8px; gap: 2px; }
+.mana-display { font-size: 9px; }
+
+/* 自分のアバター (col 9-12, 行 七-八) */
+#player-avatar {
+  grid-column: 9 / 13; grid-row: 7 / 9;
+  background: linear-gradient(145deg, rgba(8,55,8,0.65), rgba(4,32,4,0.85));
+  border-left: 1px solid rgba(30,130,30,0.2);
+  border-top: 1px solid rgba(25,100,25,0.2);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+}
+#player-avatar #player-life { font-size: 28px; font-weight: 900; text-shadow: 0 0 14px #44ff88; }
+#player-avatar .avatar-label { font-size: 8px; color: #668866; letter-spacing: 0.5px; }
+
+/* アクションパネル (col 13-16, 行 七-八) */
+#action-panel {
+  grid-column: 13 / 17; grid-row: 7 / 9;
+  background: rgba(5,6,20,0.85);
+  border-left: 1px solid rgba(50,70,150,0.3);
+  border-top: 1px solid rgba(50,70,150,0.18);
+  display: flex; flex-direction: column; align-items: stretch;
+  justify-content: center; padding: 5px 4px; gap: 3px; overflow: visible;
+}
+#action-panel #controls { flex-direction: column; gap: 3px; align-items: stretch; }
+#action-panel #controls-btns { flex-wrap: wrap; gap: 3px; justify-content: center; }
+#action-panel #controls-btns button { font-size: 10px; padding: 5px 6px; min-height: 28px; }
+#action-panel #btn-end-phase { font-size: 12px; padding: 7px 6px; font-weight: 700; }
+#action-panel #btn-pass { font-size: 11px; padding: 5px 6px; }
+#action-panel #mulligan-controls { flex-direction: column; gap: 4px; }
+#action-panel #action-hint { font-size: 9px; color: #6688aa; }
+#action-panel #debug-freeze-warn { font-size: 9px; }
+#threshold-gauge-wrap { display: none; }
+
+/* 自分の手札 (col 1-16, 行 九) */
 #player-hand-row {
-  flex: 1;
+  grid-column: 1 / 17; grid-row: 9;
   overflow: visible;
   background: rgba(4,10,4,0.5) !important;
   border-top: 1px solid rgba(30,80,20,0.25) !important;
+  display: flex !important; align-items: stretch;
 }
 #player-hand.hand-zone {
-  height: 100%;
-  justify-content: center;
-  align-items: flex-end;
-  gap: 0;
-  padding: 6px 16px 6px;
-  overflow: visible;
-  min-height: 0;
-  flex-shrink: 0;
+  width: 100%; justify-content: center; align-items: flex-end;
+  gap: 0; padding: 6px 16px 6px; overflow: visible; min-height: 0;
 }
 #player-hand .card {
-  width: 90px;
-  height: 130px;
-  margin-right: 6px;
-  transition: transform 0.15s, margin 0.15s, z-index 0s;
-  flex-shrink: 0;
+  width: 90px; height: 132px; margin-right: 6px;
+  transition: transform 0.15s, margin 0.15s, z-index 0s; flex-shrink: 0;
 }
 #player-hand .card .card-art { font-size: 42px; }
 #player-hand .card .card-name { font-size: 10px; }
 #player-hand .card .card-pt { font-size: 14px; }
 #player-hand .card .card-cost { font-size: 10px; }
-#player-hand .card:hover {
-  transform: translateY(-20px) scale(1.15);
-  z-index: 30;
-}
+#player-hand .card:hover { transform: translateY(-20px) scale(1.15); z-index: 30; }
 #player-hand .card:last-child { margin-right: 0; }
 
-/* ── スタックカラム (MTGアリーナ風) ── */
-#stack-column {
-  grid-column: 16; grid-row: 1 / 9;
-  background: rgba(4,4,22,0.88);
-  border-left: 1px solid rgba(50,70,150,0.3);
-  display: flex;
-  flex-direction: column;
-  padding: 5px 3px;
-  overflow: hidden;
-  gap: 3px;
-}
-#stack-column-header {
-  font-size: 8px;
-  color: #4455aa;
-  text-align: center;
-  padding-bottom: 4px;
-  border-bottom: 1px solid rgba(50,70,150,0.2);
-  flex-shrink: 0;
-  letter-spacing: 1px;
-  font-weight: 700;
-  text-transform: uppercase;
-}
-#stack-entries {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-end;
-  gap: 3px;
-  overflow-y: auto;
-  overflow-x: hidden;
-}
-.stack-entry {
-  font-size: 8px;
-  padding: 3px 4px;
-  border-radius: 3px;
-  border-left: 2px solid;
-  line-height: 1.3;
-  word-break: break-all;
-  flex-shrink: 0;
-}
-.stack-entry.player-entry {
-  background: rgba(15,30,70,0.8);
-  border-color: #2255bb;
-  color: #7799ee;
-}
-.stack-entry.ai-entry {
-  background: rgba(70,15,15,0.8);
-  border-color: #bb2222;
-  color: #ee7777;
-}
-.stack-entry.next-resolve {
-  outline: 1px solid rgba(240,200,60,0.55);
-  outline-offset: 1px;
-}
-#stack-empty-msg {
-  font-size: 8px;
-  color: #282840;
-  text-align: center;
-  padding: 6px 0;
-}
-
-/* 右側：サイドパネル */
+/* 非表示: ID互換のために残す */
+#ai-info-strip { display: none !important; }
+#info-bar { display: none !important; }
+#player-action-bar { display: none !important; }
+#player-bottom-area { display: contents; }
 #side-panel { display: none; }
 
 /* プレイヤー情報ヘッダー */
@@ -1661,112 +1713,199 @@ button.danger:hover { background: #6a2a2a; }
   <!-- ボードエリア -->
   <div id="board">
 
-    <!-- AI 情報ストリップ -->
-    <div id="ai-info-strip">
-      <div class="life-display" id="ai-life">❤️ 20</div>
-      <span class="info-count">手札 <span id="ai-hand-count">0</span></span>
-      <span class="info-count">山札 <span id="ai-deck-count">40</span></span>
-      <span class="info-count">土地 <span id="ai-land-deck-count">10</span></span>
-      <button onclick="showGraveyard(1)" style="font-size:9px;padding:2px 6px;background:#2a0a0a;border-color:#663333;">墓地: <span id="ai-grave-count">0</span>枚</button>
-      <span id="ai-thinking" style="display:none;font-size:9px;color:#aaf;animation:pulse 1s infinite;">⚙ 考え中...</span>
+    <!-- 相手のCXカウンター (col 1-4, 行 一-二) -->
+    <div id="opp-cx-area" class="cx-area">
+      <svg class="cx-ring-svg" viewBox="0 0 100 100">
+        <circle cx="50" cy="50" r="40" fill="none" stroke="#3a1010" stroke-width="9"/>
+        <circle id="opp-cx-ring" cx="50" cy="50" r="40" fill="none" stroke="#cc4444" stroke-width="9"
+          stroke-dasharray="251.3" stroke-dashoffset="251.3" stroke-linecap="round"
+          transform="rotate(-90 50 50)" class="cx-track-fill"
+          style="transition: stroke-dashoffset 0.4s ease;"/>
+        <text id="opp-cx-text" x="50" y="46" class="cx-value-text">0</text>
+        <text x="50" y="66" class="cx-label-text">CX</text>
+      </svg>
     </div>
 
-    <!-- AI 手札 -->
+    <!-- 相手の情報カウント (col 5-8, 行 一) -->
+    <div id="opp-counts">
+      <div class="info-cell">
+        <span class="info-cell-label">手札</span>
+        <span class="info-cell-value" id="ai-hand-count">0</span>
+      </div>
+      <div class="info-cell">
+        <span class="info-cell-label">墓地</span>
+        <span class="info-cell-value" id="ai-grave-count">0</span>
+      </div>
+      <div class="info-cell">
+        <span class="info-cell-label">除外</span>
+        <span class="info-cell-value" id="ai-exile-count">0</span>
+      </div>
+      <div class="info-cell">
+        <span class="info-cell-label">山札</span>
+        <span class="info-cell-value" id="ai-deck-count">0</span>
+      </div>
+    </div>
+
+    <!-- AI手札描画ゾーン (col 5-8, 行 二) -->
     <div id="ai-hand-row" class="board-row ai-row">
       <div id="ai-hand" class="hand-zone" style="flex:1;"></div>
     </div>
 
-    <!-- AI 土地 -->
+    <!-- 相手のアバター (col 9-12, 行 一-二) -->
+    <div id="opp-avatar">
+      <div class="avatar-label">ENEMY</div>
+      <div class="life-display" id="ai-life">❤️ 20</div>
+      <span id="ai-thinking">⚙ 考え中...</span>
+    </div>
+
+    <!-- カード情報ゾーン (col 13-16, 行 一-二) -->
+    <div id="card-info-zone">
+      <div class="cdp-placeholder">右クリックでカード詳細</div>
+    </div>
+
+    <!-- 相手の土地 (col 1-12, 行 三) -->
     <div id="ai-lands-row" class="board-row ai-row">
       <div id="ai-lands" class="land-zone" style="flex:1;"></div>
     </div>
 
-    <!-- AI フィールド -->
+    <!-- 相手GYボタン (col 1, 行 四) -->
+    <div id="opp-gy-btn-cell">
+      <button onclick="showGraveyard(1)">墓地</button>
+    </div>
+
+    <!-- 相手除外ボタン (col 2, 行 四) -->
+    <div id="opp-exile-btn-cell">
+      <button>除外</button>
+    </div>
+
+    <!-- 相手フィールド (col 3-12, 行 四) -->
     <div id="ai-field-row" class="board-row ai-row">
       <div id="ai-field" class="field-zone" style="flex:1;"></div>
       <div id="ai-balloon"></div>
     </div>
 
-    <!-- 中央情報バー -->
-    <div id="info-bar">
-      <div id="turn-indicator">ターン 1</div>
-      <div class="sep"></div>
-      <div class="phase-display" id="phase-name">アンタップ</div>
-      <div class="sep"></div>
-      <div class="threshold-gauge-wrap" id="threshold-gauge-wrap">
-        <div class="threshold-gauge-label" id="threshold-label">CX値: 0  CX6✗ CX8✗ OC✗</div>
-        <div class="threshold-gauge" style="position:relative;">
-          <div class="threshold-gauge-fill" id="threshold-fill" style="width:0%;background:#555;"></div>
-          <div id="threshold-count" style="position:absolute;top:0;left:0;width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:8px;color:#fff;font-weight:bold;pointer-events:none;">0/10</div>
-        </div>
-      </div>
-      <div class="sep"></div>
-      <span style="font-size:11px;">マナ:</span>
-      <div id="mana-display-wrap" style="display:flex;flex-direction:column;gap:1px;">
-        <div class="mana-display" id="mana-display"></div>
-        <div style="font-size:9px;color:#555;" id="mana-untapped-label"></div>
-      </div>
-      <!-- スタックは#stack-columnに移動 (ID互換のため残す) -->
-      <div id="stack-area" style="display:none;">
-        <div id="stack-items"></div>
-      </div>
-    </div>
-
-    <!-- 自分 フィールド -->
-    <div id="player-field-row" class="board-row player-row">
-      <div id="player-field" class="field-zone" style="flex:1;"></div>
-    </div>
-
-    <!-- プレイヤー下部（土地・アクション・手札） -->
-    <div id="player-bottom-area">
-      <!-- 自分 土地 -->
-      <div id="player-lands-row" class="board-row player-row">
-        <div id="player-lands" class="land-zone" style="flex:1;"></div>
-      </div>
-
-      <!-- プレイヤーアクションバー -->
-      <div id="player-action-bar">
-        <div class="life-display" id="player-life">❤️ 20</div>
-        <span class="info-count">山札 <span id="player-deck-count">40</span></span>
-        <span class="info-count">土地 <span id="player-land-deck-count">10</span></span>
-        <button onclick="showGraveyard(0)" style="font-size:9px;padding:2px 6px;background:#0a1a0a;border-color:#336633;">墓地: <span id="player-grave-count">0</span>枚</button>
-        <div class="sep"></div>
-        <!-- コントロール -->
-        <div id="controls">
-          <div id="controls-btns">
-            <button id="btn-end-phase" class="primary" onclick="endPhase()">フェイズ終了</button>
-            <button id="btn-pass" onclick="passPriority()">優先権パス</button>
-            <button id="btn-mulligan" onclick="doMulligan()" disabled>マリガン</button>
-            <button id="btn-charge" onclick="startCharge()">チャージ</button>
-            <button onclick="showTrainingPanel()" style="background:#1a2a1a;border-color:#446644;font-size:10px;">🧠 学習</button>
-            <button onclick="showTestPanel()" style="background:#1a1a2a;border-color:#444488;font-size:10px;">🧪 テスト</button>
-            <button onclick="showDebugPanel()" style="background:#1a1a2a;border-color:#444466;font-size:10px;" title="フリーズ・バグ報告用デバッグ情報">🐛 debug</button>
-          </div>
-          <div id="mulligan-controls" style="display:none; gap:10px;">
-            <button onclick="confirmStartMulligan()" style="padding:12px 24px; background:#2a2a8a; border:1px solid #6060ff; color:#fff; border-radius:8px; font-size:18px; cursor:pointer;">確認（<span id="mulligan-count">0</span>枚入替）</button>
-            <button onclick="skipStartMulligan()" style="padding:12px 24px; background:#2a2a2a; border:1px solid #555; color:#ccc; border-radius:8px; font-size:18px; cursor:pointer;">しない</button>
-          </div>
-          <div id="action-hint"></div>
-          <div id="debug-freeze-warn" style="display:none;font-size:10px;color:#ffaa44;margin-top:4px;padding:4px 6px;background:#1a1400;border:1px solid #554400;border-radius:4px;cursor:pointer;" onclick="showDebugPanel()"></div>
-        </div>
-      </div>
-
-      <!-- 自分 手札 -->
-      <div id="player-hand-row" class="board-row player-row">
-        <div id="player-hand" class="hand-zone" style="flex:1;"></div>
-      </div>
-    </div>
-
-    <!-- スタックカラム (MTGアリーナ風・右端) -->
+    <!-- スタックカラム (col 13-16, 行 三-八) -->
     <div id="stack-column">
       <div id="stack-column-header">STACK</div>
       <div id="stack-entries"></div>
       <div id="stack-empty-msg">スタック空</div>
     </div>
+
+    <!-- 自分GYボタン (col 1, 行 五) -->
+    <div id="player-gy-btn-cell">
+      <button onclick="showGraveyard(0)">墓地<br><span id="player-grave-count">0</span></button>
+    </div>
+
+    <!-- 自分除外ボタン (col 2, 行 五) -->
+    <div id="player-exile-btn-cell">
+      <button>除外</button>
+    </div>
+
+    <!-- 自分フィールド (col 3-12, 行 五) -->
+    <div id="player-field-row" class="board-row player-row">
+      <div id="player-field" class="field-zone" style="flex:1;"></div>
+    </div>
+
+    <!-- 自分の土地 (col 1-12, 行 六) -->
+    <div id="player-lands-row" class="board-row player-row">
+      <div id="player-lands" class="land-zone" style="flex:1;"></div>
+    </div>
+
+    <!-- 自分のCXカウンター (col 1-4, 行 七-八) -->
+    <div id="player-cx-area" class="cx-area">
+      <svg class="cx-ring-svg" viewBox="0 0 100 100">
+        <circle cx="50" cy="50" r="40" fill="none" stroke="#103010" stroke-width="9"/>
+        <circle id="player-cx-ring" cx="50" cy="50" r="40" fill="none" stroke="#44cc44" stroke-width="9"
+          stroke-dasharray="251.3" stroke-dashoffset="251.3" stroke-linecap="round"
+          transform="rotate(-90 50 50)" class="cx-track-fill"
+          style="transition: stroke-dashoffset 0.4s ease;"/>
+        <text id="player-cx-text" x="50" y="46" class="cx-value-text">0</text>
+        <text x="50" y="66" class="cx-label-text">CX</text>
+      </svg>
+    </div>
+
+    <!-- 自分のカウント (col 5-8, 行 七) -->
+    <div id="player-counts">
+      <div class="info-cell">
+        <span class="info-cell-label">手札</span>
+        <span class="info-cell-value" id="player-hand-count-disp">0</span>
+      </div>
+      <div class="info-cell">
+        <span class="info-cell-label">墓地</span>
+        <span class="info-cell-value" id="player-grave-count-disp">0</span>
+      </div>
+      <div class="info-cell">
+        <span class="info-cell-label">山札</span>
+        <span class="info-cell-value" id="player-deck-count">0</span>
+      </div>
+      <div class="info-cell">
+        <span class="info-cell-label">土地山</span>
+        <span class="info-cell-value" id="player-land-deck-count">0</span>
+      </div>
+    </div>
+
+    <!-- ターン・フェイズ・マナ (col 5-8, 行 八) -->
+    <div id="player-turn-info">
+      <div id="turn-indicator">ターン 1</div>
+      <div class="sep"></div>
+      <div class="phase-display" id="phase-name">アンタップ</div>
+      <div class="sep"></div>
+      <div id="mana-display-wrap" style="display:flex;gap:2px;align-items:center;">
+        <div class="mana-display" id="mana-display"></div>
+        <div style="font-size:8px;color:#555;" id="mana-untapped-label"></div>
+      </div>
+    </div>
+
+    <!-- 自分のアバター (col 9-12, 行 七-八) -->
+    <div id="player-avatar">
+      <div class="avatar-label">YOU</div>
+      <div class="life-display" id="player-life">❤️ 20</div>
+    </div>
+
+    <!-- アクションパネル (col 13-16, 行 七-八) -->
+    <div id="action-panel">
+      <div id="controls">
+        <div id="controls-btns">
+          <button id="btn-end-phase" class="primary" onclick="endPhase()">フェイズ終了</button>
+          <button id="btn-pass" onclick="passPriority()">優先権パス</button>
+          <button id="btn-mulligan" onclick="doMulligan()" disabled>マリガン</button>
+          <button id="btn-charge" onclick="startCharge()">チャージ</button>
+          <button onclick="showTrainingPanel()" style="font-size:9px;padding:4px 5px;">🧠</button>
+          <button onclick="showTestPanel()" style="font-size:9px;padding:4px 5px;">🧪</button>
+          <button onclick="showDebugPanel()" style="font-size:9px;padding:4px 5px;" title="debug">🐛</button>
+        </div>
+        <div id="mulligan-controls" style="display:none; gap:5px; flex-direction:column;">
+          <button onclick="confirmStartMulligan()" style="padding:8px 10px;background:#2a2a8a;border:1px solid #6060ff;color:#fff;border-radius:6px;font-size:13px;cursor:pointer;">確認（<span id="mulligan-count">0</span>枚入替）</button>
+          <button onclick="skipStartMulligan()" style="padding:8px 10px;background:#2a2a2a;border:1px solid #555;color:#ccc;border-radius:6px;font-size:13px;cursor:pointer;">しない</button>
+        </div>
+        <div id="action-hint"></div>
+        <div id="debug-freeze-warn" style="display:none;font-size:9px;color:#ffaa44;padding:3px 4px;background:#1a1400;border:1px solid #554400;border-radius:3px;cursor:pointer;" onclick="showDebugPanel()"></div>
+      </div>
+      <!-- ID互換のため非表示 -->
+      <div style="display:none;">
+        <div id="threshold-gauge-wrap">
+          <div id="threshold-label"></div>
+          <div class="threshold-gauge"><div class="threshold-gauge-fill" id="threshold-fill" style="width:0%;background:#555;"></div></div>
+          <div id="threshold-count">0/10</div>
+        </div>
+        <div id="stack-area"><div id="stack-items"></div></div>
+        <div id="ai-land-deck-count"></div>
+      </div>
+    </div>
+
+    <!-- 自分の手札 (col 1-16, 行 九) -->
+    <div id="player-hand-row" class="board-row player-row">
+      <div id="player-hand" class="hand-zone" style="flex:1;"></div>
+    </div>
+
+    <!-- ID互換のため非表示 -->
+    <div id="ai-info-strip" style="display:none;"></div>
+    <div id="info-bar" style="display:none;"></div>
+    <div id="player-action-bar" style="display:none;"></div>
+    <div id="player-bottom-area" style="display:none;"></div>
   </div>
 
-  <!-- 右：サイドパネル（非表示、ID互換のため残す） -->
-  <div id="side-panel"></div>
+  <div id="side-panel" style="display:none;"></div>
 </div>
 
 <!-- 処理状況バナー (画面上部中央) -->
@@ -5139,6 +5278,7 @@ function render() {
   safeCall(() => updateThresholdGauge(), 'updateThresholdGauge');
   safeCall(() => updateManaDisplay(), 'updateManaDisplay');
   safeCall(() => drawCombatArrows(), 'drawCombatArrows');
+  safeCall(() => updateCXRings(), 'updateCXRings');
   const pgc = document.getElementById('player-grave-count');
   const agc = document.getElementById('ai-grave-count');
   if (pgc) pgc.textContent = G.players[NET_MY_IDX].graveyard.length;
@@ -5388,6 +5528,28 @@ function renderInfoBar() {
   // Mana display handled by updateManaDisplay() called from render()
 }
 
+function updateCXRings() {
+  const me = NET_MY_IDX, opp = 1 - me;
+  const circumference = 251.3;
+  function updateRing(ringId, textId, areaId, cx, isOC) {
+    const ring = document.getElementById(ringId);
+    const text = document.getElementById(textId);
+    const area = document.getElementById(areaId);
+    if (!ring || !text) return;
+    const offset = circumference * (1 - Math.min(cx, 10) / 10);
+    ring.style.strokeDashoffset = offset;
+    text.textContent = cx;
+    if (area) area.classList.toggle('oc-active', isOC);
+  }
+  const pMe = G.players[me], pOpp = G.players[opp];
+  const meCX = pMe ? pMe.cx : 0;
+  const oppCX = pOpp ? pOpp.cx : 0;
+  const meOC = meCX >= 8;
+  const oppOC = oppCX >= 8;
+  updateRing('player-cx-ring', 'player-cx-text', 'player-cx-area', meCX, meOC);
+  updateRing('opp-cx-ring', 'opp-cx-text', 'opp-cx-area', oppCX, oppOC);
+}
+
 function renderStack() {
   const entries = document.getElementById('stack-entries');
   const emptyMsg = document.getElementById('stack-empty-msg');
@@ -5421,6 +5583,10 @@ function updateCounts() {
   document.getElementById('ai-land-deck-count').textContent = G.players[opp].landDeck.length;
   const ahc = document.getElementById('ai-hand-count');
   if (ahc) ahc.textContent = G.players[opp].hand.length;
+  const phcd = document.getElementById('player-hand-count-disp');
+  if (phcd) phcd.textContent = G.players[me].hand.length;
+  const pgcd = document.getElementById('player-grave-count-disp');
+  if (pgcd) pgcd.textContent = G.players[me].graveyard.length;
 }
 
 // ============================================================
