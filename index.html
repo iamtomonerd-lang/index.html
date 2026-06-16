@@ -3097,6 +3097,7 @@ function checkCreatureDeath(player, instId, sourcePlayer) {
       showDestroyAnimation(instId);
       p.field.splice(idx, 1);
       p.graveyard.push(c.cardId);
+      if (G._battleDestroyedInstIds) G._battleDestroyedInstIds.add(instId);
       log(`${card.name} が破壊された（P/T入れ替え後）`, 'damage');
       return true;
     }
@@ -3106,6 +3107,7 @@ function checkCreatureDeath(player, instId, sourcePlayer) {
     showDestroyAnimation(instId);
     p.field.splice(idx, 1);
     p.graveyard.push(c.cardId);
+    if (G._battleDestroyedInstIds) G._battleDestroyedInstIds.add(instId);
     log(`${card.name} が破壊された`, 'damage');
     return true;
   }
@@ -3479,8 +3481,9 @@ function resolveSingleCombat(atkPlayer, atkInstId, kakutouTargetId, blockerInstI
     if (atkPlayer === 1) setTimeout(() => continueAIAttack(), 300);
     return;
   }
-  // アレスティア■3用: バトル開始時の防御側フィールドをスナップショット
+  // アレスティア■3用: バトル開始時の防御側フィールドと、バトル中に破壊されたインスタンスを追跡
   const defFieldBefore = G.players[opp].field.map(c => c.instanceId);
+  G._battleDestroyedInstIds = new Set();
   const atkCard = CARD_DB[atkInst.cardId];
   const atkPow = getEffectivePower(atkPlayer, atkInst);
 
@@ -3638,12 +3641,14 @@ function resolveSingleCombat(atkPlayer, atkInstId, kakutouTargetId, blockerInstI
   G.combatArrows = [];
 
   // アレスティア ■3: ブロック終了時、このバトル中自クリーチャーが1体も破壊されていなければ相手プレイヤーに2ダメージ
-  // (アレスティア自身が死んでいれば field.some で引っかからず自動的に不発)
+  // 破壊 = 墓地行き。手札バウンスや追放は破壊ではない (_battleDestroyedInstIds で追跡)
+  // アレスティア自身が破壊された場合も _battleDestroyedInstIds に含まれるため自動的に不発
   if (blockerInstId) {
     const defHasArestia = G.players[opp].field.some(c => CARD_DB[c.cardId].id === 'arestia');
     if (defHasArestia) {
-      const noOwnCreatureDied = defFieldBefore.every(id => G.players[opp].field.some(c => c.instanceId === id));
-      if (noOwnCreatureDied) {
+      // 防御側クリーチャーが1体でも破壊されたか (defFieldBefore = バトル開始時の防御側instanceId一覧)
+      const ownCreatureDestroyed = [...G._battleDestroyedInstIds].some(id => defFieldBefore.includes(id));
+      if (!ownCreatureDestroyed) {
         const capAtkP = atkPlayer;
         triggerEffect('アレスティア ■3 ブロック終了誘発', '⚡', opp, () => {
           G.players[capAtkP].life -= 2;
