@@ -3923,32 +3923,30 @@ function activateChargedLand(player, instId) {
     renderStack();
     openPriorityWindow(opp, null, `${landCard.name} 還元起動`);
   } else if (landCard.chargedAbility === 'buffWhiteCreature') {
-    // serashia_miyako: tap -> give own white creature +0/+1 permanent
+    // serashia_miyako: tap -> give own white creature +0/+2 permanent
     if (land.tapped) { log('タップ済み'); return; }
+    const whites = G.players[player].field.filter(c => CARD_DB[c.cardId].color === 'W');
+    if (whites.length === 0) { log(`${landCard.name}: 白クリーチャーがいません`); return; }
     land.tapped = true;
-    log(`${landCard.name}: 白クリーチャー+0/+1 → スタックに積む`);
+    log(`${landCard.name}: 白クリーチャー+0/+2 → スタックに積む`);
     G.stack.push({
-      name: `${landCard.name} 起動(白+0/+1)`,
+      name: `${landCard.name} 起動(白+0/+2)`,
       icon: landCard.icon || '✨',
       owner: player,
       resolve: () => {
-        if (player === 0) {
-          G.targetMode = { type:'ownCreature', owner:player, callback:(tgt) => {
-            const tc = G.players[player].field.find(x=>x.instanceId===tgt.instId);
-            if (tc && CARD_DB[tc.cardId].color === 'W') {
-              addPermanentBuff(player, tgt.instId, 0, 2);
-              log(`${landCard.name}: 白クリーチャー+0/+2(永続)`);
-            } else { log('白クリーチャーを選んでください'); }
-            G.targetMode = null; render(); updateHints();
-            continueStack();
-          }};
-          log('白クリーチャーを選択（+0/+1永続）');
-          render(); updateHints();
-        } else {
-          const whites = G.players[player].field.filter(c=>CARD_DB[c.cardId].color==='W');
-          if (whites.length > 0) { addPermanentBuff(player, whites[0].instanceId, 0, 2); log(`AI ${landCard.name}: 白クリーチャー+0/+2`); }
-          render(); updateHints();
-        }
+        const ws = G.players[player].field.filter(c => CARD_DB[c.cardId].color === 'W');
+        if (ws.length === 0) { log(`${landCard.name}: 白クリーチャーなし`); continueStack(); return; }
+        G.targetMode = { type:'ownCreature', sourcePlayer: player, aiPick: pool => pool.filter(c => CARD_DB[c.cardId].color === 'W').reduce((a,b) => getEffectiveToughness(player,b) < getEffectiveToughness(player,a) ? b : a), callback:(tgt) => {
+          const tc = G.players[player].field.find(x => x.instanceId === tgt.instId);
+          if (tc && CARD_DB[tc.cardId].color === 'W') {
+            addPermanentBuff(player, tgt.instId, 0, 2);
+            log(`${landCard.name}: 白クリーチャー+0/+2(永続)`);
+          }
+          G.targetMode = null; render(); updateHints();
+          continueStack();
+        }};
+        log('白クリーチャーを選択（+0/+2永続）');
+        render(); updateHints();
       }
     });
     renderStack();
