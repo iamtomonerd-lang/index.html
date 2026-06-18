@@ -136,7 +136,7 @@ body {
   grid-column: 13 / 17; grid-row: 1 / 11;
   display: flex; flex-direction: column;
   background: #1a1a2e; border-left: 1px solid #333;
-  overflow: hidden;
+  overflow: hidden; min-height: 0;
 }
 #right-panel-tabs {
   display: flex; border-bottom: 1px solid #333; flex-shrink: 0;
@@ -147,15 +147,15 @@ body {
 }
 .rp-tab.active { color: #fff; border-bottom: 2px solid #4af; }
 .rp-tab:hover { background: rgba(255,255,255,0.05); box-shadow: none; }
-.rp-pane { display: none; flex: 1; overflow: auto; }
-.rp-pane.active { display: flex; flex-direction: column; flex: 1; }
+.rp-pane { display: none; flex: 1; overflow: auto; min-height: 0; }
+.rp-pane.active { display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: hidden; }
 
 /* カード情報ゾーン (右パネル内) */
 #card-info-zone {
   overflow-y: auto; overflow-x: hidden; padding: 6px;
   font-size: 9px; color: #aaa;
   flex-direction: column; align-items: flex-start; gap: 4px;
-  pointer-events: auto;
+  pointer-events: auto; min-height: 0; flex: 1;
 }
 #card-info-zone .cdp-placeholder { color: #22224a; font-size: 9px; }
 #card-info-zone .cdp-title { font-size: 13px; font-weight: 700; color: #ccccff; }
@@ -165,7 +165,7 @@ body {
 #card-info-zone .cdp-text { font-size: 11px; color: #ccccdd; line-height: 1.6; white-space: pre-wrap; margin-top: 4px; }
 
 /* ログ右ペイン */
-#log-right { flex: 1; overflow-y: auto; padding: 6px 8px; font-size: 11px; color: #7788aa; scrollbar-width: thin; scrollbar-color: #2a2a4a transparent; }
+#log-right { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 6px 8px; font-size: 11px; color: #7788aa; scrollbar-width: thin; scrollbar-color: #2a2a4a transparent; min-height: 0; }
 #log-right p { margin: 2px 0; line-height: 1.4; }
 #log-right p.important { color: #ffcc44; }
 #log-right p.damage { color: #ff6644; }
