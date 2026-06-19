@@ -958,7 +958,7 @@ button.danger:hover { background: #6a2a2a; }
       14px            /* 行7: 自分土地 */
       22px            /* 行8: 自分情報 */
       22px            /* 行9: ボタン */
-      min(116px, 24vh); /* 行10: 手札 ★ */
+      112px;          /* 行10: 手札 ★ 固定値でカード(105px)が必ず収まる */
   }
 
   /* ── CXリング: 手札行に被らないよう行8-9に限定・縮小 ── */
@@ -999,18 +999,19 @@ button.danger:hover { background: #6a2a2a; }
   #action-panel    { grid-column: 13 / 17; }
 
   /* ── 手札カード: 全体が収まりイラストが全て見えるサイズ ── */
-  #player-hand-row { overflow: hidden; }
+  #player-hand-row { overflow: visible; }
   #player-hand.hand-zone {
     padding: 2px 4px;
     gap: 0;
-    align-items: stretch;
+    align-items: flex-start;
     overflow-x: auto;
-    overflow-y: hidden;
+    overflow-y: visible;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
+    height: 100%;
   }
   #player-hand.hand-zone::-webkit-scrollbar { display: none; }
-  #player-hand .card { width: 62px; height: calc(100% - 4px); min-height: 0; margin-right: 3px; flex-shrink: 0; }
+  #player-hand .card { width: 62px; height: 105px; min-height: 0; margin-right: 3px; flex-shrink: 0; }
   #player-hand .card .card-art { font-size: 28px; }
   #player-hand .card .card-name { font-size: 7px; }
   #player-hand .card .card-pt { font-size: 10px; }
@@ -2045,7 +2046,7 @@ button.danger:hover { background: #6a2a2a; }
   </div>
   <div id="home-record"></div>
   <div id="home-elo" style="font-size:13px;margin-top:4px;cursor:pointer;" onclick="showTrophyPanel()"></div>
-  <div class="home-version">v1.7.5 — スマホUI改善</div>
+  <div class="home-version">v1.7.6 — スマホUI改善</div>
 </div>
 
 <!-- Tutorial Overlay -->
