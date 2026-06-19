@@ -949,17 +949,21 @@ button.danger:hover { background: #6a2a2a; }
   /* ── グリッド行: フィールドと手札を最大化 ── */
   #board {
     grid-template-rows:
-      16px            /* 行1: 相手情報 */
-      16px            /* 行2: 相手手札 */
-      16px            /* 行3: 相手土地 */
+      15px            /* 行1: 相手情報 */
+      15px            /* 行2: 相手手札 */
+      15px            /* 行3: 相手土地 */
       minmax(0, 1fr)  /* 行4: AIフィールド ★ */
-      12px            /* 行5: ヒントバー */
+      11px            /* 行5: ヒントバー */
       minmax(0, 1fr)  /* 行6: プレイヤーフィールド ★ */
-      16px            /* 行7: 自分土地 */
-      26px            /* 行8: 自分情報 */
-      26px            /* 行9: ボタン */
-      min(110px, 22vh); /* 行10: 手札 ★ */
+      15px            /* 行7: 自分土地 */
+      24px            /* 行8: 自分情報 */
+      24px            /* 行9: ボタン */
+      min(92px, 19vh); /* 行10: 手札 ★ */
   }
+
+  /* ── CXリング: 手札行に被らないよう行8-9に限定・縮小 ── */
+  #player-cx-area { grid-row: 8 / 10; padding: 0; }
+  #opp-cx-area { padding: 0; }
 
   /* ── 右パネル: オーバーレイ ── */
   #right-panel {
@@ -1003,16 +1007,16 @@ button.danger:hover { background: #6a2a2a; }
   #player-hand .card .card-cost { font-size: 8px; }
   #player-hand .card:hover { transform: translateY(-18px) scale(1.12); }
 
-  /* ── フィールドカード: アートしっかり見える ── */
+  /* ── フィールドカード: 空きスペースいっぱいに大きく ── */
   #ai-field-row .field-slot, #ai-field-row .card,
   #player-field-row .field-slot, #player-field-row .card {
-    height: min(115px, calc(100% - 4px));
+    height: calc(100% - 4px);
   }
-  #ai-field-row .field-zone, #player-field-row .field-zone { gap: 3px; }
+  #ai-field-row .field-zone, #player-field-row .field-zone { gap: 4px; }
   #ai-field-row .card .card-art,
-  #player-field-row .card .card-art { font-size: 28px; }
+  #player-field-row .card .card-art { font-size: 34px; }
   #ai-field-row .card .card-name,
-  #player-field-row .card .card-name { font-size: 8px; }
+  #player-field-row .card .card-name { font-size: 9px; }
 
   /* ── 土地 ── */
   .land-card { width: 20px !important; height: 28px !important; font-size: 11px !important; }
@@ -2031,7 +2035,7 @@ button.danger:hover { background: #6a2a2a; }
   </div>
   <div id="home-record"></div>
   <div id="home-elo" style="font-size:13px;margin-top:4px;cursor:pointer;" onclick="showTrophyPanel()"></div>
-  <div class="home-version">v1.7.2 — スマホUI改善</div>
+  <div class="home-version">v1.7.3 — スマホUI改善</div>
 </div>
 
 <!-- Tutorial Overlay -->

@@ -1,4 +1,4 @@
-const CACHE = 'dcg-v22';
+const CACHE = 'dcg-v23';
 const ASSETS = [
   './manifest.json',
   './icon-192.png',
