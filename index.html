@@ -1989,6 +1989,7 @@ button.danger:hover { background: #6a2a2a; }
           <button id="btn-pass" onclick="passPriority()">優先権パス</button>
           <button id="btn-mulligan" onclick="doMulligan()" disabled>マリガン</button>
           <button id="btn-charge" onclick="startCharge()">チャージ</button>
+          <button id="btn-ren-gy" onclick="renGraveyardCast()" style="display:none;background:#2a0a2a;border-color:#884488;color:#ffbbff;">💀 墓地実行</button>
           <button onclick="showTrainingPanel()" style="font-size:9px;padding:4px 5px;">🧠</button>
           <button onclick="showTestPanel()" style="font-size:9px;padding:4px 5px;">🧪</button>
           <button onclick="showDebugPanel()" style="font-size:9px;padding:4px 5px;" title="debug">🐛</button>
@@ -2066,7 +2067,7 @@ button.danger:hover { background: #6a2a2a; }
   </div>
   <div id="home-record"></div>
   <div id="home-elo" style="font-size:13px;margin-top:4px;cursor:pointer;" onclick="showTrophyPanel()"></div>
-  <div class="home-version">v1.7.8 — スマホUI改善</div>
+  <div class="home-version">v1.8.0 — 破壊者の黒 追加</div>
 </div>
 
 <!-- Tutorial Overlay -->
@@ -2486,6 +2487,111 @@ const CARD_DB = {
     text:'■起動(タップ)：1マナ生成\n■起動(タップ)：青クリーチャー1体に「攻撃時1枚引く」を付与。チャージ時のみ',
     chargedAbility:'giveDrawTriggerBlue'
   },
+
+  // ============================================================
+  // BLACK CARD DATABASE (SD破壊者の黒)
+  // ============================================================
+  // CREATURES
+  'shiki': {
+    id:'shiki', name:'死を食らうもの シキ', type:'creature', color:'B',
+    cost:{C:5,B:3}, power:4, toughness:4, subtype:'人間(ネクロマンサー)', icon:'💀',
+    keywords:['還元'],
+    text:'■出た時、自分の墓地の枚数分、相手のクリーチャー1体と相手プレイヤーにダメージを割り振る\n■起動（還元）：お互いのプレイヤーは自身のクリーチャー1体を破壊する',
+    etb:'shiki_distribute', activated:'shiki_sacrifice'
+  },
+  'ren': {
+    id:'ren', name:'死を運ぶもの レン', type:'creature', color:'B',
+    cost:{B:4}, power:3, toughness:3, subtype:'人間・ゾンビ(戦士)', icon:'☠️',
+    keywords:['格闘','C6','C8','OC'],
+    text:'■格闘\n■出た時、山札の上から2枚墓地に置く。その後、相手クリーチャー1体に2ダメージ\n〈C6〉\n■アタック時、相手クリーチャー1体を選ぶ。自分の墓地2枚につき1ダメージ\n〈C8〉\n■このクリーチャーは+3/+3される\n〈OC〉\n■自分の墓地からコストを支払ってカードを実行できる',
+    kakutou:true, etb:'mill2_damage2', onAttack:'ren_c6_graveyard_damage', cx8Buff33:true, ocGraveyardCast:true
+  },
+  'yami_jouhouya': {
+    id:'yami_jouhouya', name:'闇の情報屋', type:'creature', color:'B',
+    cost:{C:3,B:1}, power:5, toughness:1, subtype:'人間(暗殺者)', icon:'🕵️',
+    keywords:['格闘'],
+    text:'■格闘\n■出た時、3ルック1(黒)',
+    kakutou:true, etb:'look3keep1black'
+  },
+  'skeleton_senshi': {
+    id:'skeleton_senshi', name:'スケルトンの戦士', type:'creature', color:'B',
+    cost:{B:1}, power:0, toughness:1, subtype:'スケルトン', icon:'🦴',
+    keywords:['接死'],
+    text:'■接死',
+    deathtouch:true
+  },
+  'itazura_obake': {
+    id:'itazura_obake', name:'いたずらお化け', type:'creature', color:'B',
+    cost:{C:1,B:2}, power:2, toughness:1, subtype:'ゴースト', icon:'👻',
+    keywords:[],
+    text:'■出た時、相手は自身の手札を1枚選んで捨てる',
+    etb:'opp_discard1'
+  },
+  'haka_zombie': {
+    id:'haka_zombie', name:'墓ゾンビ', type:'creature', color:'B',
+    cost:{C:1,B:1}, power:2, toughness:2, subtype:'人間・ゾンビ', icon:'🧟',
+    keywords:[],
+    text:'■出た時、自分の山札の上から2枚墓地に置き、相手クリーチャー1体に2ダメージ',
+    etb:'mill2_damage2'
+  },
+  'taisei_zombie': {
+    id:'taisei_zombie', name:'耐性ゾンビ', type:'creature', color:'B',
+    cost:{C:2,B:2}, power:4, toughness:3, subtype:'人間・ゾンビ', icon:'🧟‍♂️',
+    keywords:['C8'],
+    text:'■ダメージ以外でこのクリーチャーが離れる時、かわりに自身の手札を1枚捨ててもよい\n〈C8〉\n■ターン終了時、自分の墓地からマナ総量3以下のクリーチャー1体を出す',
+    replaceLeaveWithDiscard:true, endTurnEffect:'taisei_c8_reanimate3'
+  },
+  'hakaatsume_yatoware': {
+    id:'hakaatsume_yatoware', name:'墓集めの雇われ', type:'creature', color:'B',
+    cost:{B:4}, power:3, toughness:3, subtype:'人間', icon:'⛏️',
+    keywords:[],
+    text:'■ターン終了時、山札の上から2枚見て、1枚を手札に、1枚を墓地に置く',
+    endTurnEffect:'hakaatsume_look2split'
+  },
+  // SPELLS
+  'shigoeki': {
+    id:'shigoeki', name:'死越撃', type:'spell', color:'B',
+    cost:{B:4}, icon:'⚰️', keywords:['OC'],
+    text:'■相手のクリーチャー1体を破壊する\n■自分の山札の上から5枚を墓地に置き、その中から1枚を手札に加える\n〈OC〉\n■自分の墓地からマナ総量8以下の黒のクリーチャー1体を出す',
+    effect:'shigoeki'
+  },
+  'kurogeki': {
+    id:'kurogeki', name:'黒撃', type:'spell', color:'B',
+    cost:{B:2}, icon:'🖤', keywords:[],
+    text:'■相手クリーチャー1体を破壊する',
+    effect:'kurogeki'
+  },
+  // LANDS
+  'hito_numa': {
+    id:'hito_numa', name:'人住まう沼', type:'land', color:'B',
+    produces:'B', icon:'🐊',
+    text:'■起動(タップ)：黒1マナ生成\n■起動(タップ&黒3マナ)：3ルック1(黒)。チャージ時のみ',
+    chargedAbility:'look3keep1black'
+  },
+  'wasure_numa': {
+    id:'wasure_numa', name:'忘れ去られし沼', type:'land', color:'B',
+    produces:'B', icon:'🌑',
+    text:'■起動(タップ)：黒1マナ生成\n■この土地がチャージされた時、1枚引く',
+    chargeDrawTrigger:true
+  },
+  'shigen_numa': {
+    id:'shigen_numa', name:'資源豊富な沼', type:'land', color:'B',
+    produces:'B', icon:'🦇',
+    text:'■起動(タップ):黒1マナ生成\n〈OC〉\n■起動(自身の還元):黒3マナ生成。これはこの土地がチャージされている時のみ起動できる',
+    chargedAbility:'kaizouReturnBlack'
+  },
+  'kemono_numa': {
+    id:'kemono_numa', name:'獣住む沼', type:'land', color:'B',
+    produces:'B', icon:'🐍',
+    text:'■起動(タップ):黒1マナ生成\n■起動(自身の還元):相手クリーチャー1体に5ダメージ。これはこの土地がチャージされている時のみ起動できる',
+    chargedAbility:'damage5opponent'
+  },
+  'areta_haka': {
+    id:'areta_haka', name:'荒れた墓', type:'land', color:'C',
+    produces:'C', icon:'⚰️',
+    text:'■起動(タップ):1マナ生成\n■起動(タップ):自分の山札から4枚墓地に置く。チャージ時のみ',
+    chargedAbility:'mill4'
+  },
 };
 
 // Build decks
@@ -2853,6 +2959,163 @@ function drawCard(player) {
   return result;
 }
 
+// ── 黒メカニクス共通ヘルパー ──────────────────────────────────
+// 山札の上からn枚を墓地に置く（切削）。実際に置いた枚数を返す
+function millCards(player, n) {
+  const p = G.players[player];
+  let milled = 0;
+  const names = [];
+  for (let i = 0; i < n && p.deck.length > 0; i++) {
+    const cid = p.deck.shift();
+    p.graveyard.push(cid);
+    names.push(CARD_DB[cid] ? CARD_DB[cid].name : cid);
+    milled++;
+  }
+  if (milled > 0) log(`${player===0?'自分':'相手'}: 山札から${milled}枚墓地へ (${names.join('、')})`);
+  return milled;
+}
+
+// 効果による破壊（戦闘ダメージ以外）。耐性ゾンビの置換効果を考慮する
+function destroyCreatureByEffect(player, instId, sourceName) {
+  const p = G.players[player];
+  const idx = p.field.findIndex(c => c.instanceId === instId);
+  if (idx === -1) return false;
+  const inst = p.field[idx];
+  const card = CARD_DB[inst.cardId];
+  // 置換: ダメージ以外で離れる時、手札1枚を捨てて残ってもよい
+  if (card.replaceLeaveWithDiscard && p.hand.length > 0) {
+    let useReplace = false;
+    if (player === 1 && NET_MODE === 'local') {
+      useReplace = true; // AIは盤面維持を優先
+    } else {
+      useReplace = window.confirm(`${card.name}: ダメージ以外で離れます。手札を1枚捨てて場に残しますか？\n[OK] 残す（手札1枚捨て） ／ [キャンセル] 破壊される`);
+    }
+    if (useReplace) {
+      // 解決中の置換のため自動で1枚（最も安いカード）を捨てる
+      discardCards(player, 1, 'auto');
+      log(`${card.name}: 置換効果 — 手札1枚を捨てて場に残った`, 'important');
+      render();
+      return false;
+    }
+  }
+  showDestroyAnimation(instId);
+  animDestroyParticle(instId);
+  p.field.splice(idx, 1);
+  p.graveyard.push(inst.cardId);
+  if (G._battleDestroyedInstIds) G._battleDestroyedInstIds.add(instId);
+  log(`${card.name} が破壊された${sourceName ? '（'+sourceName+'）' : ''}`, 'damage');
+  return true;
+}
+
+// 手札をn枚捨てる。modeで選び方を制御（プレイヤーは選択、AIは価値の低い順）
+function discardCards(player, n, mode) {
+  const p = G.players[player];
+  for (let k = 0; k < n; k++) {
+    if (p.hand.length === 0) return;
+    if (player === 0 && NET_MODE !== 'guest' && (mode === 'choose' || mode === 'leftmost-or-choose')) {
+      // プレイヤーが選んで捨てる（モーダル）
+      _promptDiscard(player, n - k);
+      return;
+    }
+    // AIまたは自動: 最もコストの低い（=価値が低いと近似）カードを捨てる
+    let worstIdx = 0, worstCost = Infinity;
+    p.hand.forEach((cid, i) => {
+      const c = CARD_DB[cid];
+      const tc = c && c.cost ? totalCost(c.cost) : 0;
+      if (tc < worstCost) { worstCost = tc; worstIdx = i; }
+    });
+    const discarded = p.hand.splice(worstIdx, 1)[0];
+    p.graveyard.push(discarded);
+    log(`${player===0?'自分':'相手'}: ${CARD_DB[discarded]?.name||discarded} を捨てた`, 'important');
+  }
+  render();
+}
+
+// プレイヤーに手札を選んで捨てさせるモーダル
+function _promptDiscard(player, remaining) {
+  const p = G.players[player];
+  if (p.hand.length === 0) { render(); if (G._discardCont) { const c=G._discardCont; G._discardCont=null; c(); } return; }
+  G._awaitingModal = true;
+  let html = `<p style="margin-bottom:10px;">捨てる手札を1枚選んでください（残り${remaining}枚）:</p>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;" id="discard-cards"></div>`;
+  showModal('手札を捨てる', html);
+  const container = document.getElementById('discard-cards');
+  // 重複を避けつつ全カード表示
+  p.hand.forEach((cid, i) => {
+    const card = CARD_DB[cid];
+    const el = document.createElement('div');
+    el.className = `card color-${card.color||'C'}`;
+    el.style.cursor = 'pointer';
+    el.innerHTML = buildCardHTML(card);
+    el.onclick = () => {
+      const removed = p.hand.splice(i, 1)[0];
+      p.graveyard.push(removed);
+      log(`自分: ${CARD_DB[removed]?.name||removed} を捨てた`, 'important');
+      closeModal(); G._awaitingModal = false;
+      if (remaining - 1 > 0 && p.hand.length > 0) {
+        _promptDiscard(player, remaining - 1);
+      } else {
+        render(); updateHints();
+        if (G._discardCont) { const c=G._discardCont; G._discardCont=null; c(); }
+      }
+    };
+    container.appendChild(el);
+  });
+}
+
+// 墓地からクリーチャーを場に出す（リアニメイト）。条件に合うものを対象
+// filterFn(card)->bool, opts.cantAttack, opts.aiAuto
+function reanimateFromGraveyard(player, filterFn, opts) {
+  opts = opts || {};
+  const p = G.players[player];
+  if (p.field.length >= 5) { log('フィールドが満杯のためリアニメイトできません'); return false; }
+  const candidates = p.graveyard
+    .map((cid, i) => ({ cid, i, card: CARD_DB[cid] }))
+    .filter(({ card }) => card && card.type === 'creature' && (!filterFn || filterFn(card)));
+  if (candidates.length === 0) { log('墓地に対象クリーチャーがいません'); return false; }
+
+  const doReanimate = (cid, gi) => {
+    p.graveyard.splice(gi, 1);
+    const inst = newInstance(cid);
+    inst.sick = true;
+    inst.entryTurn = G.turn;
+    if (opts.cantAttack) inst.cantAttackThisGame = true;
+    _enteringInstIds.add(inst.instanceId);
+    p.field.push(inst);
+    log(`${CARD_DB[cid].name} を墓地から場に出した`, 'important');
+    fireETB(player, inst.instanceId);
+    render(); updateHints();
+  };
+
+  if (player === 1 || opts.aiAuto || NET_MODE === 'guest') {
+    // AI/自動: マナ総量が最大のものを選ぶ
+    const best = candidates.reduce((a, b) => totalCost(b.card.cost||{}) > totalCost(a.card.cost||{}) ? b : a);
+    doReanimate(best.cid, best.i);
+    return true;
+  }
+
+  // プレイヤー: モーダルで選択
+  G._awaitingModal = true;
+  let html = `<p style="margin-bottom:10px;">墓地から場に出すクリーチャーを選んでください:</p>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;" id="reanimate-cards"></div>
+    <button onclick="closeModal();G._awaitingModal=false;continueStack();" style="margin-top:8px;padding:6px 12px;">出さない</button>`;
+  showModal('リアニメイト', html);
+  const container = document.getElementById('reanimate-cards');
+  candidates.forEach(({ cid, i, card }) => {
+    const el = document.createElement('div');
+    el.className = `card color-${card.color||'C'}`;
+    el.style.cursor = 'pointer';
+    el.innerHTML = buildCardHTML(card);
+    el.onclick = () => {
+      closeModal(); G._awaitingModal = false;
+      doReanimate(cid, i);
+      continueStack();
+    };
+    container.appendChild(el);
+  });
+  return true;
+}
+
 function _fireDrawTrigger2nd(player) {
   const opp = 1 - player;
   G.players[player].field.forEach(creature => {
@@ -3157,6 +3420,14 @@ function playCardFromHand(player, handIndex) {
     }
     if (card.effect === 'hitei') {
       playHitei(player, handIndex);
+      return;
+    }
+    if (card.effect === 'kurogeki') {
+      playKurogeki(player, handIndex);
+      return;
+    }
+    if (card.effect === 'shigoeki') {
+      playShigoeki(player, handIndex);
       return;
     }
     payMana(player, card.cost);
@@ -3624,7 +3895,118 @@ function resolveETBEffect(player, instanceId) {
     log(`${card.name} 出た時: 手札を5枚に調整`);
     render(); updateHints();
     continueStack();
+  } else if (card.etb === 'look3keep1black') {
+    doLookKeepColored(player, 3, 'B');
+  } else if (card.etb === 'mill2_damage2') {
+    // 墓ゾンビ/レン: 山札の上から2枚墓地に置き、相手クリーチャー1体に2ダメージ
+    millCards(player, 2);
+    render();
+    if (G.players[opp].field.length === 0) { log(`${card.name} 出た時: 切削のみ（対象なし）`); continueStack(); return; }
+    G.targetMode = { type:'opponentCreature', sourcePlayer: player, callback:(tgt) => {
+      applyDamageToCreature(opp, tgt.instId, 2, player);
+      log(`${card.name} 出た時: 相手クリーチャーに2ダメージ`, 'damage');
+      G.targetMode = null; checkDeath(); render(); updateHints();
+      continueStack();
+    }};
+    log(`${card.name} 出た時: 2ダメージの対象を選択`);
+    render(); updateHints();
+  } else if (card.etb === 'opp_discard1') {
+    // いたずらお化け: 相手は自身の手札を1枚選んで捨てる
+    if (G.players[opp].hand.length === 0) { log(`${card.name} 出た時: 相手の手札が空`); continueStack(); return; }
+    // 相手視点で選んで捨てる（プレイヤーが相手=opp=人間ならモーダル、AIなら自動）
+    if (opp === 0 && NET_MODE !== 'guest') {
+      G._discardCont = () => continueStack();
+      _promptDiscard(0, 1);
+    } else {
+      discardCards(opp, 1, 'auto');
+      log(`${card.name} 出た時: 相手は手札を1枚捨てた`, 'important');
+      continueStack();
+    }
+  } else if (card.etb === 'shiki_distribute') {
+    // 死を食らうもの シキ: 自分の墓地の枚数分、相手クリーチャー1体と相手プレイヤーに割り振る
+    resolveShikiDistribute(player);
   }
+}
+
+// ── 死を食らうもの シキ: ダメージ割り振り ──
+function resolveShikiDistribute(player) {
+  const opp = 1 - player;
+  const total = G.players[player].graveyard.length;
+  if (total <= 0) { log('シキ 出た時: 墓地が空のためダメージなし'); continueStack(); return; }
+  const oppField = G.players[opp].field;
+
+  if (player === 1 && NET_MODE === 'local') {
+    // AI: 倒せるクリーチャーがいればクリーチャーへ最小限、残りはプレイヤーへ
+    let toCreature = 0, target = null;
+    if (oppField.length > 0) {
+      const weakest = oppField.reduce((a,b) => (getEffectiveToughness(opp,b)-b.damage) < (getEffectiveToughness(opp,a)-a.damage) ? b : a);
+      const need = getEffectiveToughness(opp, weakest) - weakest.damage;
+      if (need <= total) { toCreature = need; target = weakest; }
+    }
+    const toPlayer = total - toCreature;
+    if (target && toCreature > 0) { applyDamageToCreature(opp, target.instanceId, toCreature, player); log(`AI シキ: クリーチャーに${toCreature}ダメージ`, 'damage'); }
+    if (toPlayer > 0) { G.players[opp].life -= toPlayer; showLifeChange(opp, -toPlayer); log(`AI シキ: プレイヤーに${toPlayer}ダメージ`, 'damage'); }
+    checkDeath(); render(); updateHints(); continueStack();
+    return;
+  }
+
+  if (NET_MODE === 'guest') { continueStack(); return; }
+
+  // プレイヤー: 割り振り入力
+  if (oppField.length === 0) {
+    G.players[opp].life -= total; showLifeChange(opp, -total);
+    log(`シキ 出た時: 相手プレイヤーに${total}ダメージ（クリーチャー不在）`, 'damage');
+    checkDeath(); render(); updateHints(); continueStack();
+    return;
+  }
+  G._awaitingModal = true;
+  G._shikiTotal = total;
+  let opts = '';
+  for (let i = 0; i <= total; i++) {
+    opts += `<option value="${i}">${i}</option>`;
+  }
+  const html = `
+    <p style="margin-bottom:10px;">合計 <b>${total}</b> ダメージを割り振ります。</p>
+    <p style="margin-bottom:6px;">相手クリーチャーへ:
+      <select id="shiki-creature-amt" onchange="shikiUpdatePlayerAmt()">${opts}</select> ダメージ</p>
+    <div id="shiki-creature-pick" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px;"></div>
+    <p style="margin-bottom:10px;">相手プレイヤーへ: <span id="shiki-player-amt">${total}</span> ダメージ</p>
+    <button onclick="shikiConfirm(${player})" style="width:100%;padding:8px;background:#3a1a3a;border:1px solid #884488;color:#fff;border-radius:6px;cursor:pointer;">確定</button>`;
+  showModal('シキ: ダメージ割り振り', html);
+  shikiRenderTargets(player);
+}
+function shikiUpdatePlayerAmt() {
+  const cAmt = parseInt(document.getElementById('shiki-creature-amt').value) || 0;
+  document.getElementById('shiki-player-amt').textContent = (G._shikiTotal - cAmt);
+  shikiRenderTargets(0);
+}
+function shikiRenderTargets(player) {
+  const opp = 1 - player;
+  const cAmt = parseInt((document.getElementById('shiki-creature-amt')||{}).value) || 0;
+  const box = document.getElementById('shiki-creature-pick');
+  if (!box) return;
+  box.innerHTML = '';
+  if (cAmt <= 0) { box.innerHTML = '<span style="color:#888;font-size:11px;">（クリーチャーへの割り振りなし）</span>'; G._shikiTarget = null; return; }
+  G.players[opp].field.forEach(c => {
+    const card = CARD_DB[c.cardId];
+    const el = document.createElement('div');
+    el.className = `card color-${card.color||'C'}`;
+    el.style.cssText = 'cursor:pointer;' + (G._shikiTarget === c.instanceId ? 'outline:3px solid #ff66ff;' : '');
+    el.innerHTML = buildCardHTML(card, c, opp);
+    el.onclick = () => { G._shikiTarget = c.instanceId; shikiRenderTargets(player); };
+    box.appendChild(el);
+  });
+}
+function shikiConfirm(player) {
+  const opp = 1 - player;
+  const cAmt = parseInt(document.getElementById('shiki-creature-amt').value) || 0;
+  const pAmt = G._shikiTotal - cAmt;
+  if (cAmt > 0 && !G._shikiTarget) { alert('クリーチャーへ割り振る対象を選んでください'); return; }
+  closeModal(); G._awaitingModal = false;
+  if (cAmt > 0 && G._shikiTarget) { applyDamageToCreature(opp, G._shikiTarget, cAmt, player); log(`シキ: クリーチャーに${cAmt}ダメージ`, 'damage'); }
+  if (pAmt > 0) { G.players[opp].life -= pAmt; showLifeChange(opp, -pAmt); log(`シキ: 相手プレイヤーに${pAmt}ダメージ`, 'damage'); }
+  G._shikiTarget = null;
+  checkDeath(); render(); updateHints(); continueStack();
 }
 
 function bastianChooseETB(instanceId, hasCX6Override, playerArg) {
@@ -4060,7 +4442,7 @@ function checkCreatureDeath(player, instId, sourcePlayer) {
   const card = CARD_DB[c.cardId];
   const permBuff = getPermanentBuff(c.instanceId);
   const toughness = card.toughness + (c.tempToughness||0) + permBuff.toughness + getCXBonus(player, c).toughness;
-  const dead = c.damage >= toughness;
+  const dead = c.damage >= toughness || (c.damage > 0 && c._deathtouched);
   if (dead && c.noDamageKill) {
     // 介善■2 置き換え効果: 離れる代わりに現在のP/Tを入れ替える（ダメージは引き継ぐ）
     c.noDamageKill = false;
@@ -4882,6 +5264,9 @@ function resolveSingleCombat(atkPlayer, atkInstId, kakutouTargetId, blockerInstI
       const tgtPow = getEffectivePower(opp, tgtInst);
       tgtInst.damage += atkPow;
       if (!atkInvuln) atkInst.damage += tgtPow;
+      // 接死
+      if (atkCard.deathtouch && atkPow > 0) tgtInst._deathtouched = true;
+      if (CARD_DB[tgtInst.cardId].deathtouch && tgtPow > 0 && !atkInvuln) atkInst._deathtouched = true;
       log(`${atkCard.name} 格闘 → ${CARD_DB[tgtInst.cardId].name}: ${atkPow}ダメージ${atkInvuln ? '（被ダメージ無効）' : '交換'}`, 'damage');
       checkCreatureDeath(opp, kakutouTargetId, atkPlayer);
       checkCreatureDeath(atkPlayer, atkInstId, opp);
@@ -4894,6 +5279,9 @@ function resolveSingleCombat(atkPlayer, atkInstId, kakutouTargetId, blockerInstI
       const blkPow = getEffectivePower(opp, blkInst);
       blkInst.damage += atkPow;
       if (!atkInvuln) atkInst.damage += blkPow;
+      // 接死
+      if (atkCard.deathtouch && atkPow > 0) blkInst._deathtouched = true;
+      if (blkCard.deathtouch && blkPow > 0 && !atkInvuln) atkInst._deathtouched = true;
       log(`${atkCard.name} vs ${blkCard.name}: ${atkPow}/${atkInvuln ? 0 : blkPow}ダメージ交換`, 'damage');
       checkCreatureDeath(opp, blockerInstId, atkPlayer);
       checkCreatureDeath(atkPlayer, atkInstId, opp);
@@ -5080,7 +5468,56 @@ function endTurnAfterMainPhase() {
   openPriorityWindow(nonTurn, () => endTurn(), 'ターン終了時');
 }
 
+// ターン終了時のクリーチャー誘発（自分の終了ステップ）
+// 安定性のため同期的に自動解決する
+function fireEndTurnEffects(player) {
+  const p = G.players[player];
+  // フィールドのスナップショット（処理中の変化に影響されないよう）
+  [...p.field].forEach(c => {
+    const card = CARD_DB[c.cardId];
+    if (!card || !card.endTurnEffect) return;
+    // 場にまだ存在するか確認
+    if (!p.field.find(x => x.instanceId === c.instanceId)) return;
+
+    if (card.endTurnEffect === 'hakaatsume_look2split') {
+      // 山札の上から2枚見て、1枚手札・1枚墓地（自動: 高コストを手札へ）
+      if (p.deck.length === 0) return;
+      const a = p.deck.shift();
+      const b = p.deck.length > 0 ? p.deck.shift() : null;
+      if (b === null) {
+        addCardToHand(player, a);
+        log(`${card.name} 終了時: ${CARD_DB[a]?.name}を手札に（山札残り0）`);
+      } else {
+        const ca = totalCost(CARD_DB[a]?.cost || {});
+        const cb = totalCost(CARD_DB[b]?.cost || {});
+        const keep = ca >= cb ? a : b;
+        const mill = ca >= cb ? b : a;
+        addCardToHand(player, keep);
+        p.graveyard.push(mill);
+        log(`${card.name} 終了時: ${CARD_DB[keep]?.name}を手札・${CARD_DB[mill]?.name}を墓地へ`);
+      }
+    } else if (card.endTurnEffect === 'taisei_c8_reanimate3') {
+      // C8: 墓地からマナ総量3以下のクリーチャー1体を出す（自動: 最高コスト）
+      if (getCXValue(player) < 8) return;
+      if (p.field.length >= 5) return;
+      const filter = cc => cc.type === 'creature' && totalCost(cc.cost || {}) <= 3;
+      const cands = p.graveyard.map((cid,i)=>({cid,i,card:CARD_DB[cid]})).filter(({card})=>card&&filter(card));
+      if (cands.length === 0) return;
+      const best = cands.reduce((x,y)=> totalCost(y.card.cost||{}) > totalCost(x.card.cost||{}) ? y : x);
+      p.graveyard.splice(best.i, 1);
+      const inst = newInstance(best.cid); inst.sick = true; inst.entryTurn = G.turn;
+      _enteringInstIds.add(inst.instanceId);
+      p.field.push(inst);
+      // 注: ターン終了処理中はスタックを解決しないため、リアニメイト時はETBを誘発しない
+      log(`${card.name} C8終了時: ${best.card.name}を墓地から場に出した（ETBなし）`, 'important');
+    }
+  });
+  render();
+}
+
 function endTurn() {
+  // ターン終了時のクリーチャー誘発（終了プレイヤーの分）
+  fireEndTurnEffects(G.activePlayer);
   // 中央にターン終了を表示
   const _endingP = G.activePlayer;
   const _endLabel = NET_MODE === 'hotseat' ? (_endingP === 0 ? 'P1' : 'P2')
@@ -5515,6 +5952,54 @@ function activateChargedLand(player, instId) {
     });
     renderStack();
     openPriorityWindow(opp, null, `${landCard.name} 起動`);
+  } else if (landCard.chargedAbility === 'look3keep1black') {
+    // 人住まう沼: タップ + 黒3 → 3ルック1(黒)
+    if (land.tapped) { log(`${landCard.name}: タップ済みのため起動できません`); return; }
+    if (!canAfford(player, {B:3})) { log('マナ不足 (黒3)'); return; }
+    land.tapped = true;
+    payMana(player, {B:3});
+    log(`${landCard.name}: 3ルック1(黒) → スタックに積む`);
+    G.stack.push({
+      name: `${landCard.name} 起動(3ルック1)`,
+      icon: landCard.icon || '✨',
+      owner: player,
+      resolve: () => { doLookKeepColored(player, 3, 'B'); render(); updateHints(); }
+    });
+    renderStack();
+    openPriorityWindow(opp, null, `${landCard.name} 起動`);
+  } else if (landCard.chargedAbility === 'kaizouReturnBlack') {
+    // 資源豊富な沼: OC + tap → 黒3生成、土地デッキ底へ
+    if (!isOCActive(player)) { log('OC未達成'); return; }
+    if (land.tapped) { log('タップ済み'); return; }
+    land.tapped = true;
+    log(`${landCard.name} 還元: スタックに積む`);
+    G.stack.push({
+      name: `${landCard.name} 起動(還元BBB)`,
+      icon: landCard.icon || '✨',
+      owner: player,
+      resolve: () => {
+        p.mana.B = (p.mana.B||0)+3;
+        const idx = p.lands.findIndex(l=>l.instanceId===instId);
+        if (idx !== -1) { p.lands.splice(idx,1); p.landDeck.push(land.cardId); }
+        log(`${landCard.name} 還元: 黒3追加、土地デッキ底へ`, 'heal');
+        render(); updateHints();
+      }
+    });
+    renderStack();
+    openPriorityWindow(opp, null, `${landCard.name} 還元起動`);
+  } else if (landCard.chargedAbility === 'mill4') {
+    // 荒れた墓: タップ → 自分の山札から4枚墓地に置く
+    if (land.tapped) { log('タップ済み'); return; }
+    land.tapped = true;
+    log(`${landCard.name}: 切削4 → スタックに積む`);
+    G.stack.push({
+      name: `${landCard.name} 起動(切削4)`,
+      icon: landCard.icon || '⚰️',
+      owner: player,
+      resolve: () => { millCards(player, 4); render(); updateHints(); continueStack(); }
+    });
+    renderStack();
+    openPriorityWindow(opp, null, `${landCard.name} 起動`);
   }
 }
 
@@ -5627,6 +6112,9 @@ function resolveCombat() {
           const tgtPow = getEffectivePower(1, tgtInst);
           tgtInst.damage += atkPow;
           attacker.damage += tgtPow;
+          // 接死: ダメージ>0なら相手を破壊フラグ
+          if (atkCard.deathtouch && atkPow > 0) tgtInst._deathtouched = true;
+          if (CARD_DB[tgtInst.cardId].deathtouch && tgtPow > 0) attacker._deathtouched = true;
           log(`${atkCard.name} (格闘) が ${CARD_DB[tgtInst.cardId].name} に${atkPow}ダメージ`, 'damage');
           checkCreatureDeath(1, tgtId, 0);
           checkCreatureDeath(0, atkId, 1);
@@ -5645,6 +6133,10 @@ function resolveCombat() {
 
         blocker.damage += atkPow;
         attacker.damage += blkPow;
+
+        // 接死: ダメージ>0で相手を破壊フラグ
+        if (atkCard.deathtouch && atkPow > 0) blocker._deathtouched = true;
+        if (blkCard.deathtouch && blkPow > 0) attacker._deathtouched = true;
 
         const blockerDied = checkCreatureDeath(1, blkId, 0);
         G.combatBlockersAlive[blkId] = !blockerDied;
@@ -5811,6 +6303,23 @@ function fireAttackTriggers(player, atkInstId) {
     dmgToCreature('攻撃時', 2);
   } else if (card.onAttack === 'damage4creature') {
     dmgToCreature('攻撃時', 4);
+  } else if (card.onAttack === 'ren_c6_graveyard_damage') {
+    // レン C6: アタック時、相手クリーチャー1体に「自分の墓地2枚につき1ダメージ」
+    if (getCXValue(player) >= 6) {
+      const amount = Math.floor(p.graveyard.length / 2);
+      triggerEffect(`${card.name} C6攻撃時`, card.icon || '☠️', player, () => {
+        if (amount <= 0) { log(`${card.name} C6攻撃時: 墓地が少なくダメージ0`); render(); return; }
+        if (G.players[opp].field.length === 0) { log(`${card.name} C6攻撃時: 対象なし`); return; }
+        G.targetMode = { type:'opponentCreature', sourcePlayer: player, callback:(tgt) => {
+          G.targetMode = null;
+          applyDamageToCreature(opp, tgt.instId, amount, player);
+          log(`${card.name} C6攻撃時: 墓地${p.graveyard.length}枚 → ${amount}ダメージ`, 'damage');
+          checkDeath(); render(); updateHints(); continueStack();
+        }};
+        log(`${card.name} C6攻撃時: ${amount}ダメージの対象を選択`);
+        render(); updateHints();
+      });
+    }
   } else if (card.onAttack === 'ayumuC7') {
     if (getCXValue(player) >= 7) {
       // 1枚引く → その後、相手クリーチャー1体に5ダメージ（同一誘発内で順次処理）
@@ -7292,6 +7801,21 @@ function handleFieldClick(player, instId) {
       return;
     }
 
+    // シキ: 攻撃 or 還元(お互い自軍1体破壊) を選択
+    if (card.id === 'shiki') {
+      const canAtk = canCreatureAttack(actP, inst);
+      if (NET_MODE === 'host' && actP === 1) { if (canAtk) startSingleAttack(actP, instId); return; }
+      const untappedLands = G.players[actP].lands.filter(l => !l.tapped);
+      const canKaizou = untappedLands.length > 0 && G.players[actP].field.length > 0;
+      const html = `
+        <p style="margin-bottom:10px;">${card.name} の使用方法を選択:</p>
+        <button onclick="closeModal(); startSingleAttack(${actP},${instId});" style="width:100%;margin-bottom:8px;padding:8px;${canAtk?'':'opacity:0.4;cursor:not-allowed;'}" ${canAtk?'':'disabled'}>⚔️ 攻撃する</button>
+        <button onclick="closeModal(); shikiKaizou(${instId});" style="width:100%;padding:8px;${canKaizou?'':'opacity:0.4;cursor:not-allowed;'}" ${canKaizou?'':'disabled'}>♻️ 還元: お互い自軍クリーチャー1体破壊</button>
+      `;
+      showModal(card.name, html);
+      return;
+    }
+
     // メグル: 攻撃 or 還元(自分のクリーチャー+1/+1) を選択
     if (card.id === 'meguru') {
       const canAtk = canCreatureAttack(actP, inst);
@@ -7369,7 +7893,9 @@ function handleLandClick(player, instId) {
   if (land.chargeCard && landCard.chargedAbility) {
     if (!land.tapped) {
       const canActivate = (landCard.chargedAbility !== 'look3keep1white' || canAfford(lp, {W:3}))
-        && (landCard.chargedAbility !== 'look3keep1red' || canAfford(lp, {R:3}));
+        && (landCard.chargedAbility !== 'look3keep1red' || canAfford(lp, {R:3}))
+        && (landCard.chargedAbility !== 'look3keep1black' || canAfford(lp, {B:3}))
+        && ((landCard.chargedAbility !== 'kaizouReturnBlack') || isOCActive(lp));
       const abilityLabel = landCard.text.split('\n').find(l => l.includes('起動') && l.includes('チャージ')) || landCard.text.split('\n')[1] || '特殊能力';
       const html = `
         <p style="margin-bottom:10px;">${landCard.name} の使用方法を選択:</p>
@@ -7509,6 +8035,71 @@ function meguruKaizou(instId) {
   render(); updateHints();
 }
 
+// シキ 還元: お互いのプレイヤーは自身のクリーチャー1体を破壊する
+function shikiKaizou(instId) {
+  const actP = NET_MODE === 'local' ? 0 : G.activePlayer;
+  const p = G.players[actP];
+  const untappedLands = p.lands.filter(l => !l.tapped);
+  if (untappedLands.length === 0) { log('シキ 還元: アンタップ状態の土地がありません'); return; }
+  if (p.field.length === 0) { log('シキ 還元: 自分のクリーチャーがいません'); return; }
+  G.targetMode = { type:'ownLand', owner:actP, callback:(landInstId) => {
+    const lIdx = p.lands.findIndex(l => l.instanceId === landInstId);
+    if (lIdx === -1 || p.lands[lIdx].tapped) { log('アンタップ状態の土地を選んでください'); return; }
+    const returnedLand = p.lands.splice(lIdx, 1)[0];
+    p.landDeck.push(returnedLand.cardId);
+    log(`還元コスト支払い: ${CARD_DB[returnedLand.cardId].name} を土地デッキ底へ`);
+    G.targetMode = null;
+    G.stack.push({
+      name: 'シキ 起動（還元）',
+      icon: '💀',
+      owner: actP,
+      resolve: () => { shikiSacrificeResolve(actP, instId); }
+    });
+    renderStack();
+    openPriorityWindow(1 - actP, null, 'シキ 還元起動');
+  }};
+  log('シキ 還元: コスト — アンタップ状態の土地を選択');
+  render(); updateHints();
+}
+
+// シキ 還元の解決: 起動側プレイヤー→相手プレイヤーの順で各自1体破壊
+function shikiSacrificeResolve(actP, shikiInstId) {
+  const opp = 1 - actP;
+  // 相手(AI/または人間)が自軍1体を破壊
+  const sacForPlayer = (pl, cont) => {
+    const pf = G.players[pl];
+    if (pf.field.length === 0) { log(`${pl===0?'自分':'相手'}: 破壊するクリーチャーなし`); cont(); return; }
+    if (pl === 1 || (NET_MODE === 'guest')) {
+      // AI: 最も価値の低い自軍クリーチャーを破壊
+      const worst = pf.field.reduce((a,b) => getEffectivePower(pl,b) < getEffectivePower(pl,a) ? b : a);
+      destroyCreatureByEffect(pl, worst.instanceId, 'シキ 還元');
+      checkDeath(); render(); updateHints(); cont(); return;
+    }
+    // プレイヤー: 選択モーダル
+    G._awaitingModal = true;
+    let html = `<p style="margin-bottom:10px;">シキ 還元: 破壊する自分のクリーチャーを1体選んでください:</p>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;" id="shiki-sac-cards"></div>`;
+    showModal('シキ 還元: 生け贄', html);
+    const box = document.getElementById('shiki-sac-cards');
+    pf.field.forEach(c => {
+      const cd = CARD_DB[c.cardId];
+      const el = document.createElement('div');
+      el.className = `card color-${cd.color||'C'}`; el.style.cursor = 'pointer';
+      el.innerHTML = buildCardHTML(cd, c, pl);
+      el.onclick = () => {
+        closeModal(); G._awaitingModal = false;
+        destroyCreatureByEffect(pl, c.instanceId, 'シキ 還元');
+        checkDeath(); render(); updateHints(); cont();
+      };
+      box.appendChild(el);
+    });
+  };
+  // 起動側 → 相手 の順に処理 → continueStack
+  sacForPlayer(actP, () => {
+    sacForPlayer(opp, () => { render(); updateHints(); continueStack(); });
+  });
+}
+
 // ============================================================
 // 青デッキ スペル
 // ============================================================
@@ -7615,6 +8206,166 @@ function playHitei(player, handIndex) {
   }});
   renderStack(); render(); updateHints();
   openPriorityWindow(1-player, G.priorityContinuation, `${card.name}に対応`);
+}
+
+// ── 黒撃: 相手クリーチャー1体を破壊 ──
+function playKurogeki(player, handIndex) {
+  const p = G.players[player];
+  const cardId = p.hand[handIndex];
+  const card = CARD_DB[cardId];
+  if (!canAfford(player, card.cost)) { log('マナ不足'); return; }
+  const opp = 1 - player;
+  if (G.players[opp].field.length === 0) { log(`${card.name}: 対象クリーチャーなし`); return; }
+  payMana(player, card.cost);
+  p.hand.splice(handIndex, 1);
+  log(`${card.name} をスタックに積んだ`, 'important');
+  G.stack.push({ name: card.name, icon: card.icon||'🖤', owner: player, resolve: () => {
+    p.graveyard.push(cardId);
+    const oppField = G.players[opp].field;
+    if (oppField.length === 0) { log(`${card.name}: 対象なし`); render(); updateHints(); continueStack(); return; }
+    if (player === 1) {
+      const tgt = oppField.reduce((a,b) => getEffectivePower(opp,b) > getEffectivePower(opp,a) ? b : a);
+      destroyCreatureByEffect(opp, tgt.instanceId, card.name);
+      checkDeath(); render(); updateHints(); continueStack(); return;
+    }
+    G.targetMode = { type:'opponentCreature', sourcePlayer:player, callback:(tgt) => {
+      G.targetMode = null;
+      destroyCreatureByEffect(opp, tgt.instId, card.name);
+      checkDeath(); render(); updateHints(); continueStack();
+    }};
+    log(`${card.name}: 破壊する対象を選択`); render(); updateHints();
+  }});
+  renderStack(); render(); updateHints();
+  openPriorityWindow(1-player, G.priorityContinuation, `${card.name}に対応`);
+}
+
+// ── 死越撃: 破壊 → 山札5枚墓地→1枚回収 → 〈OC〉墓地から黒クリーチャー出す ──
+function playShigoeki(player, handIndex) {
+  const p = G.players[player];
+  const cardId = p.hand[handIndex];
+  const card = CARD_DB[cardId];
+  if (!canAfford(player, card.cost)) { log('マナ不足'); return; }
+  payMana(player, card.cost);
+  p.hand.splice(handIndex, 1);
+  log(`${card.name} をスタックに積んだ`, 'important');
+  const opp = 1 - player;
+  const ocAtCast = isOCActive(player);
+  G.stack.push({ name: card.name, icon: card.icon||'⚰️', owner: player, resolve: () => {
+    p.graveyard.push(cardId);
+    // ■1: 相手クリーチャー1体破壊 → ■2: 5枚墓地+1回収 → OC: リアニメイト の順で連続処理
+    const step2 = () => {
+      // 山札の上から5枚墓地に置く（このカード自身は既に墓地）
+      const milled = [];
+      for (let i = 0; i < 5 && p.deck.length > 0; i++) { milled.push(p.deck.shift()); }
+      milled.forEach(c => p.graveyard.push(c));
+      log(`${card.name}: 山札から${milled.length}枚墓地へ`);
+      const step3 = () => {
+        if (ocAtCast) shigoekiOCReanimate(player, () => { render(); updateHints(); continueStack(); });
+        else { render(); updateHints(); continueStack(); }
+      };
+      // 墓地に置いた5枚から1枚を手札に回収
+      if (milled.length === 0) { step3(); return; }
+      if (player === 1) {
+        // AI: 最もコストの高いカードを回収（≒強い）
+        const best = milled.reduce((a,b) => totalCost(CARD_DB[b]?.cost||{}) > totalCost(CARD_DB[a]?.cost||{}) ? b : a);
+        const gi = p.graveyard.lastIndexOf(best);
+        if (gi !== -1) { p.graveyard.splice(gi,1); addCardToHand(1, best); log(`AI ${card.name}: ${CARD_DB[best]?.name}を回収`); }
+        step3(); return;
+      }
+      shigoekiPickRecover(player, milled, step3);
+    };
+    if (G.players[opp].field.length === 0) { log(`${card.name}: 破壊対象なし`); step2(); return; }
+    if (player === 1) {
+      const tgt = G.players[opp].field.reduce((a,b) => getEffectivePower(opp,b) > getEffectivePower(opp,a) ? b : a);
+      destroyCreatureByEffect(opp, tgt.instanceId, card.name);
+      checkDeath(); render(); step2(); return;
+    }
+    G.targetMode = { type:'opponentCreature', sourcePlayer:player, callback:(tgt) => {
+      G.targetMode = null;
+      destroyCreatureByEffect(opp, tgt.instId, card.name);
+      checkDeath(); render(); updateHints();
+      step2();
+    }};
+    log(`${card.name}: 破壊する対象を選択`); render(); updateHints();
+  }});
+  renderStack(); render(); updateHints();
+  openPriorityWindow(1-player, G.priorityContinuation, `${card.name}に対応`);
+}
+
+// 死越撃: 墓地に置いた5枚から1枚を手札に加える（プレイヤー選択）
+function shigoekiPickRecover(player, milledIds, cont) {
+  const p = G.players[player];
+  const uniqueMilled = milledIds.filter(cid => p.graveyard.includes(cid));
+  if (uniqueMilled.length === 0) { cont(); return; }
+  G._awaitingModal = true;
+  let html = `<p style="margin-bottom:10px;">墓地に置いた中から1枚を手札に加えます:</p>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;" id="shigoeki-cards"></div>
+    <button onclick="closeModal();G._awaitingModal=false;(window._shigoekiCont&&window._shigoekiCont())" style="margin-top:8px;padding:6px 12px;">加えない</button>`;
+  showModal('死越撃: 回収', html);
+  window._shigoekiCont = cont;
+  const container = document.getElementById('shigoeki-cards');
+  const seen = new Set();
+  milledIds.forEach(cid => {
+    const gi = p.graveyard.indexOf(cid);
+    if (gi === -1) return;
+    const card = CARD_DB[cid];
+    const el = document.createElement('div');
+    el.className = `card color-${card.color||'C'}`;
+    el.style.cursor = 'pointer';
+    el.innerHTML = buildCardHTML(card);
+    el.onclick = () => {
+      const gidx = p.graveyard.indexOf(cid);
+      if (gidx !== -1) { p.graveyard.splice(gidx,1); addCardToHand(player, cid); log(`${card.name}を手札に加えた`); }
+      closeModal(); G._awaitingModal = false;
+      if (window._shigoekiCont) window._shigoekiCont();
+    };
+    container.appendChild(el);
+  });
+}
+
+// 死越撃 OC: 墓地からマナ総量8以下の黒クリーチャー1体を出す
+function shigoekiOCReanimate(player, cont) {
+  const filterFn = c => c.color === 'B' && totalCost(c.cost||{}) <= 8;
+  const p = G.players[player];
+  const has = p.graveyard.some(cid => { const c=CARD_DB[cid]; return c && c.type==='creature' && filterFn(c); });
+  if (!has) { log('死越撃 OC: 墓地に対象の黒クリーチャーなし'); cont(); return; }
+  if (player === 1) { reanimateFromGraveyard(1, filterFn, {aiAuto:true}); cont(); return; }
+  // プレイヤー: reanimateFromGraveyardはcontinueStackを呼ぶので、ここではcontを直接渡せない。
+  // 専用フローで処理
+  _shigoekiOCPlayerPick(player, filterFn, cont);
+}
+function _shigoekiOCPlayerPick(player, filterFn, cont) {
+  const p = G.players[player];
+  if (p.field.length >= 5) { log('フィールド満杯'); cont(); return; }
+  const candidates = p.graveyard.map((cid,i)=>({cid,i,card:CARD_DB[cid]})).filter(({card})=>card&&card.type==='creature'&&filterFn(card));
+  if (candidates.length === 0) { cont(); return; }
+  G._awaitingModal = true;
+  let html = `<p style="margin-bottom:10px;">〈OC〉墓地から出す黒クリーチャー(総量8以下)を選んでください:</p>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;" id="shigoeki-oc-cards"></div>
+    <button onclick="closeModal();G._awaitingModal=false;(window._shigoekiOCCont&&window._shigoekiOCCont())" style="margin-top:8px;padding:6px 12px;">出さない</button>`;
+  showModal('死越撃 〈OC〉リアニメイト', html);
+  window._shigoekiOCCont = cont;
+  const container = document.getElementById('shigoeki-oc-cards');
+  candidates.forEach(({cid,card}) => {
+    const el = document.createElement('div');
+    el.className = `card color-${card.color||'C'}`;
+    el.style.cursor = 'pointer';
+    el.innerHTML = buildCardHTML(card);
+    el.onclick = () => {
+      const gi = p.graveyard.indexOf(cid);
+      if (gi !== -1) {
+        p.graveyard.splice(gi,1);
+        const inst = newInstance(cid); inst.sick = true; inst.entryTurn = G.turn;
+        _enteringInstIds.add(inst.instanceId);
+        p.field.push(inst);
+        log(`死越撃 OC: ${card.name}を墓地から場に出した`, 'important');
+        fireETB(player, inst.instanceId);
+      }
+      closeModal(); G._awaitingModal = false;
+      if (window._shigoekiOCCont) window._shigoekiOCCont();
+    };
+    container.appendChild(el);
+  });
 }
 
 function playChishikiNoSeiri(player, handIndex) {
@@ -7793,6 +8544,59 @@ function updateHints() {
     btnPass.textContent = '優先権パス';
     btnPass.disabled = G.stack.length === 0;
   }
+
+  // レン 〈OC〉墓地から実行ボタン: 自分がレンを場に持ち、OC達成、メインフェイズ時のみ表示
+  const btnRen = document.getElementById('btn-ren-gy');
+  if (btnRen) {
+    const me = NET_MODE === 'local' ? 0 : NET_MY_IDX;
+    const hasRenOC = G.players[me] && G.players[me].field.some(c => CARD_DB[c.cardId] && CARD_DB[c.cardId].ocGraveyardCast) && isOCActive(me);
+    const canShow = hasRenOC && G.activePlayer === me && G.phase === 'main' && !G.awaitingPriority && G.stack.length === 0 && !G.targetMode && !G._awaitingModal;
+    btnRen.style.display = canShow ? '' : 'none';
+  }
+}
+
+// レン 〈OC〉: 自分の墓地からコストを支払ってクリーチャーを場に出す（呪文の墓地実行は未対応）
+function renGraveyardCast() {
+  const me = NET_MODE === 'local' ? 0 : NET_MY_IDX;
+  const p = G.players[me];
+  if (p.field.length >= 5) { log('フィールドが満杯です'); return; }
+  // 支払い可能なクリーチャーを抽出
+  const cands = p.graveyard
+    .map((cid, i) => ({ cid, i, card: CARD_DB[cid] }))
+    .filter(({ card }) => card && card.type === 'creature' && canAfford(me, card.cost));
+  if (cands.length === 0) { log('レン 墓地実行: コストを支払える墓地のクリーチャーがありません'); return; }
+  G._awaitingModal = true;
+  let html = `<p style="margin-bottom:6px;">レン〈OC〉: 墓地からコストを支払って実行するクリーチャーを選択:</p>
+    <p style="margin-bottom:10px;font-size:11px;color:#888;">（呪文の墓地実行は未対応）</p>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;" id="ren-gy-cards"></div>
+    <button onclick="closeModal();G._awaitingModal=false;updateHints();" style="margin-top:8px;padding:6px 12px;">やめる</button>`;
+  showModal('レン 〈OC〉墓地実行', html);
+  const box = document.getElementById('ren-gy-cards');
+  const seen = new Set();
+  cands.forEach(({ cid, card }) => {
+    if (seen.has(cid)) return; seen.add(cid);
+    const el = document.createElement('div');
+    el.className = `card color-${card.color||'C'}`; el.style.cursor = 'pointer';
+    el.innerHTML = buildCardHTML(card);
+    el.onclick = () => {
+      const gi = p.graveyard.indexOf(cid);
+      if (gi === -1 || !canAfford(me, card.cost)) { return; }
+      payMana(me, card.cost);
+      p.graveyard.splice(gi, 1);
+      const inst = newInstance(cid); inst.sick = true; inst.entryTurn = G.turn;
+      _enteringInstIds.add(inst.instanceId);
+      p.field.push(inst);
+      log(`レン 〈OC〉: ${card.name}を墓地からコストを支払って場に出した`, 'important');
+      closeModal(); G._awaitingModal = false;
+      fireETB(me, inst.instanceId);
+      render(); updateHints();
+      // ETBがスタックに乗る場合は解決
+      if (G.stack.length > 0) {
+        openPriorityWindow(1 - me, null, `レン墓地実行 ${card.name} の誘発`);
+      }
+    };
+    box.appendChild(el);
+  });
 }
 
 // ============================================================
@@ -7829,6 +8633,7 @@ const KEYWORD_DEFS = {
   '飛行': '飛行を持たないクリーチャーにブロックされない',
   '還元': '土地を土地デッキの底に戻すことをコストに起動する能力',
   '速攻': '召喚酔いしない（場に出たターンから攻撃できる）',
+  '接死': 'このクリーチャーが与えた戦闘ダメージが1点以上なら、そのクリーチャーを破壊する',
   '2回攻撃': 'このターン最初の攻撃時にアンタップし、もう一度攻撃できる',
   'Quick': '相手ターン・戦闘中でも使用できる',
   'C6': 'C値が6以上のとき効果が発動',
@@ -11106,6 +11911,9 @@ const DB_RED_LAND = ['hito_yama','wasure_yama','shigen_yama','kemono_yama','daik
 const DB_BLUE_MAIN = ['omnieru','aaka','chishiki_maju','maju_gakusha','bu_in','nexia',
   'ao_geki','chishiki_no_seiri','mizu_geki','hitei'];
 const DB_BLUE_LAND = ['hito_shima','wasure_shima','shigen_shima','kemono_shima','gakuin'];
+const DB_BLACK_MAIN = ['shiki','ren','yami_jouhouya','skeleton_senshi','itazura_obake',
+  'haka_zombie','taisei_zombie','hakaatsume_yatoware','shigoeki','kurogeki'];
+const DB_BLACK_LAND = ['hito_numa','wasure_numa','shigen_numa','kemono_numa','areta_haka'];
 
 function dbRenderCollection() {
   const el = document.getElementById('db-collection-list');
@@ -11147,6 +11955,7 @@ function dbRenderCollection() {
     <button onclick="dbLoadPreset('white')" style="flex:1;padding:6px;background:#2a2a3a;border:1px solid #888844;color:#ffffcc;border-radius:6px;cursor:pointer;font-size:11px;">⚪ 白デッキ</button>
     <button onclick="dbLoadPreset('red')" style="flex:1;padding:6px;background:#3a1a1a;border:1px solid #cc4422;color:#ffcccc;border-radius:6px;cursor:pointer;font-size:11px;">🔴 赤デッキ</button>
     <button onclick="dbLoadPreset('blue')" style="flex:1;padding:6px;background:#1a1a3a;border:1px solid #2244cc;color:#aaccff;border-radius:6px;cursor:pointer;font-size:11px;">🔵 青デッキ</button>
+    <button onclick="dbLoadPreset('black')" style="flex:1;padding:6px;background:#1a0a1a;border:1px solid #884488;color:#ddaadd;border-radius:6px;cursor:pointer;font-size:11px;">⚫ 黒デッキ</button>
   </div>`;
   html += '<div class="db-section-label">⚪ 白 — クリーチャー / スペル</div>';
   DB_WHITE_MAIN.forEach(id => { html += renderMainRow(id); });
@@ -11160,14 +11969,18 @@ function dbRenderCollection() {
   DB_BLUE_MAIN.forEach(id => { html += renderMainRow(id); });
   html += '<div class="db-section-label">🔵 青 — 土地</div>';
   DB_BLUE_LAND.forEach(id => { html += renderLandRow(id); });
+  html += '<div class="db-section-label">⚫ 黒 — クリーチャー / スペル</div>';
+  DB_BLACK_MAIN.forEach(id => { html += renderMainRow(id); });
+  html += '<div class="db-section-label">⚫ 黒 — 土地</div>';
+  DB_BLACK_LAND.forEach(id => { html += renderLandRow(id); });
 
   el.innerHTML = html;
 }
 
 // プリセットデッキ読込（現在のスロットを上書き）
 function dbLoadPreset(color) {
-  const mains = color === 'red' ? DB_RED_MAIN : color === 'blue' ? DB_BLUE_MAIN : DB_WHITE_MAIN;
-  const lands = color === 'red' ? DB_RED_LAND : color === 'blue' ? DB_BLUE_LAND : DB_WHITE_LAND;
+  const mains = color === 'red' ? DB_RED_MAIN : color === 'blue' ? DB_BLUE_MAIN : color === 'black' ? DB_BLACK_MAIN : DB_WHITE_MAIN;
+  const lands = color === 'red' ? DB_RED_LAND : color === 'blue' ? DB_BLUE_LAND : color === 'black' ? DB_BLACK_LAND : DB_WHITE_LAND;
   const main = [];
   mains.forEach(id => { for (let i=0;i<4;i++) main.push(id); }); // 10種×4 = 40
   const land = [];
@@ -11177,7 +11990,8 @@ function dbLoadPreset(color) {
   dbStoreCurrentToSlot();
   dbPersistSlots();
   dbRenderAll();
-  log(`${color === 'red' ? '赤' : color === 'blue' ? '青' : '白'}デッキプリセットを読み込みました`);
+  const colorName = color === 'red' ? '赤' : color === 'blue' ? '青' : color === 'black' ? '黒' : '白';
+  log(`${colorName}デッキプリセットを読み込みました`);
 }
 
 // ── デッキ構築: 右上パネルに効果テキストを表示 ──
