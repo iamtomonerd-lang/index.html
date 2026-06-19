@@ -2031,7 +2031,7 @@ button.danger:hover { background: #6a2a2a; }
   </div>
   <div id="home-record"></div>
   <div id="home-elo" style="font-size:13px;margin-top:4px;cursor:pointer;" onclick="showTrophyPanel()"></div>
-  <div class="home-version">v1.7.0 — アニメーション強化</div>
+  <div class="home-version">v1.7.2 — スマホUI改善</div>
 </div>
 
 <!-- Tutorial Overlay -->
@@ -7563,11 +7563,7 @@ function playHitei(player, handIndex) {
   const cardId = p.hand[handIndex];
   const card = CARD_DB[cardId];
   if (!canAfford(player, card.cost)) { log('マナ不足'); return; }
-<<<<<<< HEAD
-  if (G.stack.length < 2) { log(`${card.name}: スタックに打ち消す対象がありません（2つ以上必要）`); return; }
-=======
   if (G.stack.length < 1) { log(`${card.name}: スタックに打ち消す対象がありません`); return; }
->>>>>>> push-branch
   payMana(player, card.cost);
   p.hand.splice(handIndex, 1);
   log(`${card.name} をスタックに積んだ`, 'important');
