@@ -348,6 +348,9 @@ body {
 #player-counts .info-cell-value { color: #aaccaa; }
 
 
+/* 右パネルトグルボタン: 通常は非表示 */
+.rp-toggle-btn { display: none; }
+
 /* 自分のアバター (col 9-12, 行 八-九) */
 #player-avatar {
   grid-column: 9 / 13; grid-row: 8 / 10;
@@ -487,6 +490,28 @@ body {
 .card.entering { animation: cardEnter 0.45s cubic-bezier(.2,1.4,.5,1) forwards; }
 .card.attacking-up   { animation: cardAttackUp   0.4s ease-out, attackShimmer 0.4s ease-out; }
 .card.attacking-down { animation: cardAttackDown 0.4s ease-out, attackShimmer 0.4s ease-out; }
+/* ── 新アニメーション ── */
+@keyframes drawSlide { from { transform: translateY(-40px) scale(0.85); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes landTapGlow { 0%{box-shadow:0 0 0 #aaffaa;} 40%{box-shadow:0 0 18px 4px #aaffaa88;} 100%{box-shadow:none;} }
+@keyframes ocFlash { 0%{opacity:0;} 15%{opacity:0.55;} 100%{opacity:0;} }
+@keyframes spellResolveFlash { 0%{opacity:0;transform:scale(0.7);} 30%{opacity:1;transform:scale(1.12);} 100%{opacity:0;transform:scale(1.4);} }
+@keyframes collisionBurst { 0%{opacity:1;transform:scale(0.5);} 60%{opacity:1;transform:scale(1.6);} 100%{opacity:0;transform:scale(2.2);} }
+@keyframes particleFly { 0%{opacity:1;transform:translate(0,0) scale(1);} 100%{opacity:0;transform:translate(var(--px),var(--py)) scale(0);} }
+@keyframes confettiFall { 0%{opacity:1;transform:translateY(0) rotate(0deg);} 100%{opacity:0;transform:translateY(100vh) rotate(720deg);} }
+@keyframes winOverlay { 0%{opacity:0;} 30%{opacity:0.7;} 100%{opacity:0;} }
+@keyframes loseOverlay { 0%{opacity:0;} 60%{opacity:0.6;} 100%{opacity:0.6;} }
+@keyframes eloFloat { 0%{opacity:1;transform:translateX(-50%) translateY(0) scale(1.3);} 100%{opacity:0;transform:translateX(-50%) translateY(-80px) scale(1);} }
+@keyframes tierPromo { 0%{opacity:0;transform:translateX(-50%) scale(0.4) rotate(-10deg);} 50%{opacity:1;transform:translateX(-50%) scale(1.2) rotate(3deg);} 80%{transform:translateX(-50%) scale(0.95);} 100%{opacity:0;transform:translateX(-50%) scale(1.05);} }
+@keyframes trophyPop { 0%{opacity:0;transform:translateX(-50%) scale(0) rotate(-20deg);} 60%{transform:translateX(-50%) scale(1.25) rotate(5deg);} 100%{opacity:1;transform:translateX(-50%) scale(1) rotate(0deg);} }
+.card.draw-anim { animation: drawSlide 0.35s cubic-bezier(.2,1.4,.5,1); }
+#oc-flash-overlay { position:fixed;inset:0;pointer-events:none;z-index:999;background:radial-gradient(ellipse at 50% 50%,#aaffaa88 0%,transparent 70%);opacity:0; }
+#win-overlay  { position:fixed;inset:0;pointer-events:none;z-index:998;background:radial-gradient(ellipse at 50% 40%,#ffee8888 0%,transparent 70%);opacity:0; }
+#lose-overlay { position:fixed;inset:0;pointer-events:none;z-index:998;background:#000;opacity:0; }
+#spell-resolve-ring { position:fixed;width:90px;height:90px;border-radius:50%;border:3px solid #aaccff;pointer-events:none;z-index:997;display:none; }
+#collision-burst { position:fixed;width:60px;height:60px;border-radius:50%;background:radial-gradient(#ffcc44,#ff440000);pointer-events:none;z-index:997;display:none; }
+#elo-float-el { position:fixed;left:50%;top:40%;font-size:32px;font-weight:bold;pointer-events:none;z-index:1001;opacity:0; }
+#tier-promo-el { position:fixed;left:50%;top:30%;font-size:28px;font-weight:bold;pointer-events:none;z-index:1002;opacity:0;text-align:center; }
+#trophy-pop-el { position:fixed;left:50%;top:35%;font-size:48px;pointer-events:none;z-index:1003;opacity:0; }
 /* ライフフラッシュ */
 .life-display.life-hit  { animation: lifeHit  0.6s ease-out; }
 .life-display.life-heal { animation: lifeHeal 0.6s ease-out; }
@@ -916,6 +941,138 @@ button.danger:hover { background: #6a2a2a; }
 #db-detail-panel .cdp-placeholder { color: #444; font-size: 11px; }
 @media (max-width: 900px) {
   #db-detail-panel { width: 170px; padding: 8px; }
+}
+
+/* ── スマホ横向き専用レイアウト (高さ480px以下) ── */
+@media (max-height: 480px) and (orientation: landscape) {
+
+  /* ── グリッド行: フィールドと手札を最大化 ── */
+  #board {
+    grid-template-rows:
+      16px            /* 行1: 相手情報 */
+      16px            /* 行2: 相手手札 */
+      16px            /* 行3: 相手土地 */
+      minmax(0, 1fr)  /* 行4: AIフィールド ★ */
+      12px            /* 行5: ヒントバー */
+      minmax(0, 1fr)  /* 行6: プレイヤーフィールド ★ */
+      16px            /* 行7: 自分土地 */
+      26px            /* 行8: 自分情報 */
+      26px            /* 行9: ボタン */
+      min(110px, 22vh); /* 行10: 手札 ★ */
+  }
+
+  /* ── 右パネル: オーバーレイ ── */
+  #right-panel {
+    display: none;
+    position: fixed;
+    top: 0; right: 0;
+    width: 56vw; max-width: 290px;
+    height: 100vh;
+    z-index: 300;
+    background: rgba(8,8,20,0.98);
+    border-left: 2px solid var(--accent);
+    flex-direction: column;
+    box-shadow: -6px 0 24px rgba(0,0,0,0.85);
+  }
+  #right-panel.rp-open { display: flex; }
+
+  #rp-backdrop {
+    display: none;
+    position: fixed; inset: 0;
+    z-index: 299;
+    background: rgba(0,0,0,0.45);
+  }
+  #rp-backdrop.rp-open { display: block; }
+
+  /* ── 列拡張: 右パネル分を全行に開放 ── */
+  #ai-field-row    { grid-column: 3 / 17; }
+  #player-field-row { grid-column: 3 / 17; }
+  #ai-lands-row    { grid-column: 1 / 17; }
+  #player-lands-row { grid-column: 1 / 17; }
+  #center-hint-bar  { grid-column: 1 / 17; }
+  #opp-avatar      { grid-column: 9 / 17; }
+  #player-avatar   { grid-column: 9 / 13; }
+  #action-panel    { grid-column: 13 / 17; }
+
+  /* ── 手札カード: 見やすく大きく ── */
+  #player-hand.hand-zone { padding: 3px 6px 2px; gap: 0; }
+  #player-hand .card { width: 68px; height: 100px; margin-right: 3px; }
+  #player-hand .card .card-art { font-size: 30px; }
+  #player-hand .card .card-name { font-size: 8px; }
+  #player-hand .card .card-pt { font-size: 11px; }
+  #player-hand .card .card-cost { font-size: 8px; }
+  #player-hand .card:hover { transform: translateY(-18px) scale(1.12); }
+
+  /* ── フィールドカード: アートしっかり見える ── */
+  #ai-field-row .field-slot, #ai-field-row .card,
+  #player-field-row .field-slot, #player-field-row .card {
+    height: min(115px, calc(100% - 4px));
+  }
+  #ai-field-row .field-zone, #player-field-row .field-zone { gap: 3px; }
+  #ai-field-row .card .card-art,
+  #player-field-row .card .card-art { font-size: 28px; }
+  #ai-field-row .card .card-name,
+  #player-field-row .card .card-name { font-size: 8px; }
+
+  /* ── 土地 ── */
+  .land-card { width: 20px !important; height: 28px !important; font-size: 11px !important; }
+  #player-lands-row, #ai-lands-row { padding: 1px 4px; }
+
+  /* ── 相手アバター: ライフ+ボタンを横一列 ── */
+  #opp-avatar {
+    flex-direction: row; flex-wrap: nowrap;
+    justify-content: flex-start; align-items: center;
+    gap: 6px; padding: 0 8px; overflow: hidden;
+  }
+  #opp-avatar .avatar-label { font-size: 7px; white-space: nowrap; }
+  #opp-avatar #ai-life { font-size: 15px; font-weight: 900; white-space: nowrap; }
+  #opp-counts { display: none; }
+  #ai-hand .card { width: 10px; height: 15px; }
+
+  /* ── 自分アバター: コンパクト横並び ── */
+  #player-avatar {
+    flex-direction: row; flex-wrap: nowrap;
+    justify-content: center; align-items: center;
+    gap: 4px; padding: 0 4px;
+  }
+  #player-avatar .avatar-label { font-size: 7px; }
+  #player-avatar #player-life { font-size: 15px; font-weight: 900; }
+
+  /* ── カウント表示 ── */
+  .info-cell-value { font-size: 11px; }
+  .info-cell-label { font-size: 6px; }
+  #player-counts { gap: 2px; }
+
+  /* ── アクションボタン ── */
+  #action-panel { padding: 2px 3px; gap: 2px; }
+  #action-panel #controls-btns button { font-size: 8px; padding: 2px 3px; min-height: 20px; }
+  #action-panel #btn-end-phase { font-size: 9px; padding: 3px 4px; }
+  #action-panel #btn-pass { font-size: 8px; padding: 2px 3px; }
+
+  /* ── CXリング ── */
+  .cx-value-text { font-size: 18px; }
+
+  /* ── ヒントバー ── */
+  #action-hint { font-size: 9px; }
+
+  /* ── ターン情報 ── */
+  #player-turn-info { font-size: 8px; }
+
+  /* ── 右パネルトグルボタン ── */
+  .rp-toggle-btn {
+    display: inline-flex;
+    align-items: center; justify-content: center;
+    background: rgba(50,50,110,0.75);
+    border: 1px solid var(--accent);
+    border-radius: 4px;
+    color: #aaaaff;
+    font-size: 11px;
+    padding: 1px 5px;
+    cursor: pointer;
+    line-height: 1;
+    touch-action: manipulation;
+    flex-shrink: 0;
+  }
 }
 
 /* ── モーダル ── */
@@ -1354,6 +1511,10 @@ button.danger:hover { background: #6a2a2a; }
 #home-screen .home-btn:active {
   transform: translateY(0);
 }
+#home-screen .home-btn.btn-rated  { border-color: #ccaa33; color: #ccaa33; }
+#home-screen .home-btn.btn-rated:hover  { border-color: #ffdd66; box-shadow: 0 8px 24px #ccaa3344; }
+#home-screen .home-btn.btn-trophy { border-color: #aa8833; color: #ddbb55; }
+#home-screen .home-btn.btn-trophy:hover { border-color: #ddcc66; box-shadow: 0 8px 24px #aa883344; }
 #home-screen .home-btn.btn-battle { border-color: #6644aa; }
 #home-screen .home-btn.btn-battle:hover { border-color: #aa88ff; box-shadow: 0 8px 24px #9966ff44; }
 #home-screen .home-btn.btn-hotseat { border-color: #446688; }
@@ -1661,7 +1822,11 @@ button.danger:hover { background: #6a2a2a; }
       <div class="avatar-label">ENEMY</div>
       <div class="life-display" id="ai-life">❤️ 20</div>
       <span id="ai-thinking">⚙ 考え中...</span>
+      <button class="rp-toggle-btn" onclick="toggleRightPanel()" title="パネル表示">📋</button>
     </div>
+
+    <!-- 右パネル背景タップ用バックドロップ -->
+    <div id="rp-backdrop" onclick="toggleRightPanel()"></div>
 
     <!-- 右パネル (col 13-16, 行 一-九) -->
     <div id="right-panel">
@@ -1856,14 +2021,17 @@ button.danger:hover { background: #6a2a2a; }
   <div class="home-title">DCG</div>
   <div class="home-subtitle">デジタルカードゲーム</div>
   <div class="home-buttons">
-    <button class="home-btn btn-battle"  onclick="showLobbyFromHome()">⚔️ AI対戦</button>
+    <button class="home-btn btn-rated"   onclick="showRatedFromHome()">🏆 レート戦</button>
+    <button class="home-btn btn-battle"  onclick="showLobbyFromHome()">⚔️ AI対戦（練習）</button>
     <button class="home-btn btn-hotseat" onclick="startHotseat()">👥 2人対戦（同デバイス）</button>
     <button class="home-btn btn-deck"    onclick="showDeckBuilder()">📖 デッキ構築</button>
     <button class="home-btn btn-ai"      onclick="showAIFromHome()">🧠 AI学習</button>
+    <button class="home-btn btn-trophy"   onclick="showTrophyPanel()">🏆 トロフィー</button>
     <button class="home-btn btn-tutorial" onclick="showTutorial()">❓ 遊び方</button>
   </div>
   <div id="home-record"></div>
-  <div class="home-version">v1.4.0 — イラスト＋バグ修正</div>
+  <div id="home-elo" style="font-size:13px;margin-top:4px;cursor:pointer;" onclick="showTrophyPanel()"></div>
+  <div class="home-version">v1.7.0 — アニメーション強化</div>
 </div>
 
 <!-- Tutorial Overlay -->
@@ -1942,7 +2110,7 @@ button.danger:hover { background: #6a2a2a; }
 </div>
 
 <!-- Retire button -->
-<button id="btn-retire" onclick="confirmRetire()">🏳️ リタイア</button>
+<button id="btn-retire" ontouchstart="retireHoldStart(event)" ontouchend="retireHoldEnd(event)" onmousedown="retireHoldStart(event)" onmouseup="retireHoldEnd(event)" onmouseleave="retireHoldEnd(null)">🏳️ リタイア</button>
 
 <!-- Hotseat Pass Screen -->
 <div id="hotseat-pass">
@@ -1959,6 +2127,16 @@ button.danger:hover { background: #6a2a2a; }
 
 <!-- Phase Flash -->
 <div id="phase-flash"></div>
+
+<!-- Animation Overlays -->
+<div id="oc-flash-overlay"></div>
+<div id="win-overlay"></div>
+<div id="lose-overlay"></div>
+<div id="spell-resolve-ring"></div>
+<div id="collision-burst"></div>
+<div id="elo-float-el"></div>
+<div id="tier-promo-el"></div>
+<div id="trophy-pop-el"></div>
 
 
 <!-- Modal -->
@@ -2400,6 +2578,7 @@ let G; // global game state
 
 function initGame() {
   if (typeof REPLAY_HISTORY !== 'undefined') REPLAY_HISTORY = []; // 新ゲームでリプレイ履歴をクリア
+  _prevCX = [0, 0];
   const firstPlayer = Math.random() < 0.5 ? 0 : 1; // 先手後手ランダム
   G = {
     turn: 1,
@@ -2630,6 +2809,7 @@ function drawCard(player) {
   }
   const cardId = p.deck.shift();
   const result = addCardToHand(player, cardId);
+  animDrawCard(player);
   if (!G.drawCount) G.drawCount = [0, 0];
   G.drawCount[player] = (G.drawCount[player] || 0) + 1;
   if (G.drawCount[player] >= 2) {
@@ -2702,6 +2882,7 @@ function tapLandForMana(player, instId) {
   const p = G.players[player];
   const land = p.lands.find(l => l.instanceId === instId);
   if (!land || land.tapped) return false;
+  animLandTap(instId);
   land.tapped = true;
   const card = CARD_DB[land.cardId];
   const manaType = card.produces || 'C';
@@ -3756,6 +3937,13 @@ function applyDamageToCreature(player, instId, amount, sourcePlayer, opts) {
   }
   c.damage += amount;
   showCreatureDamage(instId, amount);
+  if (sourcePlayer !== undefined && sourcePlayer !== null) {
+    const srcField = G.players[sourcePlayer] ? G.players[sourcePlayer].field : [];
+    const atkInst = srcField.find(x => x.attacking);
+    const atkEl = atkInst ? getCardEl(atkInst.instanceId) : (srcField.length ? getCardEl(srcField[0].instanceId) : null);
+    const tgtEl = getCardEl(instId);
+    if (atkEl || tgtEl) animCombatCollision(atkEl, tgtEl);
+  }
   checkCreatureDeath(player, instId, sourcePlayer);
 }
 
@@ -3859,6 +4047,7 @@ function checkCreatureDeath(player, instId, sourcePlayer) {
   }
   if (dead) {
     showDestroyAnimation(instId);
+    animDestroyParticle(instId);
     p.field.splice(idx, 1);
     p.graveyard.push(c.cardId);
     if (G._battleDestroyedInstIds) G._battleDestroyedInstIds.add(instId);
@@ -3874,6 +4063,301 @@ function checkDeath() {
   }
 }
 
+// ── アニメーション関数群 ────────────────────────────────────────
+let _prevCX = [0, 0];
+
+function animDrawCard(player) {
+  if (player !== (typeof NET_MY_IDX !== 'undefined' ? NET_MY_IDX : 0)) return;
+  setTimeout(() => {
+    const hand = document.getElementById('player-hand-row');
+    if (!hand) return;
+    const cards = hand.querySelectorAll('.card');
+    const last = cards[cards.length - 1];
+    if (last) { last.classList.add('draw-anim'); setTimeout(() => last.classList.remove('draw-anim'), 400); }
+  }, 60);
+}
+
+function animLandTap(instId) {
+  setTimeout(() => {
+    const el = document.querySelector(`[data-inst="${instId}"]`);
+    if (el) { el.style.animation='none'; el.offsetHeight; el.style.animation='landTapGlow 0.5s ease-out'; setTimeout(()=>{el.style.animation='';},500); }
+  }, 10);
+}
+
+function animCXChange(player, newVal) {
+  const old = _prevCX[player];
+  if (newVal > old) {
+    const ringId = player === (typeof NET_MY_IDX !== 'undefined' ? NET_MY_IDX : 0) ? 'player-cx-ring' : 'opp-cx-ring';
+    const el = document.getElementById(ringId);
+    if (el) {
+      el.style.transition = 'stroke 0.2s';
+      el.style.stroke = '#aaffaa';
+      setTimeout(() => { el.style.stroke = ''; el.style.transition = ''; }, 400);
+    }
+    if (newVal >= 10 && old < 10) animOCReached(player);
+  }
+  _prevCX[player] = newVal;
+}
+
+function animOCReached(player) {
+  const el = document.getElementById('oc-flash-overlay');
+  if (!el) return;
+  el.style.animation = 'none'; el.offsetHeight;
+  el.style.animation = 'ocFlash 1.2s forwards';
+  const myIdx = typeof NET_MY_IDX !== 'undefined' ? NET_MY_IDX : 0;
+  showPhaseFlash('⚡ OC 解放！', player === myIdx ? 'あなたのOCが発動' : '相手のOCが発動');
+}
+
+function animSpellResolve(x, y) {
+  const el = document.getElementById('spell-resolve-ring');
+  if (!el) return;
+  el.style.left = (x - 45) + 'px'; el.style.top = (y - 45) + 'px';
+  el.style.display = 'block'; el.style.animation = 'none'; el.offsetHeight;
+  el.style.animation = 'spellResolveFlash 0.5s forwards';
+  setTimeout(() => { el.style.display = 'none'; }, 600);
+}
+
+function animCombatCollision(atkEl, blkEl) {
+  const el = document.getElementById('collision-burst');
+  if (!el) return;
+  let cx, cy;
+  if (atkEl && blkEl) {
+    const ar = atkEl.getBoundingClientRect(), br = blkEl.getBoundingClientRect();
+    cx = (ar.left + ar.right + br.left + br.right) / 4;
+    cy = (ar.top + ar.bottom + br.top + br.bottom) / 4;
+  } else if (atkEl) {
+    const r = atkEl.getBoundingClientRect();
+    cx = (r.left + r.right) / 2; cy = (r.top + r.bottom) / 2;
+  } else if (blkEl) {
+    const r = blkEl.getBoundingClientRect();
+    cx = (r.left + r.right) / 2; cy = (r.top + r.bottom) / 2;
+  } else return;
+  el.style.left = (cx - 30) + 'px'; el.style.top = (cy - 30) + 'px';
+  el.style.display = 'block'; el.style.animation = 'none'; el.offsetHeight;
+  el.style.animation = 'collisionBurst 0.45s forwards';
+  setTimeout(() => { el.style.display = 'none'; }, 500);
+}
+
+function animDestroyParticle(instId) {
+  const el = document.querySelector(`[data-inst="${instId}"]`);
+  if (!el) return;
+  const r = el.getBoundingClientRect();
+  const cx = (r.left + r.right) / 2, cy = (r.top + r.bottom) / 2;
+  const colors = ['#ff4444','#ff8800','#ffcc00','#ff44aa','#ffffff'];
+  for (let i = 0; i < 10; i++) {
+    const p = document.createElement('div');
+    const angle = (i / 10) * Math.PI * 2;
+    const dist = 40 + Math.random() * 40;
+    p.style.cssText = `position:fixed;width:8px;height:8px;border-radius:50%;z-index:990;
+      background:${colors[i % colors.length]};left:${cx-4}px;top:${cy-4}px;pointer-events:none;
+      --px:${Math.cos(angle)*dist}px;--py:${Math.sin(angle)*dist}px;
+      animation:particleFly 0.6s ease-out forwards;animation-delay:${i*0.02}s;`;
+    document.body.appendChild(p);
+    setTimeout(() => p.remove(), 700);
+  }
+}
+
+function animGameWin() {
+  const el = document.getElementById('win-overlay');
+  if (el) { el.style.animation='none'; el.offsetHeight; el.style.animation='winOverlay 2s forwards'; }
+  const colors = ['#ffcc00','#ff4488','#44aaff','#44ff88','#ff8800','#ffffff'];
+  for (let i = 0; i < 40; i++) {
+    const c = document.createElement('div');
+    const size = 6 + Math.random() * 8;
+    c.style.cssText = `position:fixed;width:${size}px;height:${size}px;border-radius:${Math.random()>.5?'50%':'2px'};
+      background:${colors[Math.floor(Math.random()*colors.length)]};
+      left:${Math.random()*100}vw;top:-10px;z-index:1000;pointer-events:none;
+      animation:confettiFall ${1.5+Math.random()*2}s ease-in forwards;animation-delay:${Math.random()*1}s;`;
+    document.body.appendChild(c);
+    setTimeout(() => c.remove(), 4000);
+  }
+}
+
+function animGameLose() {
+  const el = document.getElementById('lose-overlay');
+  if (!el) return;
+  el.style.animation = 'none'; el.offsetHeight;
+  el.style.animation = 'loseOverlay 1.5s forwards';
+  setTimeout(() => { el.style.opacity = '0'; el.style.animation = ''; }, 3500);
+}
+
+function animEloChange(delta, newR, oldTier, newTier) {
+  const el = document.getElementById('elo-float-el');
+  if (!el) return;
+  const sign = delta >= 0 ? '+' : '';
+  el.textContent = sign + delta;
+  el.style.color = delta >= 0 ? '#44ff88' : '#ff4444';
+  el.style.animation = 'none'; el.offsetHeight;
+  el.style.animation = 'eloFloat 2s forwards';
+  if (newTier && oldTier && newTier.name !== oldTier.name && delta > 0) {
+    setTimeout(() => animTierPromotion(newTier), 800);
+  }
+}
+
+function animTierPromotion(tier) {
+  const el = document.getElementById('tier-promo-el');
+  if (!el) return;
+  el.innerHTML = `${tier.icon}<br><span style="font-size:18px;color:${tier.color}">${tier.name} 昇格！</span>`;
+  el.style.animation = 'none'; el.offsetHeight;
+  el.style.animation = 'tierPromo 2.5s forwards';
+}
+
+function animTrophyGet(rank) {
+  const el = document.getElementById('trophy-pop-el');
+  if (!el) return;
+  el.textContent = rank.icon;
+  el.style.animation = 'none'; el.offsetHeight;
+  el.style.animation = 'trophyPop 1.5s forwards';
+  setTimeout(() => { el.style.opacity = '0'; el.style.animation = ''; }, 2000);
+}
+
+function getCardEl(instId) {
+  return document.querySelector(`[data-inst="${instId}"]`);
+}
+
+// ── トロフィー・実績 ──────────────────────────────────────────
+function trophyLoad() {
+  try { return JSON.parse(localStorage.getItem('dcg_trophy') || '{}'); } catch(e) { return {}; }
+}
+function trophySave(t) {
+  try { localStorage.setItem('dcg_trophy', JSON.stringify(t)); } catch(e) {}
+}
+// デッキ構築からユニークキーを生成（メイン＋土地をソート）
+function deckKey(mainCards, landCards) {
+  return [...mainCards].sort().join(',') + '|' + [...landCards].sort().join(',');
+}
+// ゲーム終了時のデッキ名を取得（dcg_decks_v2のactiveスロット名）
+function currentDeckName() {
+  try {
+    const v2 = localStorage.getItem('dcg_decks_v2');
+    if (v2) {
+      const data = JSON.parse(v2);
+      if (data && Array.isArray(data.slots) && typeof data.active === 'number') {
+        return data.slots[data.active].name || 'デッキ' + (data.active + 1);
+      }
+    }
+  } catch(e) {}
+  return 'デッキ1';
+}
+function trophyRecord(newRating, mainCards, landCards) {
+  const t = trophyLoad();
+  t.peakRating = Math.max(t.peakRating || 0, newRating);
+  if (!t.deckPeak) t.deckPeak = {};
+  const key = deckKey(mainCards, landCards);
+  const name = currentDeckName();
+  const prev = t.deckPeak[key] || { name, rating: 0 };
+  // 名前はユーザーが後で変更できるので上書きしない（既存エントリは保持）
+  if (!t.deckPeak[key]) prev.name = name;
+  prev.rating = Math.max(prev.rating, newRating);
+  t.deckPeak[key] = prev;
+  if (!t.cardPeak) t.cardPeak = {};
+  const allUsed = [...new Set([...mainCards, ...landCards])];
+  allUsed.forEach(id => {
+    t.cardPeak[id] = Math.max(t.cardPeak[id] || 0, newRating);
+  });
+  trophySave(t);
+  return key;
+}
+// カードトロフィーランク（Eloティアとは独立）
+function cardTrophyRank(r) {
+  if (r >= 1800) return { icon: '🥇', label: '金', color: '#ffcc44' };
+  if (r >= 1700) return { icon: '🥈', label: '銀', color: '#cccccc' };
+  if (r >= 1600) return { icon: '🥉', label: '銅', color: '#cd7f32' };
+  return null;
+}
+// トロフィー画面でデッキ名を編集して保存
+function trophyRenameDeck(key) {
+  const t = trophyLoad();
+  if (!t.deckPeak || !t.deckPeak[key]) return;
+  const newName = prompt('デッキ名を入力してください:', t.deckPeak[key].name);
+  if (newName === null) return;
+  t.deckPeak[key].name = newName.trim() || t.deckPeak[key].name;
+  trophySave(t);
+  showTrophyPanel();
+}
+
+function showTrophyPanel() {
+  const t = trophyLoad();
+  const peak = t.peakRating || 0;
+  const peakTier = eloTierOf(peak);
+
+  // デッキ別（構築単位、名前編集可）
+  const deckEntries = Object.entries(t.deckPeak || {}).sort((a,b) => b[1].rating - a[1].rating);
+  let deckHtml = '';
+  deckEntries.forEach(([key, d]) => {
+    const tier = eloTierOf(d.rating);
+    const safeKey = key.replace(/'/g, "\\'");
+    deckHtml += `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 4px;border-bottom:1px solid #1a1a2a;gap:6px;">
+      <span style="font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;">${d.name}</span>
+      <button onclick="trophyRenameDeck('${safeKey}')" style="font-size:10px;padding:2px 6px;background:#1a1a3a;border:1px solid #3a3a6a;color:#8888cc;border-radius:4px;cursor:pointer;flex-shrink:0;">✏️</button>
+      <span style="color:${tier.color};font-size:13px;font-weight:bold;white-space:nowrap;flex-shrink:0;">${tier.icon} ${d.rating}</span>
+    </div>`;
+  });
+  if (!deckHtml) deckHtml = '<div style="color:#555;font-size:12px;padding:4px 0;">まだ記録なし</div>';
+
+  // カード別（CARD_DB全カード、土地含む）
+  const cardPeak = t.cardPeak || {};
+  const allCards = Object.values(CARD_DB);
+  const sorted = [...allCards].sort((a,b) => (cardPeak[b.id]||0) - (cardPeak[a.id]||0));
+  let cardHtml = '';
+  sorted.forEach(card => {
+    const r = cardPeak[card.id] || 0;
+    const rank = r ? cardTrophyRank(r) : null;
+    cardHtml += `<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 4px;border-bottom:1px solid #111120;">
+      <span style="font-size:11px;">${card.icon||''} ${card.name}</span>
+      <span style="color:${rank?rank.color:'#444'};font-size:11px;font-weight:bold;">${rank ? rank.icon+' '+rank.label+(r?' ('+r+')':'') : r ? r : '─'}</span>
+    </div>`;
+  });
+
+  showModal('🏆 トロフィー', `
+    <div style="text-align:center;margin-bottom:12px;padding:10px;background:#111122;border-radius:8px;border:1px solid #2a2a4a;">
+      <div style="font-size:11px;color:#888;margin-bottom:4px;">総合最高レート</div>
+      <div style="font-size:28px;font-weight:bold;color:${peakTier.color}">${peak ? peakTier.icon+' '+peak : '─'}</div>
+      <div style="font-size:13px;color:${peakTier.color}">${peak ? peakTier.name : '未挑戦'}</div>
+    </div>
+    <div style="font-size:12px;color:#888;margin-bottom:4px;">デッキ別最高レート <span style="color:#666;font-size:10px;">（✏️で名前変更）</span></div>
+    <div style="margin-bottom:12px;max-height:160px;overflow-y:auto;">${deckHtml}</div>
+    <div style="font-size:12px;color:#888;margin-bottom:2px;">カード別トロフィー</div>
+    <div style="font-size:10px;color:#666;margin-bottom:4px;">🥇金 1800以上 ／ 🥈銀 1700以上 ／ 🥉銅 1600以上</div>
+    <div style="max-height:200px;overflow-y:auto;margin-bottom:12px;">${cardHtml}</div>
+    <button onclick="closeModal();" style="width:100%;padding:10px;background:#12121e;border:1px solid #4a4a6a;color:#aaaacc;border-radius:6px;cursor:pointer;">閉じる</button>
+  `);
+}
+
+// ── Elo レーティングシステム ──────────────────────────────────
+const ELO_TIERS = [
+  { name: 'Bronze',   min: 0,    max: 999,  color: '#cd7f32', icon: '🥉', mctsScale: 0.15, mistakeRate: 0.30 },
+  { name: 'Silver',   min: 1000, max: 1299, color: '#a0a0b0', icon: '🥈', mctsScale: 0.40, mistakeRate: 0.15 },
+  { name: 'Gold',     min: 1300, max: 1599, color: '#ccaa33', icon: '🥇', mctsScale: 1.00, mistakeRate: 0.05 },
+  { name: 'Platinum', min: 1600, max: 1899, color: '#88ccff', icon: '💎', mctsScale: 2.00, mistakeRate: 0.01 },
+  { name: 'Master',   min: 1900, max: 9999, color: '#ff88ff', icon: '👑', mctsScale: 4.00, mistakeRate: 0.00 },
+];
+let RATED_MODE = false;
+let RATED_OPP_RATING = 1500;
+
+function eloGetRating() {
+  try { return JSON.parse(localStorage.getItem('dcg_elo') || '{"rating":1500}').rating; } catch(e) { return 1500; }
+}
+function eloSaveRating(r) {
+  try { localStorage.setItem('dcg_elo', JSON.stringify({rating: Math.max(0, Math.round(r))})); } catch(e) {}
+}
+function eloTierOf(r) {
+  return ELO_TIERS.find(t => r >= t.min && r <= t.max) || ELO_TIERS[ELO_TIERS.length - 1];
+}
+function eloCalcDelta(myRating, oppRating, won) {
+  const K = 32;
+  const expected = 1 / (1 + Math.pow(10, (oppRating - myRating) / 400));
+  return Math.round(K * ((won ? 1 : 0) - expected));
+}
+// Box-Muller正規分布で対戦相手レートを生成（σ≈100、中心=自分レート）
+function eloOppRatingForMyRating(myRating) {
+  let u, v, s;
+  do { u = Math.random() * 2 - 1; v = Math.random() * 2 - 1; s = u*u + v*v; } while (s >= 1 || s === 0);
+  const gauss = u * Math.sqrt(-2 * Math.log(s) / s);
+  const raw = Math.round(myRating + gauss * 150);
+  return Math.max(0, Math.min(2500, Math.max(myRating - 300, Math.min(myRating + 300, raw))));
+}
+
 function endGame(winner) {
   if (G.phase !== 'ended' && typeof NET_MODE !== 'undefined' && NET_MODE === 'local') {
     try {
@@ -3886,7 +4370,41 @@ function endGame(winner) {
   const who = NET_MODE === 'hotseat' ? (winner === 0 ? 'P1の' : 'P2の') : winner === 0 ? 'あなたの' : 'AIの';
   log(`ゲーム終了！ ${who}勝利！`, 'important');
   recordReplaySnapshot(`ゲーム終了 (${who}勝利)`);
-  showModal('ゲーム終了', `<p style="font-size:24px; text-align:center; margin:20px 0;">${who}勝利！</p><button onclick="closeModal();resetBoardAndRestart();" style="width:100%;padding:10px;margin-bottom:8px;">もう一度プレイ</button><button onclick="closeModal();showReplayViewer();" style="width:100%;padding:10px;margin-bottom:8px;background:#1a1a3a;border:1px solid #4444aa;color:#aaaaff;border-radius:6px;cursor:pointer;">📽️ リプレイを見る</button><button onclick="closeModal();resetBoardAndHome();" style="width:100%;padding:10px;background:#12121e;border:1px solid #4a4a6a;color:#aaaacc;border-radius:6px;cursor:pointer;">🏠 ホームに戻る</button>`);
+  // 勝敗アニメ
+  if (NET_MODE === 'local') {
+    if (winner === 0) setTimeout(animGameWin, 200);
+    else setTimeout(animGameLose, 200);
+  }
+  // Elo処理
+  let _eloHtml = '';
+  if (RATED_MODE && NET_MODE === 'local') {
+    const oldR = eloGetRating();
+    const oldTier = eloTierOf(oldR);
+    const delta = eloCalcDelta(oldR, RATED_OPP_RATING, winner === 0);
+    const newR = oldR + delta;
+    eloSaveRating(newR);
+    // トロフィー記録（メイン＋土地の全構築で保存）
+    const p0 = G.players[0];
+    const playerMainCards = p0.deck.concat(p0.hand, p0.field.map(c=>c.cardId), p0.graveyard, p0.exile||[]);
+    const playerLandCards = p0.lands.map(l=>l.cardId).concat(p0.landDeck||[]);
+    trophyRecord(newR, playerMainCards, playerLandCards);
+    RATED_MODE = false;
+    const newTier = eloTierOf(newR);
+    setTimeout(() => animEloChange(delta, newR, oldTier, newTier), 700);
+    // トロフィー新獲得チェック
+    const tData = trophyLoad();
+    const allUsed = [...new Set([...playerMainCards, ...playerLandCards])];
+    const topRank = allUsed.map(id => cardTrophyRank(tData.cardPeak[id]||0)).filter(Boolean)
+      .sort((a,b) => b.icon.length - a.icon.length)[0];
+    if (topRank) setTimeout(() => animTrophyGet(topRank), 1400);
+    const sign = delta >= 0 ? '+' : '';
+    _eloHtml = `<div style="text-align:center;margin:10px 0 14px;padding:10px;background:#111122;border-radius:8px;border:1px solid #2a2a4a;">
+      <div style="font-size:12px;color:#888;margin-bottom:4px;">レート変動</div>
+      <div style="font-size:24px;font-weight:bold;color:${delta>=0?'#44ff88':'#ff4444'}">${sign}${delta}</div>
+      <div style="font-size:15px;color:${newTier.color};margin-top:4px;">${newTier.icon} ${newR} — ${newTier.name}</div>
+    </div>`;
+  }
+  showModal('ゲーム終了', `<p style="font-size:24px; text-align:center; margin:20px 0;">${who}勝利！</p>${_eloHtml}<button onclick="closeModal();resetBoardAndRestart();" style="width:100%;padding:10px;margin-bottom:8px;">もう一度プレイ</button><button onclick="closeModal();showReplayViewer();" style="width:100%;padding:10px;margin-bottom:8px;background:#1a1a3a;border:1px solid #4444aa;color:#aaaaff;border-radius:6px;cursor:pointer;">📽️ リプレイを見る</button><button onclick="closeModal();resetBoardAndHome();" style="width:100%;padding:10px;background:#12121e;border:1px solid #4a4a6a;color:#aaaacc;border-radius:6px;cursor:pointer;">🏠 ホームに戻る</button>`);
   G.phase = 'ended';
 }
 
@@ -3914,9 +4432,11 @@ function resetBoardAndHome() {
 // ── リタイア（投了）────────────────────────────────────────
 function confirmRetire() {
   if (!G || G.phase === 'ended') { resetBoardAndHome(); return; }
+  const ratedNote = RATED_MODE ? '<br><span style="color:#ffcc44;font-size:12px;">⚠️ レート戦中 — 敗北としてレートが変動します</span>' : '';
   showModal('リタイア確認', `
-    <p style="margin-bottom:16px;">対戦をリタイアしてホームに戻りますか？<br><span style="color:#888;font-size:12px;">（AI対戦の場合は敗北として記録されます）</span></p>
+    <p style="margin-bottom:16px;">対戦をリタイアしてホームに戻りますか？<br><span style="color:#888;font-size:12px;">（AI対戦の場合は敗北として記録されます）</span>${ratedNote}</p>
     <button onclick="closeModal();doRetire();" style="width:100%;padding:10px;margin-bottom:8px;background:#2a1212;border:1px solid #884444;color:#ffaaaa;border-radius:6px;cursor:pointer;">🏳️ リタイアする</button>
+    <button onclick="closeModal();emergencyEscape();" style="width:100%;padding:10px;margin-bottom:8px;background:#1a0a2a;border:1px solid #664488;color:#ddaaff;border-radius:6px;cursor:pointer;">🚨 フリーズ脱出（レート変動なし）</button>
     <button onclick="closeModal();" style="width:100%;padding:10px;background:#12121e;border:1px solid #4a4a6a;color:#aaaacc;border-radius:6px;cursor:pointer;">対戦に戻る</button>`);
 }
 
@@ -3927,10 +4447,80 @@ function doRetire() {
       rec.losses = (rec.losses || 0) + 1;
       localStorage.setItem('dcg_record', JSON.stringify(rec));
     } catch(e) {}
+    // レート戦中のリタイアはElo敗北処理
+    if (RATED_MODE) {
+      const oldR = eloGetRating();
+      const delta = eloCalcDelta(oldR, RATED_OPP_RATING, false);
+      const newR = oldR + delta;
+      eloSaveRating(newR);
+      const p0 = G.players[0];
+      const mainCards = p0.deck.concat(p0.hand, p0.field.map(c=>c.cardId), p0.graveyard, p0.exile||[]);
+      const landCards = p0.lands.map(l=>l.cardId).concat(p0.landDeck||[]);
+      trophyRecord(newR, mainCards, landCards);
+      RATED_MODE = false;
+      const tier = eloTierOf(newR);
+      const sign = delta >= 0 ? '+' : '';
+      log(`レート変動: ${sign}${delta} → ${tier.icon} ${newR} (${tier.name})`, 'important');
+    }
   }
   if (G) G.phase = 'ended';
   log('🏳️ リタイアしました', 'important');
   resetBoardAndHome();
+}
+
+// フリーズ・バグ時の強制脱出（Elo変動なし）
+function emergencyEscape() {
+  RATED_MODE = false; // レート変動させない
+  if (G) {
+    G.phase = 'ended';
+    G.stack = [];
+    G.targetMode = null;
+    G.awaitingPriority = false;
+    G.attackMode = false;
+    G.blockMode = false;
+    G.combatArrows = [];
+  }
+  // タイマー等の残留を全てクリア
+  clearAllAITimers();
+  const logEl = document.getElementById('log');
+  if (logEl) logEl.innerHTML = '';
+  showHomeScreen();
+}
+
+// AI関連タイマーを強制クリア
+let _aiTimerIds = [];
+function trackAITimer(id) { _aiTimerIds.push(id); return id; }
+function clearAllAITimers() {
+  _aiTimerIds.forEach(id => { try { clearTimeout(id); clearInterval(id); } catch(e){} });
+  _aiTimerIds = [];
+}
+
+// リタイアボタン長押し（3秒）でフリーズ脱出
+let _retireHoldTimer = null;
+let _retireHoldStart = 0;
+let _retireTriggered = false;
+function retireHoldStart(e) {
+  e && e.preventDefault && e.preventDefault();
+  _retireHoldStart = Date.now();
+  _retireTriggered = false;
+  const btn = document.getElementById('btn-retire');
+  _retireHoldTimer = setTimeout(() => {
+    _retireTriggered = true;
+    if (btn) btn.textContent = '🏳️ リタイア';
+    emergencyEscape();
+  }, 3000);
+  // 視覚フィードバック: 徐々にボタンが赤くなる
+  if (btn) btn.style.transition = 'background 3s';
+  if (btn) btn.style.background = 'rgba(120,20,20,0.95)';
+}
+function retireHoldEnd(e) {
+  if (_retireHoldTimer) { clearTimeout(_retireHoldTimer); _retireHoldTimer = null; }
+  const btn = document.getElementById('btn-retire');
+  if (btn) { btn.style.transition = ''; btn.style.background = ''; btn.textContent = '🏳️ リタイア'; }
+  if (!_retireTriggered && e !== null && (Date.now() - _retireHoldStart) < 800) {
+    // 短タップ → 通常のリタイア確認
+    confirmRetire();
+  }
 }
 
 // ============================================================
@@ -4479,6 +5069,7 @@ function endTurn() {
   G.blockMode = false;
   G.chargingMode = false;
   G.chargeUsedThisTurn = false;
+  G.iegekiRedirectTurn = [-1, -1];
 
   G.activePlayer = 1 - G.activePlayer;
   G.turn++;
@@ -5393,6 +5984,8 @@ function resolveStack() {
   if (G.stack.length === 0) return;
   const item = G.stack.pop();
   log(`スタックを解決: ${item.name}`);
+  const stackEl = document.getElementById('stack-display');
+  if (stackEl) { const r = stackEl.getBoundingClientRect(); animSpellResolve((r.left+r.right)/2, (r.top+r.bottom)/2); }
   if (item.resolve) item.resolve();
   render();
 }
@@ -5526,10 +6119,12 @@ function aiActivateChargedLands() {
   for (const land of [...ai.lands]) {
     const lc = CARD_DB[land.cardId];
     if (!land.chargeCard || !lc.chargedAbility || land.tapped) continue;
-    // kaizouReturn requires OC
-    if (lc.chargedAbility === 'kaizouReturn' && !isOCActive(1)) continue;
+    // kaizouReturn / kaizouReturnBlue requires OC
+    if ((lc.chargedAbility === 'kaizouReturn' || lc.chargedAbility === 'kaizouReturnBlue') && !isOCActive(1)) continue;
     // look3keep1white requires mana
     if (lc.chargedAbility === 'look3keep1white' && !canAfford(1, {W:3})) continue;
+    // look3keep1blue requires mana
+    if (lc.chargedAbility === 'look3keep1blue' && !canAfford(1, {U:3})) continue;
 
     const landInstId = land.instanceId;
     showAIThinking(true);
@@ -5553,6 +6148,18 @@ function aiActivateChargedLands() {
         if (simLand.tapped) return; simLand.tapped=true;
         const ws=p1.field.filter(c=>CARD_DB[c.cardId].color==='W');
         if (ws.length){const t=ws.reduce((a,b)=>sim.hp(a)<sim.hp(b)?a:b);t.tempToughness=(t.tempToughness||0)+1;}
+      } else if (lc.chargedAbility === 'look3keep1blue') {
+        if (!sim.canAfford(p1,{U:3})) return;
+        sim.payMana(p1,{U:3}); simLand.tapped=true;
+        if (p1.deck.length) p1.hand.push(p1.deck.shift());
+      } else if (lc.chargedAbility === 'kaizouReturnBlue') {
+        if (!sim.simIsOC(p1)||simLand.tapped) return;
+        p1.mana.U=(p1.mana.U||0)+3;
+        const ix=p1.lands.indexOf(simLand); if(ix!==-1){p1.lands.splice(ix,1);p1.landDeck.push(lc.id);}
+      } else if (lc.chargedAbility === 'giveDrawTriggerBlue') {
+        if (simLand.tapped) return; simLand.tapped=true;
+        // grant draw trigger: in sim, approximate as +0.5 hand advantage
+        if (p1.field.length) p1.hand.push(p1.deck.length?p1.deck.shift():'');
       }
     });
     showAIThinking(false);
@@ -6405,6 +7012,8 @@ function updateCXRings() {
   const oppCX = G.players[opp] ? getCXValue(opp) : 0;
   const meOC = isOCActive(me);
   const oppOC = isOCActive(opp);
+  animCXChange(me, meCX);
+  animCXChange(opp, oppCX);
   updateRing('player-cx-ring', 'player-cx-text', 'player-cx-area', meCX, meOC, true);
   updateRing('opp-cx-ring', 'opp-cx-text', 'opp-cx-area', oppCX, oppOC, false);
 }
@@ -6954,7 +7563,11 @@ function playHitei(player, handIndex) {
   const cardId = p.hand[handIndex];
   const card = CARD_DB[cardId];
   if (!canAfford(player, card.cost)) { log('マナ不足'); return; }
+<<<<<<< HEAD
   if (G.stack.length < 2) { log(`${card.name}: スタックに打ち消す対象がありません（2つ以上必要）`); return; }
+=======
+  if (G.stack.length < 1) { log(`${card.name}: スタックに打ち消す対象がありません`); return; }
+>>>>>>> push-branch
   payMana(player, card.cost);
   p.hand.splice(handIndex, 1);
   log(`${card.name} をスタックに積んだ`, 'important');
@@ -7196,6 +7809,13 @@ const KEYWORD_DEFS = {
 function kwTipHtml(kw) {
   const def = KEYWORD_DEFS[kw] || kw;
   return `<span class="kw-tip" data-def="${def}">${kw}</span>`;
+}
+
+function toggleRightPanel() {
+  const panel = document.getElementById('right-panel');
+  const backdrop = document.getElementById('rp-backdrop');
+  const open = panel.classList.toggle('rp-open');
+  backdrop.classList.toggle('rp-open', open);
 }
 
 function switchRightPanel(tab) {
@@ -7590,6 +8210,8 @@ function evalBoardScore(player) {
 }
 
 function aiPickBestCard(handItems) {
+  // Rated mode: lower tiers randomly skip optimal play
+  if (RATED_MODE && handItems.length > 0 && Math.random() < eloTierOf(RATED_OPP_RATING).mistakeRate) return null;
   const ai = G.players[1];
   const player = G.players[0];
   const myLife = ai.life, oppLife = player.life;
@@ -7942,6 +8564,13 @@ class SimGame {
       const kills=(tgt.damage+2)>=(CARD_DB[tgt.cardId].toughness+(tgt.tempToughness||0));
       return (kills?w.fieldPower*(CARD_DB[tgt.cardId].power||1)+w.fieldCount:w.fieldPower*0.3)+w.handAdv*0.3;
     }
+    if (card.effect==='ao_geki') {
+      if (opp.field.length) { const t=opp.field.reduce((a,b)=>this.hp(b)<this.hp(a)?b:a); const k=(t.damage+3)>=(CARD_DB[t.cardId].toughness+(t.tempToughness||0)); return k?w.fieldPower*(CARD_DB[t.cardId].power||1)+w.fieldCount:w.fieldPower*0.5; }
+      return w.lifeAdv*3;
+    }
+    if (card.effect==='mizu_geki') return opp.field.length ? w.fieldCount*0.8+w.fieldPower*0.3 : 0;
+    if (card.effect==='hitei') return (this.state.stack||[]).length>=1 ? w.fieldPower*1.5 : -Infinity;
+    if (card.effect==='chishiki_no_seiri') return w.handAdv*1.2;
     return 0;
   }
 
@@ -7967,6 +8596,17 @@ class SimGame {
           this.simETB(ap,inst);
         }
       }
+    } else if (card.effect==='ao_geki') {
+      if (opp.field.length) { const t=opp.field.reduce((a,b)=>this.hp(b)<this.hp(a)?b:a); t.damage+=3; this.simCheckDeath(1-ap); }
+      else opp.life-=3;
+    } else if (card.effect==='mizu_geki') {
+      if (opp.field.length) { const t=opp.field.reduce((a,b)=>this.hp(b)<this.hp(a)?b:a); const ix=opp.field.indexOf(t); if(ix!==-1){opp.field.splice(ix,1); opp.hand.push(t.cardId);} }
+    } else if (card.effect==='hitei') {
+      if ((s.stack||[]).length>=1) s.stack.splice(s.stack.length-1,1);
+    } else if (card.effect==='chishiki_no_seiri') {
+      // draw 2, discard 1 (sim: net +1 hand)
+      for(let i=0;i<2;i++){if(me.deck.length)me.hand.push(me.deck.shift());}
+      if(me.hand.length>1){me.hand.shift();}
     }
   }
 
@@ -8153,13 +8793,16 @@ const MCTS_TIME_CRITICAL  = 800; // ms - 超終盤（ライフ<=5 or OC条件付
 const MCTS_TIME_BUDGET_MS = MCTS_TIME_NORMAL; // backward compat
 
 function mctsTimeBudget() {
-  if (!G) return MCTS_TIME_NORMAL;
+  const scale = RATED_MODE ? eloTierOf(RATED_OPP_RATING).mctsScale : 1.0;
+  if (!G) return Math.round(MCTS_TIME_NORMAL * scale);
   const p0 = G.players[0], p1 = G.players[1];
   const minLife = Math.min(p0.life, p1.life);
   const graveTotal = p0.graveyard.length + p1.graveyard.length;
-  if (minLife <= 5 || graveTotal >= 18) return MCTS_TIME_CRITICAL;
-  if (minLife <= 10 || G.turn >= 8) return MCTS_TIME_LATE;
-  return MCTS_TIME_NORMAL;
+  let base;
+  if (minLife <= 5 || graveTotal >= 18) base = MCTS_TIME_CRITICAL;
+  else if (minLife <= 10 || G.turn >= 8) base = MCTS_TIME_LATE;
+  else base = MCTS_TIME_NORMAL;
+  return Math.round(base * scale);
 }
 
 class MCTSNode {
@@ -10194,6 +10837,11 @@ function updateHomeRecord() {
   const total = w + l;
   const rate = total > 0 ? Math.round(w / total * 100) : 0;
   el.textContent = `戦績: ${w}勝 ${l}敗 (勝率${rate}%)`;
+  const eloEl = document.getElementById('home-elo');
+  if (eloEl) {
+    const r = eloGetRating(), t = eloTierOf(r);
+    eloEl.innerHTML = `<span style="color:${t.color}">${t.icon} ${t.name} ${r}</span>`;
+  }
 }
 
 // ── チュートリアル ────────────────────────────────────────────
@@ -10233,6 +10881,47 @@ function tutRender() {
 function showLobbyFromHome() {
   document.getElementById('home-screen').style.display = 'none';
   netShowLobby();
+}
+
+// ── レート戦 ─────────────────────────────────────────────────
+function showRatedFromHome() {
+  document.getElementById('home-screen').style.display = 'none';
+  const myR = eloGetRating();
+  const myT = eloTierOf(myR);
+  RATED_OPP_RATING = eloOppRatingForMyRating(myR);
+  const oppT = eloTierOf(RATED_OPP_RATING);
+  const dWin  = eloCalcDelta(myR, RATED_OPP_RATING, true);
+  const dLoss = eloCalcDelta(myR, RATED_OPP_RATING, false);
+  const intelligenceLabel = { Bronze:'初心者', Silver:'普通', Gold:'上級', Platinum:'エキスパート', Master:'最強' };
+  showModal('🏆 レート戦 マッチング', `
+    <div style="text-align:center;margin-bottom:14px;">
+      <div style="font-size:12px;color:#888;margin-bottom:4px;">あなたのレート</div>
+      <div style="font-size:28px;font-weight:bold;color:${myT.color}">${myT.icon} ${myR}</div>
+      <div style="font-size:13px;color:${myT.color}">${myT.name}</div>
+    </div>
+    <div style="background:#1a1a2a;border:1px solid #2a2a4a;border-radius:8px;padding:12px;margin-bottom:12px;">
+      <div style="font-size:11px;color:#888;margin-bottom:6px;">対戦相手</div>
+      <div style="font-size:20px;font-weight:bold;color:${oppT.color}">${oppT.icon} ${RATED_OPP_RATING} — ${oppT.name}</div>
+      <div style="font-size:12px;color:#666;margin-top:4px;">AI知能: ${intelligenceLabel[oppT.name]}</div>
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:14px;">
+      <div style="flex:1;text-align:center;background:#0a2a0a;border:1px solid #336633;border-radius:6px;padding:8px;">
+        <div style="font-size:11px;color:#666;">勝利</div>
+        <div style="font-size:20px;color:#44ff88;font-weight:bold;">+${dWin}</div>
+      </div>
+      <div style="flex:1;text-align:center;background:#2a0a0a;border:1px solid #663333;border-radius:6px;padding:8px;">
+        <div style="font-size:11px;color:#666;">敗北</div>
+        <div style="font-size:20px;color:#ff4444;font-weight:bold;">${dLoss}</div>
+      </div>
+    </div>
+    <button onclick="closeModal();startRatedBattle();" style="width:100%;padding:12px;background:#1a2a3a;border:1px solid #4466aa;color:#aaccff;border-radius:8px;font-size:14px;margin-bottom:8px;">▶ 対戦開始</button>
+    <button onclick="closeModal();showHomeScreen();" style="width:100%;padding:10px;background:#12121e;border:1px solid #4a4a6a;color:#aaaacc;border-radius:6px;cursor:pointer;">キャンセル</button>
+  `);
+}
+
+function startRatedBattle() {
+  RATED_MODE = true;
+  netStartLocal();
 }
 
 function showAIFromHome() {
