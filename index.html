@@ -218,7 +218,7 @@ body {
   flex-wrap: nowrap; gap: 6px; padding: 0; overflow: visible;
 }
 #ai-field-row .field-slot, #ai-field-row .card {
-  height: min(118px, calc(100% - 6px)); width: auto; aspect-ratio: 7 / 10;
+  height: min(118px, calc(100% - 6px)); width: auto; aspect-ratio: 7 / 10; min-width: 0;
 }
 
 /* スタックペイン (右パネル内) */
@@ -313,7 +313,7 @@ body {
   flex-wrap: nowrap; gap: 6px; padding: 0; overflow: visible;
 }
 #player-field-row .field-slot, #player-field-row .card {
-  height: min(118px, calc(100% - 6px)); width: auto; aspect-ratio: 7 / 10;
+  height: min(118px, calc(100% - 6px)); width: auto; aspect-ratio: 7 / 10; min-width: 0;
 }
 
 /* 自分の土地 (col 1-12, 行 七) */
@@ -2096,7 +2096,7 @@ const CARD_DB = {
   },
   'daikokubashira': {
     id:'daikokubashira', name:'一家の大黒柱', type:'creature', color:'R',
-    cost:{C:3,R:1}, power:5, toughness:2, subtype:'人間', icon:'🛠️',
+    cost:{C:3,R:1}, power:4, toughness:2, subtype:'人間', icon:'🛠️',
     keywords:['格闘'], text:'■格闘\n■出た時、3ルック1(赤)',
     kakutou:true, etb:'look3keep1red'
   },
@@ -4020,12 +4020,15 @@ function canCreatureAttack(player, inst) {
   const card = CARD_DB[inst.cardId];
   if (G.cantAttackPermanent.has(inst.instanceId)) return false;
   if (inst.tapped) return false;
+  // 召喚酔いしていない → 通常攻撃（相手プレイヤーへ攻撃）可能
   if (!inst.sick) return true;
   // 速攻: 召喚酔いを無視して攻撃できる
   if (card.haste) return true;
-  // 格闘: 出たターンは状態問わず相手クリーチャーにのみ攻撃できる
-  if (card.kakutou && inst.entryTurn === G.turn) {
-    return G.players[1-player].field.length > 0;
+  // 格闘: 出たターン／得たターンは、召喚酔い中でも相手クリーチャー(飛行考慮)を攻撃できる
+  const hasKakutou = (card.kakutou && inst.entryTurn === G.turn) || inst.grantedKakutouTurn === G.turn;
+  if (hasKakutou) {
+    const reachable = G.players[1-player].field.filter(c => card.flying || !CARD_DB[c.cardId].flying);
+    return reachable.length > 0;
   }
   return false;
 }
@@ -6036,7 +6039,7 @@ function render() {
 }
 
 // 生成イラスト機能のスイッチ。card-art-ai/integrate.py が true に書き換える。
-const CARD_ART_ENABLED = false;
+const CARD_ART_ENABLED = true;
 const CARD_ART_DIR = 'images/cards';
 // 生成画像があれば<img>で表示し、無ければ（読み込み失敗時）絵文字にフォールバック
 function cardArtHtml(card) {
@@ -6574,12 +6577,26 @@ function handleFieldClick(player, instId) {
       return;
     }
 
-    // 格闘キーワード: 出たターン（または格闘付与されたターン）のみ起動可
-    if (((card.kakutou && inst.entryTurn === G.turn) || inst.grantedKakutouTurn === G.turn) && !inst.tapped) {
+    // 格闘キーワード: 出たターン（または格闘を得たターン）のみ起動可
+    const hasKakutouThisTurn = (card.kakutou && inst.entryTurn === G.turn) || inst.grantedKakutouTurn === G.turn;
+    if (hasKakutouThisTurn && !inst.tapped) {
       const opp = 1 - actP;
       const reachable = G.players[opp].field.filter(c => !CARD_DB[c.cardId].flying || card.flying);
-      if (reachable.length === 0) { log(`${card.name} 格闘: 対象クリーチャーがいません`); return; }
-      startKakutou(actP, instId);
+      const canPlayerAttack = !inst.sick || card.haste;
+      if (!canPlayerAttack) {
+        // 召喚酔い中 → 格闘（相手クリーチャー攻撃）のみ。対象がいなければ宣言不可
+        if (reachable.length === 0) { log(`${card.name} 格闘: 対象にできる相手クリーチャーがいません`); return; }
+        startKakutou(actP, instId);
+        return;
+      }
+      // 召喚酔いなし → プレイヤー攻撃 と 格闘 を選択（格闘対象がいる時のみ選択肢）
+      if (reachable.length === 0) { startSingleAttack(actP, instId); return; }
+      if (NET_MODE === 'host' && actP === 1) { startSingleAttack(actP, instId); return; }
+      const html = `
+        <p style="margin-bottom:10px;">${card.name} の攻撃方法を選択:</p>
+        <button onclick="closeModal(); startSingleAttack(${actP},${instId});" style="width:100%;margin-bottom:8px;padding:8px;">⚔️ 相手プレイヤーに攻撃</button>
+        <button onclick="closeModal(); startKakutou(${actP},${instId});" style="width:100%;padding:8px;">🥊 格闘: 相手クリーチャーを攻撃</button>`;
+      showModal(card.name, html);
       return;
     }
 
@@ -7077,7 +7094,7 @@ function log(msg, type) {
 // 1. CARD DETAIL PANEL
 // ============================================================
 const KEYWORD_DEFS = {
-  '格闘': '出たターンに限り、相手クリーチャーのみに攻撃できる',
+  '格闘': '出たターン、または格闘を得たターン、タップ／アンタップを問わず相手クリーチャーを攻撃できる',
   '警戒': '攻撃してもタップしない',
   '飛行': '飛行を持たないクリーチャーにブロックされない',
   '還元': '土地を土地デッキの底に戻すことをコストに起動する能力',
