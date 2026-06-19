@@ -1493,9 +1493,11 @@ button.danger:hover { background: #6a2a2a; }
   align-items: center;
   justify-content: center;
   font-family: inherit;
+  overflow-y: auto;
+  padding: 20px 0 40px;
 }
 #home-screen .home-title {
-  font-size: clamp(48px, 10vw, 96px);
+  font-size: clamp(36px, 10vw, 96px);
   font-weight: 900;
   letter-spacing: 0.15em;
   background: linear-gradient(135deg, #8888ff 0%, #cc88ff 50%, #88ccff 100%);
@@ -1511,17 +1513,17 @@ button.danger:hover { background: #6a2a2a; }
   color: #8888aa;
   letter-spacing: 0.3em;
   text-transform: uppercase;
-  margin-bottom: 60px;
+  margin-bottom: clamp(20px, 5vh, 60px);
 }
 #home-screen .home-buttons {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: clamp(8px, 1.5vh, 16px);
   width: min(400px, 90vw);
 }
 #home-screen .home-btn {
   width: 100%;
-  padding: 18px 24px;
+  padding: clamp(12px, 2vh, 18px) 24px;
   background: linear-gradient(135deg, #12121e 0%, #1a1a2e 100%);
   border: 1px solid #4040aa;
   border-radius: 12px;
@@ -2064,7 +2066,7 @@ button.danger:hover { background: #6a2a2a; }
   </div>
   <div id="home-record"></div>
   <div id="home-elo" style="font-size:13px;margin-top:4px;cursor:pointer;" onclick="showTrophyPanel()"></div>
-  <div class="home-version">v1.7.7 — スマホUI改善</div>
+  <div class="home-version">v1.7.8 — スマホUI改善</div>
 </div>
 
 <!-- Tutorial Overlay -->
