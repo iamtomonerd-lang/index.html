@@ -961,8 +961,9 @@ button.danger:hover { background: #6a2a2a; }
       112px;          /* 行10: 手札 ★ 固定値でカード(105px)が必ず収まる */
   }
 
-  /* ── CXリング: 手札行に被らないよう行8-9に限定・縮小 ── */
-  #player-cx-area { grid-row: 8 / 10; padding: 0; }
+  /* ── 自分CXリング: 行8〜10(手札行まで)に拡張して大きく ── */
+  /* 手札行col1-4は空きなのでCXリングが占有できる */
+  #player-cx-area { grid-row: 8 / 11; padding: 2px; }
   #opp-cx-area { padding: 0; }
 
   /* ── 右パネル: オーバーレイ ── */
@@ -1041,8 +1042,25 @@ button.danger:hover { background: #6a2a2a; }
   }
   #opp-avatar .avatar-label { font-size: 7px; white-space: nowrap; }
   #opp-avatar #ai-life { font-size: 15px; font-weight: 900; white-space: nowrap; }
-  #opp-counts { display: none; }
   #ai-hand .card { width: 10px; height: 15px; }
+
+  /* ── 相手情報: ライフ右〜📋の間に手札/墓地/山札を表示 ── */
+  #opp-counts {
+    display: flex;
+    grid-column: 12 / 16;
+    grid-row: 1 / 3;
+    z-index: 5;
+    background: transparent;
+    border: none;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 0 4px;
+  }
+  #opp-counts .info-cell { flex-direction: column; align-items: center; gap: 0; }
+  #opp-counts .info-cell-label { font-size: 6px; color: #886666; }
+  #opp-counts .info-cell-value { font-size: 12px; font-weight: 700; color: #ffbbbb; line-height: 1; }
 
   /* ── 自分アバター: コンパクト横並び ── */
   #player-avatar {
@@ -1064,8 +1082,8 @@ button.danger:hover { background: #6a2a2a; }
   #action-panel #btn-end-phase { font-size: 9px; padding: 3px 4px; }
   #action-panel #btn-pass { font-size: 8px; padding: 2px 3px; }
 
-  /* ── CXリング ── */
-  .cx-value-text { font-size: 18px; }
+  /* ── CXリング数字: 大きく ── */
+  .cx-value-text { font-size: 22px; }
 
   /* ── ヒントバー ── */
   #action-hint { font-size: 9px; }
@@ -2046,7 +2064,7 @@ button.danger:hover { background: #6a2a2a; }
   </div>
   <div id="home-record"></div>
   <div id="home-elo" style="font-size:13px;margin-top:4px;cursor:pointer;" onclick="showTrophyPanel()"></div>
-  <div class="home-version">v1.7.6 — スマホUI改善</div>
+  <div class="home-version">v1.7.7 — スマホUI改善</div>
 </div>
 
 <!-- Tutorial Overlay -->
