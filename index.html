@@ -3184,7 +3184,7 @@ function akagekiChoose(player, mode) {
     if (G.players[opp].field.length === 0) { continueStack(); return; }
     G.targetMode = { type:'opponentCreature', sourcePlayer:player, callback:(tgt) => {
       G.targetMode = null;
-      applyDamageToCreature(opp, tgt.instId, 2, player);
+      applyDamageToCreature(opp, tgt.instId, 2, player, {noRedirect:true});
       log('赤撃: 相手クリーチャーに2ダメージ', 'damage');
       checkDeath(); render(); updateHints(); continueStack();
     }};
@@ -3205,6 +3205,10 @@ function playIegeki(player, handIndex) {
   log(`${card.name} をスタックに積んだ (${costToString(card.cost)})`, 'important');
   const ocAtCast = isOCActive(player);
   const opp = 1 - player;
+  // このターン、相手クリーチャーへのダメージを相手プレイヤーへ移し替え可能にする（毎回確認）
+  if (!G.iegekiRedirectTurn) G.iegekiRedirectTurn = [-1, -1];
+  G.iegekiRedirectTurn[player] = G.turn;
+  log(`${card.name}: このターン、相手クリーチャーへのダメージを相手プレイヤーに移し替えできます`, 'important');
 
   // OC: 赤クリーチャー展開（先に積む = 後で解決）
   if (ocAtCast) {
@@ -3247,7 +3251,7 @@ function iegekiChoose(player, mode) {
     if (G.players[opp].field.length === 0) { continueStack(); return; }
     G.targetMode = { type:'opponentCreature', sourcePlayer:player, callback:(tgt) => {
       G.targetMode = null;
-      applyDamageToCreature(opp, tgt.instId, 5, player);
+      applyDamageToCreature(opp, tgt.instId, 5, player, {noRedirect:true});
       log('家撃！: 相手クリーチャーに5ダメージ', 'damage');
       checkDeath(); render(); updateHints(); continueStack();
     }};
@@ -3725,10 +3729,31 @@ function getPermanentBuff(instanceId) {
   return {power:pw, toughness:th};
 }
 
-function applyDamageToCreature(player, instId, amount, sourcePlayer) {
+function applyDamageToCreature(player, instId, amount, sourcePlayer, opts) {
   const pf = G.players[player];
   const c = pf.field.find(x=>x.instanceId===instId);
   if (!c) return;
+  // 家撃！: このターン「相手クリーチャーへ与えるダメージを相手プレイヤーに移し替えてもよい」
+  // sourcePlayer が移し替え有効・対象が相手クリーチャー・ダメージ>0 のとき、毎回任意で移し替える
+  if (!(opts && opts.noRedirect) && sourcePlayer !== undefined && sourcePlayer !== null
+      && player === 1 - sourcePlayer && amount > 0
+      && G.iegekiRedirectTurn && G.iegekiRedirectTurn[sourcePlayer] === G.turn) {
+    let redirect = false;
+    if (sourcePlayer === 0 && NET_MODE === 'local') {
+      redirect = window.confirm(
+        `家撃！移し替え：この${amount}ダメージ（対象: ${CARD_DB[c.cardId].name}）を相手プレイヤーに移し替えますか？\n[OK] プレイヤーへ ／ [キャンセル] このクリーチャーへ`);
+    } else if (sourcePlayer === 1) {
+      // AI: そのクリーチャーを倒せない場合はプレイヤーへ移し替えた方が良いと判断
+      if (getEffectiveToughness(player, c) - c.damage > amount) redirect = true;
+    }
+    if (redirect) {
+      G.players[player].life -= amount;
+      showLifeChange(player, -amount);
+      log(`家撃！移し替え: 相手プレイヤーに${amount}ダメージ`, 'damage');
+      checkDeath();
+      return;
+    }
+  }
   c.damage += amount;
   showCreatureDamage(instId, amount);
   checkCreatureDeath(player, instId, sourcePlayer);
