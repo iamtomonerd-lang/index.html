@@ -3888,9 +3888,9 @@ function trophyLoad() {
 function trophySave(t) {
   try { localStorage.setItem('dcg_trophy', JSON.stringify(t)); } catch(e) {}
 }
-// デッキ構築からユニークキーを生成（ソート済みカードリスト）
-function deckKey(mainCards) {
-  return [...mainCards].sort().join(',');
+// デッキ構築からユニークキーを生成（メイン＋土地をソート）
+function deckKey(mainCards, landCards) {
+  return [...mainCards].sort().join(',') + '|' + [...landCards].sort().join(',');
 }
 // ゲーム終了時のデッキ名を取得（dcg_decks_v2のactiveスロット名）
 function currentDeckName() {
@@ -3905,24 +3905,41 @@ function currentDeckName() {
   } catch(e) {}
   return 'デッキ1';
 }
-function trophyRecord(newRating, mainCards) {
+function trophyRecord(newRating, mainCards, landCards) {
   const t = trophyLoad();
-  // 総合最高レート
   t.peakRating = Math.max(t.peakRating || 0, newRating);
-  // デッキ別最高レート（構築ごと）
   if (!t.deckPeak) t.deckPeak = {};
-  const key = deckKey(mainCards);
+  const key = deckKey(mainCards, landCards);
   const name = currentDeckName();
-  const prev = t.deckPeak[key] || { name, rating: 0, main: [...new Set(mainCards)] };
-  prev.name = name; // 名前は常に最新を使う
+  const prev = t.deckPeak[key] || { name, rating: 0 };
+  // 名前はユーザーが後で変更できるので上書きしない（既存エントリは保持）
+  if (!t.deckPeak[key]) prev.name = name;
   prev.rating = Math.max(prev.rating, newRating);
   t.deckPeak[key] = prev;
-  // カード別最高レート（デッキに入っている全カード）
   if (!t.cardPeak) t.cardPeak = {};
-  [...new Set(mainCards)].forEach(id => {
+  const allUsed = [...new Set([...mainCards, ...landCards])];
+  allUsed.forEach(id => {
     t.cardPeak[id] = Math.max(t.cardPeak[id] || 0, newRating);
   });
   trophySave(t);
+  return key;
+}
+// カードトロフィーランク（Eloティアとは独立）
+function cardTrophyRank(r) {
+  if (r >= 1800) return { icon: '🥇', label: '金', color: '#ffcc44' };
+  if (r >= 1700) return { icon: '🥈', label: '銀', color: '#cccccc' };
+  if (r >= 1600) return { icon: '🥉', label: '銅', color: '#cd7f32' };
+  return null;
+}
+// トロフィー画面でデッキ名を編集して保存
+function trophyRenameDeck(key) {
+  const t = trophyLoad();
+  if (!t.deckPeak || !t.deckPeak[key]) return;
+  const newName = prompt('デッキ名を入力してください:', t.deckPeak[key].name);
+  if (newName === null) return;
+  t.deckPeak[key].name = newName.trim() || t.deckPeak[key].name;
+  trophySave(t);
+  showTrophyPanel();
 }
 
 function showTrophyPanel() {
@@ -3930,29 +3947,31 @@ function showTrophyPanel() {
   const peak = t.peakRating || 0;
   const peakTier = eloTierOf(peak);
 
-  // デッキ別（構築単位）
-  const deckEntries = Object.values(t.deckPeak || {}).sort((a,b) => b.rating - a.rating);
+  // デッキ別（構築単位、名前編集可）
+  const deckEntries = Object.entries(t.deckPeak || {}).sort((a,b) => b[1].rating - a[1].rating);
   let deckHtml = '';
-  deckEntries.forEach(d => {
+  deckEntries.forEach(([key, d]) => {
     const tier = eloTierOf(d.rating);
-    deckHtml += `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 4px;border-bottom:1px solid #1a1a2a;">
-      <span style="font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:180px;">${d.name}</span>
-      <span style="color:${tier.color};font-size:13px;font-weight:bold;white-space:nowrap;">${tier.icon} ${d.rating}</span>
+    const safeKey = key.replace(/'/g, "\\'");
+    deckHtml += `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 4px;border-bottom:1px solid #1a1a2a;gap:6px;">
+      <span style="font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;">${d.name}</span>
+      <button onclick="trophyRenameDeck('${safeKey}')" style="font-size:10px;padding:2px 6px;background:#1a1a3a;border:1px solid #3a3a6a;color:#8888cc;border-radius:4px;cursor:pointer;flex-shrink:0;">✏️</button>
+      <span style="color:${tier.color};font-size:13px;font-weight:bold;white-space:nowrap;flex-shrink:0;">${tier.icon} ${d.rating}</span>
     </div>`;
   });
   if (!deckHtml) deckHtml = '<div style="color:#555;font-size:12px;padding:4px 0;">まだ記録なし</div>';
 
-  // カード別（CARD_DB全カード）
+  // カード別（CARD_DB全カード、土地含む）
   const cardPeak = t.cardPeak || {};
-  const allCards = Object.values(CARD_DB).filter(c => c.type !== 'land');
+  const allCards = Object.values(CARD_DB);
   const sorted = [...allCards].sort((a,b) => (cardPeak[b.id]||0) - (cardPeak[a.id]||0));
   let cardHtml = '';
   sorted.forEach(card => {
     const r = cardPeak[card.id] || 0;
-    const tier = r ? eloTierOf(r) : null;
+    const rank = r ? cardTrophyRank(r) : null;
     cardHtml += `<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 4px;border-bottom:1px solid #111120;">
       <span style="font-size:11px;">${card.icon||''} ${card.name}</span>
-      <span style="color:${tier?tier.color:'#444'};font-size:11px;font-weight:bold;">${tier?tier.icon+' '+r:'─'}</span>
+      <span style="color:${rank?rank.color:'#444'};font-size:11px;font-weight:bold;">${rank ? rank.icon+' '+rank.label+(r?' ('+r+')':'') : r ? r : '─'}</span>
     </div>`;
   });
 
@@ -3962,9 +3981,10 @@ function showTrophyPanel() {
       <div style="font-size:28px;font-weight:bold;color:${peakTier.color}">${peak ? peakTier.icon+' '+peak : '─'}</div>
       <div style="font-size:13px;color:${peakTier.color}">${peak ? peakTier.name : '未挑戦'}</div>
     </div>
-    <div style="font-size:12px;color:#888;margin-bottom:4px;">デッキ別最高レート</div>
+    <div style="font-size:12px;color:#888;margin-bottom:4px;">デッキ別最高レート <span style="color:#666;font-size:10px;">（✏️で名前変更）</span></div>
     <div style="margin-bottom:12px;max-height:160px;overflow-y:auto;">${deckHtml}</div>
-    <div style="font-size:12px;color:#888;margin-bottom:4px;">カード別最高レート（全カード）</div>
+    <div style="font-size:12px;color:#888;margin-bottom:2px;">カード別トロフィー</div>
+    <div style="font-size:10px;color:#666;margin-bottom:4px;">🥇金 1800以上 ／ 🥈銀 1700以上 ／ 🥉銅 1600以上</div>
     <div style="max-height:200px;overflow-y:auto;margin-bottom:12px;">${cardHtml}</div>
     <button onclick="closeModal();" style="width:100%;padding:10px;background:#12121e;border:1px solid #4a4a6a;color:#aaaacc;border-radius:6px;cursor:pointer;">閉じる</button>
   `);
@@ -4023,11 +4043,11 @@ function endGame(winner) {
     const delta = eloCalcDelta(oldR, RATED_OPP_RATING, winner === 0);
     const newR = oldR + delta;
     eloSaveRating(newR);
-    // トロフィー記録（プレイヤーデッキを検出して保存）
-    const playerMainCards = G.players[0].deck.concat(
-      G.players[0].hand, G.players[0].field.map(c=>c.cardId), G.players[0].graveyard
-    );
-    trophyRecord(newR, playerMainCards);
+    // トロフィー記録（メイン＋土地の全構築で保存）
+    const p0 = G.players[0];
+    const playerMainCards = p0.deck.concat(p0.hand, p0.field.map(c=>c.cardId), p0.graveyard, p0.exile||[]);
+    const playerLandCards = p0.lands.map(l=>l.cardId).concat(p0.landDeck||[]);
+    trophyRecord(newR, playerMainCards, playerLandCards);
     RATED_MODE = false;
     const tier = eloTierOf(newR);
     const sign = delta >= 0 ? '+' : '';
