@@ -940,6 +940,74 @@ button.danger:hover { background: #6a2a2a; }
   #db-detail-panel { width: 170px; padding: 8px; }
 }
 
+/* ── スマホ横向き専用レイアウト (高さ480px以下) ── */
+@media (max-height: 480px) and (orientation: landscape) {
+  #board {
+    grid-template-rows:
+      min(24px, 4vh)      /* 行1: 相手カウント上 */
+      min(24px, 4vh)      /* 行2: 相手手札 */
+      min(26px, 3.5vh)    /* 行3: 相手土地 */
+      minmax(0, 1fr)      /* 行4: AIフィールド */
+      min(16px, 2.5vh)    /* 行5: 中央ヒントバー */
+      minmax(0, 1fr)      /* 行6: プレイヤーフィールド */
+      min(26px, 3.5vh)    /* 行7: 自分土地 */
+      min(30px, 5vh)      /* 行8: 自分カウント/アバター */
+      min(30px, 5vh)      /* 行9: ターン情報/アクション */
+      min(90px, 16vh);    /* 行10: 手札 */
+  }
+
+  /* 手札カードを小さく */
+  #player-hand .card {
+    width: 58px; height: 85px; margin-right: 4px;
+  }
+  #player-hand .card .card-art { font-size: 26px; }
+  #player-hand .card .card-name { font-size: 7px; }
+  #player-hand .card .card-pt { font-size: 10px; }
+  #player-hand .card .card-cost { font-size: 7px; }
+  #player-hand .card:hover { transform: translateY(-14px) scale(1.1); }
+  #player-hand.hand-zone { padding: 4px 8px 4px; gap: 0; }
+
+  /* フィールドカードを行高さに合わせる */
+  #ai-field-row .field-slot, #ai-field-row .card,
+  #player-field-row .field-slot, #player-field-row .card {
+    height: min(90px, calc(100% - 4px));
+  }
+  #ai-field-row .field-zone, #player-field-row .field-zone { gap: 3px; }
+
+  /* 土地カードを小さく */
+  .player-row .land-card { width: 22px; height: 32px; font-size: 12px; }
+  #player-lands-row { padding: 1px 4px; }
+
+  /* ライフ表示を小さく */
+  #opp-avatar #ai-life, #player-avatar #player-life { font-size: 20px; }
+  #opp-avatar .avatar-label, #player-avatar .avatar-label { font-size: 7px; }
+
+  /* カウント表示を小さく */
+  .info-cell-value { font-size: 12px; }
+  .info-cell-label { font-size: 7px; }
+
+  /* アクションボタンを小さく */
+  #action-panel #controls-btns button { font-size: 9px; padding: 3px 4px; min-height: 22px; }
+  #action-panel #btn-end-phase { font-size: 10px; padding: 4px 4px; }
+  #action-panel #btn-pass { font-size: 9px; padding: 3px 4px; }
+  #action-panel { padding: 3px 3px; gap: 2px; }
+
+  /* CXリング文字 */
+  .cx-value-text { font-size: 20px; }
+
+  /* 右パネルタブを小さく */
+  .rpanel-tab { font-size: 9px; padding: 3px 4px; }
+
+  /* ヒントバー文字 */
+  #action-hint { font-size: 10px; }
+
+  /* AIの手札表示 */
+  #ai-hand .card { width: 14px; height: 20px; }
+
+  /* ターン情報 */
+  #player-turn-info { font-size: 9px; }
+}
+
 /* ── モーダル ── */
 #modal {
   display: none;
