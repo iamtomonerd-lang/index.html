@@ -1,0 +1,14 @@
+# Core diffusion stack
+torch>=2.1.0
+diffusers>=0.27.0
+transformers>=4.38.0
+accelerate>=0.27.0
+safetensors>=0.4.0
+peft>=0.9.0          # LCM-LoRA 等のアダプタ読み込み用
+Pillow>=10.0.0
+
+# NOTE:
+# - GPU(CUDA)を使う場合は、環境に合わせて公式手順で torch を入れ直してください:
+#     https://pytorch.org/get-started/locally/
+# - Apple Silicon は標準の torch で mps が使えます。
+# - CPUのみでも動きますが低速です。
