@@ -1356,6 +1356,8 @@ button.danger:hover { background: #6a2a2a; }
 }
 #home-screen .home-btn.btn-rated  { border-color: #ccaa33; color: #ccaa33; }
 #home-screen .home-btn.btn-rated:hover  { border-color: #ffdd66; box-shadow: 0 8px 24px #ccaa3344; }
+#home-screen .home-btn.btn-trophy { border-color: #aa8833; color: #ddbb55; }
+#home-screen .home-btn.btn-trophy:hover { border-color: #ddcc66; box-shadow: 0 8px 24px #aa883344; }
 #home-screen .home-btn.btn-battle { border-color: #6644aa; }
 #home-screen .home-btn.btn-battle:hover { border-color: #aa88ff; box-shadow: 0 8px 24px #9966ff44; }
 #home-screen .home-btn.btn-hotseat { border-color: #446688; }
@@ -1863,11 +1865,12 @@ button.danger:hover { background: #6a2a2a; }
     <button class="home-btn btn-hotseat" onclick="startHotseat()">👥 2人対戦（同デバイス）</button>
     <button class="home-btn btn-deck"    onclick="showDeckBuilder()">📖 デッキ構築</button>
     <button class="home-btn btn-ai"      onclick="showAIFromHome()">🧠 AI学習</button>
+    <button class="home-btn btn-trophy"   onclick="showTrophyPanel()">🏆 トロフィー</button>
     <button class="home-btn btn-tutorial" onclick="showTutorial()">❓ 遊び方</button>
   </div>
   <div id="home-record"></div>
-  <div id="home-elo" style="font-size:13px;margin-top:4px;"></div>
-  <div class="home-version">v1.5.0 — レート戦</div>
+  <div id="home-elo" style="font-size:13px;margin-top:4px;cursor:pointer;" onclick="showTrophyPanel()"></div>
+  <div class="home-version">v1.6.0 — レート戦＋トロフィー</div>
 </div>
 
 <!-- Tutorial Overlay -->
@@ -3878,6 +3881,93 @@ function checkDeath() {
   }
 }
 
+// ── トロフィー・実績 ──────────────────────────────────────────
+function trophyLoad() {
+  try { return JSON.parse(localStorage.getItem('dcg_trophy') || '{}'); } catch(e) { return {}; }
+}
+function trophySave(t) {
+  try { localStorage.setItem('dcg_trophy', JSON.stringify(t)); } catch(e) {}
+}
+// プレイヤーのデッキがどのプリセットに最も近いかを判定
+function detectDeckColor(mainCards) {
+  const ids = new Set(mainCards);
+  const wScore = DB_WHITE_MAIN.filter(id => ids.has(id)).length;
+  const rScore = DB_RED_MAIN.filter(id => ids.has(id)).length;
+  const bScore = DB_BLUE_MAIN.filter(id => ids.has(id)).length;
+  const max = Math.max(wScore, rScore, bScore);
+  if (max < 3) return 'custom';
+  if (wScore === max) return 'white';
+  if (rScore === max) return 'red';
+  return 'blue';
+}
+function trophyRecord(newRating, mainCards) {
+  const t = trophyLoad();
+  // 総合最高レート
+  t.peakRating = Math.max(t.peakRating || 0, newRating);
+  // デッキ別最高レート
+  const color = detectDeckColor(mainCards);
+  if (!t.deckPeak) t.deckPeak = {};
+  t.deckPeak[color] = Math.max(t.deckPeak[color] || 0, newRating);
+  // カード別最高レート（デッキに入っている全カード）
+  if (!t.cardPeak) t.cardPeak = {};
+  const uniqueCards = [...new Set(mainCards)];
+  uniqueCards.forEach(id => {
+    t.cardPeak[id] = Math.max(t.cardPeak[id] || 0, newRating);
+  });
+  trophySave(t);
+  return { color };
+}
+
+const DECK_LABELS = { white: '⚪ 蒼穹の白', red: '🔴 SD攻撃者の赤', blue: '🔵 収集者の青', custom: '🎲 カスタム' };
+
+function showTrophyPanel() {
+  const t = trophyLoad();
+  const peak = t.peakRating || 0;
+  const peakTier = eloTierOf(peak);
+
+  // デッキ別セクション
+  const deckColors = ['white', 'red', 'blue', 'custom'];
+  let deckHtml = '';
+  deckColors.forEach(c => {
+    const r = (t.deckPeak || {})[c] || 0;
+    if (!r) return;
+    const tier = eloTierOf(r);
+    deckHtml += `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid #1a1a2a;">
+      <span style="font-size:12px;">${DECK_LABELS[c]}</span>
+      <span style="color:${tier.color};font-size:13px;font-weight:bold;">${tier.icon} ${r}</span>
+    </div>`;
+  });
+  if (!deckHtml) deckHtml = '<div style="color:#555;font-size:12px;">まだ記録なし</div>';
+
+  // カード別上位10件
+  const cardPeak = t.cardPeak || {};
+  const cardEntries = Object.entries(cardPeak).sort((a,b) => b[1]-a[1]).slice(0, 10);
+  let cardHtml = '';
+  cardEntries.forEach(([id, r]) => {
+    const card = CARD_DB[id];
+    if (!card) return;
+    const tier = eloTierOf(r);
+    cardHtml += `<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid #1a1a2a;">
+      <span style="font-size:12px;">${card.icon||''} ${card.name}</span>
+      <span style="color:${tier.color};font-size:12px;font-weight:bold;">${tier.icon} ${r}</span>
+    </div>`;
+  });
+  if (!cardHtml) cardHtml = '<div style="color:#555;font-size:12px;">まだ記録なし</div>';
+
+  showModal('🏆 トロフィー', `
+    <div style="text-align:center;margin-bottom:14px;padding:12px;background:#111122;border-radius:8px;border:1px solid #2a2a4a;">
+      <div style="font-size:12px;color:#888;margin-bottom:4px;">総合最高レート</div>
+      <div style="font-size:30px;font-weight:bold;color:${peakTier.color}">${peakTier.icon} ${peak||'─'}</div>
+      <div style="font-size:14px;color:${peakTier.color}">${peak ? peakTier.name : '未挑戦'}</div>
+    </div>
+    <div style="font-size:12px;color:#888;margin-bottom:6px;">デッキ別最高レート</div>
+    <div style="margin-bottom:14px;">${deckHtml}</div>
+    <div style="font-size:12px;color:#888;margin-bottom:6px;">カード別最高レート（上位10）</div>
+    <div style="margin-bottom:12px;">${cardHtml}</div>
+    <button onclick="closeModal();" style="width:100%;padding:10px;background:#12121e;border:1px solid #4a4a6a;color:#aaaacc;border-radius:6px;cursor:pointer;">閉じる</button>
+  `);
+}
+
 // ── Elo レーティングシステム ──────────────────────────────────
 const ELO_TIERS = [
   { name: 'Bronze',   min: 0,    max: 999,  color: '#cd7f32', icon: '🥉', mctsScale: 0.15, mistakeRate: 0.30 },
@@ -3931,6 +4021,11 @@ function endGame(winner) {
     const delta = eloCalcDelta(oldR, RATED_OPP_RATING, winner === 0);
     const newR = oldR + delta;
     eloSaveRating(newR);
+    // トロフィー記録（プレイヤーデッキを検出して保存）
+    const playerMainCards = G.players[0].deck.concat(
+      G.players[0].hand, G.players[0].field.map(c=>c.cardId), G.players[0].graveyard
+    );
+    trophyRecord(newR, playerMainCards);
     RATED_MODE = false;
     const tier = eloTierOf(newR);
     const sign = delta >= 0 ? '+' : '';
