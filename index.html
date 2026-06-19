@@ -945,121 +945,133 @@ button.danger:hover { background: #6a2a2a; }
 
 /* ── スマホ横向き専用レイアウト (高さ480px以下) ── */
 @media (max-height: 480px) and (orientation: landscape) {
+
+  /* ── グリッド行: フィールドと手札を最大化 ── */
   #board {
     grid-template-rows:
-      min(24px, 4vh)      /* 行1: 相手カウント上 */
-      min(24px, 4vh)      /* 行2: 相手手札 */
-      min(26px, 3.5vh)    /* 行3: 相手土地 */
-      minmax(0, 1fr)      /* 行4: AIフィールド */
-      min(16px, 2.5vh)    /* 行5: 中央ヒントバー */
-      minmax(0, 1fr)      /* 行6: プレイヤーフィールド */
-      min(26px, 3.5vh)    /* 行7: 自分土地 */
-      min(30px, 5vh)      /* 行8: 自分カウント/アバター */
-      min(30px, 5vh)      /* 行9: ターン情報/アクション */
-      min(90px, 16vh);    /* 行10: 手札 */
+      16px            /* 行1: 相手情報 */
+      16px            /* 行2: 相手手札 */
+      16px            /* 行3: 相手土地 */
+      minmax(0, 1fr)  /* 行4: AIフィールド ★ */
+      12px            /* 行5: ヒントバー */
+      minmax(0, 1fr)  /* 行6: プレイヤーフィールド ★ */
+      16px            /* 行7: 自分土地 */
+      26px            /* 行8: 自分情報 */
+      26px            /* 行9: ボタン */
+      min(110px, 22vh); /* 行10: 手札 ★ */
   }
 
-  /* 手札カードを小さく */
-  #player-hand .card {
-    width: 58px; height: 85px; margin-right: 4px;
-  }
-  #player-hand .card .card-art { font-size: 26px; }
-  #player-hand .card .card-name { font-size: 7px; }
-  #player-hand .card .card-pt { font-size: 10px; }
-  #player-hand .card .card-cost { font-size: 7px; }
-  #player-hand .card:hover { transform: translateY(-14px) scale(1.1); }
-  #player-hand.hand-zone { padding: 4px 8px 4px; gap: 0; }
-
-  /* フィールドカードを行高さに合わせる */
-  #ai-field-row .field-slot, #ai-field-row .card,
-  #player-field-row .field-slot, #player-field-row .card {
-    height: min(90px, calc(100% - 4px));
-  }
-  #ai-field-row .field-zone, #player-field-row .field-zone { gap: 3px; }
-
-  /* 土地カードを小さく */
-  .player-row .land-card { width: 22px; height: 32px; font-size: 12px; }
-  #player-lands-row { padding: 1px 4px; }
-
-  /* カウント表示を小さく */
-  .info-cell-value { font-size: 12px; }
-  .info-cell-label { font-size: 7px; }
-
-  /* アクションボタンを小さく */
-  #action-panel #controls-btns button { font-size: 9px; padding: 3px 4px; min-height: 22px; }
-  #action-panel #btn-end-phase { font-size: 10px; padding: 4px 4px; }
-  #action-panel #btn-pass { font-size: 9px; padding: 3px 4px; }
-  #action-panel { padding: 3px 3px; gap: 2px; }
-
-  /* CXリング文字 */
-  .cx-value-text { font-size: 20px; }
-
-  /* 右パネルタブを小さく */
-  .rpanel-tab { font-size: 9px; padding: 3px 4px; }
-
-  /* ヒントバー文字 */
-  #action-hint { font-size: 10px; }
-
-  /* AIの手札表示 */
-  #ai-hand .card { width: 14px; height: 20px; }
-
-  /* ターン情報 */
-  #player-turn-info { font-size: 9px; }
-
-  /* 右パネルをオーバーレイに変更 */
+  /* ── 右パネル: オーバーレイ ── */
   #right-panel {
     display: none;
     position: fixed;
     top: 0; right: 0;
-    width: 52vw; max-width: 260px;
+    width: 56vw; max-width: 290px;
     height: 100vh;
     z-index: 300;
-    background: rgba(10,10,22,0.97);
+    background: rgba(8,8,20,0.98);
     border-left: 2px solid var(--accent);
     flex-direction: column;
-    box-shadow: -4px 0 20px rgba(0,0,0,0.8);
+    box-shadow: -6px 0 24px rgba(0,0,0,0.85);
   }
   #right-panel.rp-open { display: flex; }
 
-  /* 右パネルが開いているとき背景をタップで閉じるオーバーレイ */
   #rp-backdrop {
     display: none;
-    position: fixed;
-    inset: 0;
+    position: fixed; inset: 0;
     z-index: 299;
-    background: rgba(0,0,0,0.4);
+    background: rgba(0,0,0,0.45);
   }
   #rp-backdrop.rp-open { display: block; }
 
-  /* フィールドを右パネル分まで拡張 */
-  #ai-field-row { grid-column: 3 / 17; }
+  /* ── 列拡張: 右パネル分を全行に開放 ── */
+  #ai-field-row    { grid-column: 3 / 17; }
   #player-field-row { grid-column: 3 / 17; }
-  #ai-lands-row { grid-column: 1 / 17; }
+  #ai-lands-row    { grid-column: 1 / 17; }
   #player-lands-row { grid-column: 1 / 17; }
-  #center-hint-bar { grid-column: 1 / 17; }
-  #opp-avatar { grid-column: 9 / 17; }
-  #player-avatar { grid-column: 9 / 17; }
-  #action-panel { grid-column: 13 / 17; }
+  #center-hint-bar  { grid-column: 1 / 17; }
+  #opp-avatar      { grid-column: 9 / 17; }
+  #player-avatar   { grid-column: 9 / 13; }
+  #action-panel    { grid-column: 13 / 17; }
 
-  /* ライフ表示を小さく、横並びにしてトグルボタンのスペース確保 */
-  #opp-avatar { flex-direction: row; flex-wrap: wrap; justify-content: center; align-items: center; gap: 2px; padding: 2px 4px; }
-  #player-avatar { flex-direction: row; flex-wrap: wrap; justify-content: center; align-items: center; gap: 2px; padding: 2px 4px; }
-  #opp-avatar #ai-life, #player-avatar #player-life { font-size: 16px; }
-  #opp-avatar .avatar-label, #player-avatar .avatar-label { font-size: 7px; }
+  /* ── 手札カード: 見やすく大きく ── */
+  #player-hand.hand-zone { padding: 3px 6px 2px; gap: 0; }
+  #player-hand .card { width: 68px; height: 100px; margin-right: 3px; }
+  #player-hand .card .card-art { font-size: 30px; }
+  #player-hand .card .card-name { font-size: 8px; }
+  #player-hand .card .card-pt { font-size: 11px; }
+  #player-hand .card .card-cost { font-size: 8px; }
+  #player-hand .card:hover { transform: translateY(-18px) scale(1.12); }
 
-  /* トグルボタン */
+  /* ── フィールドカード: アートしっかり見える ── */
+  #ai-field-row .field-slot, #ai-field-row .card,
+  #player-field-row .field-slot, #player-field-row .card {
+    height: min(115px, calc(100% - 4px));
+  }
+  #ai-field-row .field-zone, #player-field-row .field-zone { gap: 3px; }
+  #ai-field-row .card .card-art,
+  #player-field-row .card .card-art { font-size: 28px; }
+  #ai-field-row .card .card-name,
+  #player-field-row .card .card-name { font-size: 8px; }
+
+  /* ── 土地 ── */
+  .land-card { width: 20px !important; height: 28px !important; font-size: 11px !important; }
+  #player-lands-row, #ai-lands-row { padding: 1px 4px; }
+
+  /* ── 相手アバター: ライフ+ボタンを横一列 ── */
+  #opp-avatar {
+    flex-direction: row; flex-wrap: nowrap;
+    justify-content: flex-start; align-items: center;
+    gap: 6px; padding: 0 8px; overflow: hidden;
+  }
+  #opp-avatar .avatar-label { font-size: 7px; white-space: nowrap; }
+  #opp-avatar #ai-life { font-size: 15px; font-weight: 900; white-space: nowrap; }
+  #opp-counts { display: none; }
+  #ai-hand .card { width: 10px; height: 15px; }
+
+  /* ── 自分アバター: コンパクト横並び ── */
+  #player-avatar {
+    flex-direction: row; flex-wrap: nowrap;
+    justify-content: center; align-items: center;
+    gap: 4px; padding: 0 4px;
+  }
+  #player-avatar .avatar-label { font-size: 7px; }
+  #player-avatar #player-life { font-size: 15px; font-weight: 900; }
+
+  /* ── カウント表示 ── */
+  .info-cell-value { font-size: 11px; }
+  .info-cell-label { font-size: 6px; }
+  #player-counts { gap: 2px; }
+
+  /* ── アクションボタン ── */
+  #action-panel { padding: 2px 3px; gap: 2px; }
+  #action-panel #controls-btns button { font-size: 8px; padding: 2px 3px; min-height: 20px; }
+  #action-panel #btn-end-phase { font-size: 9px; padding: 3px 4px; }
+  #action-panel #btn-pass { font-size: 8px; padding: 2px 3px; }
+
+  /* ── CXリング ── */
+  .cx-value-text { font-size: 18px; }
+
+  /* ── ヒントバー ── */
+  #action-hint { font-size: 9px; }
+
+  /* ── ターン情報 ── */
+  #player-turn-info { font-size: 8px; }
+
+  /* ── 右パネルトグルボタン ── */
   .rp-toggle-btn {
     display: inline-flex;
     align-items: center; justify-content: center;
-    background: rgba(60,60,120,0.7);
+    background: rgba(50,50,110,0.75);
     border: 1px solid var(--accent);
     border-radius: 4px;
     color: #aaaaff;
-    font-size: 12px;
-    padding: 2px 5px;
+    font-size: 11px;
+    padding: 1px 5px;
     cursor: pointer;
     line-height: 1;
     touch-action: manipulation;
+    flex-shrink: 0;
   }
 }
 
