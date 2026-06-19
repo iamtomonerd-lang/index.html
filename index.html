@@ -348,6 +348,9 @@ body {
 #player-counts .info-cell-value { color: #aaccaa; }
 
 
+/* 右パネルトグルボタン: 通常は非表示 */
+.rp-toggle-btn { display: none; }
+
 /* 自分のアバター (col 9-12, 行 八-九) */
 #player-avatar {
   grid-column: 9 / 13; grid-row: 8 / 10;
@@ -978,10 +981,6 @@ button.danger:hover { background: #6a2a2a; }
   .player-row .land-card { width: 22px; height: 32px; font-size: 12px; }
   #player-lands-row { padding: 1px 4px; }
 
-  /* ライフ表示を小さく */
-  #opp-avatar #ai-life, #player-avatar #player-life { font-size: 20px; }
-  #opp-avatar .avatar-label, #player-avatar .avatar-label { font-size: 7px; }
-
   /* カウント表示を小さく */
   .info-cell-value { font-size: 12px; }
   .info-cell-label { font-size: 7px; }
@@ -1006,6 +1005,62 @@ button.danger:hover { background: #6a2a2a; }
 
   /* ターン情報 */
   #player-turn-info { font-size: 9px; }
+
+  /* 右パネルをオーバーレイに変更 */
+  #right-panel {
+    display: none;
+    position: fixed;
+    top: 0; right: 0;
+    width: 52vw; max-width: 260px;
+    height: 100vh;
+    z-index: 300;
+    background: rgba(10,10,22,0.97);
+    border-left: 2px solid var(--accent);
+    flex-direction: column;
+    box-shadow: -4px 0 20px rgba(0,0,0,0.8);
+  }
+  #right-panel.rp-open { display: flex; }
+
+  /* 右パネルが開いているとき背景をタップで閉じるオーバーレイ */
+  #rp-backdrop {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 299;
+    background: rgba(0,0,0,0.4);
+  }
+  #rp-backdrop.rp-open { display: block; }
+
+  /* フィールドを右パネル分まで拡張 */
+  #ai-field-row { grid-column: 3 / 17; }
+  #player-field-row { grid-column: 3 / 17; }
+  #ai-lands-row { grid-column: 1 / 17; }
+  #player-lands-row { grid-column: 1 / 17; }
+  #center-hint-bar { grid-column: 1 / 17; }
+  #opp-avatar { grid-column: 9 / 17; }
+  #player-avatar { grid-column: 9 / 17; }
+  #action-panel { grid-column: 13 / 17; }
+
+  /* ライフ表示を小さく、横並びにしてトグルボタンのスペース確保 */
+  #opp-avatar { flex-direction: row; flex-wrap: wrap; justify-content: center; align-items: center; gap: 2px; padding: 2px 4px; }
+  #player-avatar { flex-direction: row; flex-wrap: wrap; justify-content: center; align-items: center; gap: 2px; padding: 2px 4px; }
+  #opp-avatar #ai-life, #player-avatar #player-life { font-size: 16px; }
+  #opp-avatar .avatar-label, #player-avatar .avatar-label { font-size: 7px; }
+
+  /* トグルボタン */
+  .rp-toggle-btn {
+    display: inline-flex;
+    align-items: center; justify-content: center;
+    background: rgba(60,60,120,0.7);
+    border: 1px solid var(--accent);
+    border-radius: 4px;
+    color: #aaaaff;
+    font-size: 12px;
+    padding: 2px 5px;
+    cursor: pointer;
+    line-height: 1;
+    touch-action: manipulation;
+  }
 }
 
 /* ── モーダル ── */
@@ -1755,7 +1810,11 @@ button.danger:hover { background: #6a2a2a; }
       <div class="avatar-label">ENEMY</div>
       <div class="life-display" id="ai-life">❤️ 20</div>
       <span id="ai-thinking">⚙ 考え中...</span>
+      <button class="rp-toggle-btn" onclick="toggleRightPanel()" title="パネル表示">📋</button>
     </div>
+
+    <!-- 右パネル背景タップ用バックドロップ -->
+    <div id="rp-backdrop" onclick="toggleRightPanel()"></div>
 
     <!-- 右パネル (col 13-16, 行 一-九) -->
     <div id="right-panel">
@@ -7734,6 +7793,13 @@ const KEYWORD_DEFS = {
 function kwTipHtml(kw) {
   const def = KEYWORD_DEFS[kw] || kw;
   return `<span class="kw-tip" data-def="${def}">${kw}</span>`;
+}
+
+function toggleRightPanel() {
+  const panel = document.getElementById('right-panel');
+  const backdrop = document.getElementById('rp-backdrop');
+  const open = panel.classList.toggle('rp-open');
+  backdrop.classList.toggle('rp-open', open);
 }
 
 function switchRightPanel(tab) {
