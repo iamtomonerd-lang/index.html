@@ -1949,7 +1949,7 @@ button.danger:hover { background: #6a2a2a; }
 </div>
 
 <!-- Retire button -->
-<button id="btn-retire" onclick="confirmRetire()">🏳️ リタイア</button>
+<button id="btn-retire" ontouchstart="retireHoldStart(event)" ontouchend="retireHoldEnd(event)" onmousedown="retireHoldStart(event)" onmouseup="retireHoldEnd(event)" onmouseleave="retireHoldEnd(null)">🏳️ リタイア</button>
 
 <!-- Hotseat Pass Screen -->
 <div id="hotseat-pass">
@@ -4085,9 +4085,11 @@ function resetBoardAndHome() {
 // ── リタイア（投了）────────────────────────────────────────
 function confirmRetire() {
   if (!G || G.phase === 'ended') { resetBoardAndHome(); return; }
+  const ratedNote = RATED_MODE ? '<br><span style="color:#ffcc44;font-size:12px;">⚠️ レート戦中 — 敗北としてレートが変動します</span>' : '';
   showModal('リタイア確認', `
-    <p style="margin-bottom:16px;">対戦をリタイアしてホームに戻りますか？<br><span style="color:#888;font-size:12px;">（AI対戦の場合は敗北として記録されます）</span></p>
+    <p style="margin-bottom:16px;">対戦をリタイアしてホームに戻りますか？<br><span style="color:#888;font-size:12px;">（AI対戦の場合は敗北として記録されます）</span>${ratedNote}</p>
     <button onclick="closeModal();doRetire();" style="width:100%;padding:10px;margin-bottom:8px;background:#2a1212;border:1px solid #884444;color:#ffaaaa;border-radius:6px;cursor:pointer;">🏳️ リタイアする</button>
+    <button onclick="closeModal();emergencyEscape();" style="width:100%;padding:10px;margin-bottom:8px;background:#1a0a2a;border:1px solid #664488;color:#ddaaff;border-radius:6px;cursor:pointer;">🚨 フリーズ脱出（レート変動なし）</button>
     <button onclick="closeModal();" style="width:100%;padding:10px;background:#12121e;border:1px solid #4a4a6a;color:#aaaacc;border-radius:6px;cursor:pointer;">対戦に戻る</button>`);
 }
 
@@ -4098,10 +4100,80 @@ function doRetire() {
       rec.losses = (rec.losses || 0) + 1;
       localStorage.setItem('dcg_record', JSON.stringify(rec));
     } catch(e) {}
+    // レート戦中のリタイアはElo敗北処理
+    if (RATED_MODE) {
+      const oldR = eloGetRating();
+      const delta = eloCalcDelta(oldR, RATED_OPP_RATING, false);
+      const newR = oldR + delta;
+      eloSaveRating(newR);
+      const p0 = G.players[0];
+      const mainCards = p0.deck.concat(p0.hand, p0.field.map(c=>c.cardId), p0.graveyard, p0.exile||[]);
+      const landCards = p0.lands.map(l=>l.cardId).concat(p0.landDeck||[]);
+      trophyRecord(newR, mainCards, landCards);
+      RATED_MODE = false;
+      const tier = eloTierOf(newR);
+      const sign = delta >= 0 ? '+' : '';
+      log(`レート変動: ${sign}${delta} → ${tier.icon} ${newR} (${tier.name})`, 'important');
+    }
   }
   if (G) G.phase = 'ended';
   log('🏳️ リタイアしました', 'important');
   resetBoardAndHome();
+}
+
+// フリーズ・バグ時の強制脱出（Elo変動なし）
+function emergencyEscape() {
+  RATED_MODE = false; // レート変動させない
+  if (G) {
+    G.phase = 'ended';
+    G.stack = [];
+    G.targetMode = null;
+    G.awaitingPriority = false;
+    G.attackMode = false;
+    G.blockMode = false;
+    G.combatArrows = [];
+  }
+  // タイマー等の残留を全てクリア
+  clearAllAITimers();
+  const logEl = document.getElementById('log');
+  if (logEl) logEl.innerHTML = '';
+  showHomeScreen();
+}
+
+// AI関連タイマーを強制クリア
+let _aiTimerIds = [];
+function trackAITimer(id) { _aiTimerIds.push(id); return id; }
+function clearAllAITimers() {
+  _aiTimerIds.forEach(id => { try { clearTimeout(id); clearInterval(id); } catch(e){} });
+  _aiTimerIds = [];
+}
+
+// リタイアボタン長押し（3秒）でフリーズ脱出
+let _retireHoldTimer = null;
+let _retireHoldStart = 0;
+let _retireTriggered = false;
+function retireHoldStart(e) {
+  e && e.preventDefault && e.preventDefault();
+  _retireHoldStart = Date.now();
+  _retireTriggered = false;
+  const btn = document.getElementById('btn-retire');
+  _retireHoldTimer = setTimeout(() => {
+    _retireTriggered = true;
+    if (btn) btn.textContent = '🏳️ リタイア';
+    emergencyEscape();
+  }, 3000);
+  // 視覚フィードバック: 徐々にボタンが赤くなる
+  if (btn) btn.style.transition = 'background 3s';
+  if (btn) btn.style.background = 'rgba(120,20,20,0.95)';
+}
+function retireHoldEnd(e) {
+  if (_retireHoldTimer) { clearTimeout(_retireHoldTimer); _retireHoldTimer = null; }
+  const btn = document.getElementById('btn-retire');
+  if (btn) { btn.style.transition = ''; btn.style.background = ''; btn.textContent = '🏳️ リタイア'; }
+  if (!_retireTriggered && e !== null && (Date.now() - _retireHoldStart) < 800) {
+    // 短タップ → 通常のリタイア確認
+    confirmRetire();
+  }
 }
 
 // ============================================================
