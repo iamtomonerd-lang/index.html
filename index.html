@@ -1997,8 +1997,8 @@ const CARD_DB = {
   'serashia_heishi': {
     id:'serashia_heishi', name:'セラシアの兵士', type:'creature', color:'W',
     cost:{W:2,C:1}, power:2, toughness:5, subtype:'人間(戦士)', icon:'🗡️',
-    keywords:[], text:'■ブロック時、1枚引く',
-    onBlock:'draw1'
+    keywords:[], text:'■出た時、相手クリーチャー１体選ぶ。次の相手のターン中、そのクリーチャーは可能なら攻撃する\n■ブロック時、1枚引く',
+    etb:'mustAttackTarget', onBlock:'draw1'
   },
   'serashia_junhei': {
     id:'serashia_junhei', name:'セラシアの盾兵', type:'creature', color:'W',
