@@ -512,6 +512,13 @@ body {
   font-size: 36px;
   border-bottom: 1px solid rgba(255,255,255,0.12);
   position: relative;
+  overflow: hidden;
+}
+.card-art-img {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  object-fit: cover;
 }
 .card-bottom {
   padding: 3px 4px;
@@ -6028,6 +6035,19 @@ function render() {
   }
 }
 
+// 生成イラスト機能のスイッチ。card-art-ai/integrate.py が true に書き換える。
+const CARD_ART_ENABLED = false;
+const CARD_ART_DIR = 'images/cards';
+// 生成画像があれば<img>で表示し、無ければ（読み込み失敗時）絵文字にフォールバック
+function cardArtHtml(card) {
+  if (!CARD_ART_ENABLED) return `<div class="card-art">${card.icon}</div>`;
+  return `<div class="card-art">`
+    + `<img class="card-art-img" src="${CARD_ART_DIR}/${card.id}.png" alt="" `
+    + `onerror="this.style.display='none';this.nextElementSibling.style.display='';">`
+    + `<span class="card-art-emoji" style="display:none">${card.icon}</span>`
+    + `</div>`;
+}
+
 function buildCardHTML(card, inst, playerOwner) {
   let ptHtml = '';
   if (card.type === 'creature' && inst) {
@@ -6046,7 +6066,7 @@ function buildCardHTML(card, inst, playerOwner) {
   const dmg = inst && inst.damage > 0 ? `<div class="damage-counter">${inst.damage}</div>` : '';
   const chg = inst && inst.chargeCard ? `<div class="charge-indicator">CG</div>` : '';
   return `
-    <div class="card-art">${card.icon}</div>
+    ${cardArtHtml(card)}
     <div class="card-bottom">
       <div class="card-name">${card.name}</div>
       <div class="card-type-line">${card.type === 'creature' ? card.subtype : card.type}</div>
