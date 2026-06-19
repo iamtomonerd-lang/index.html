@@ -1354,6 +1354,8 @@ button.danger:hover { background: #6a2a2a; }
 #home-screen .home-btn:active {
   transform: translateY(0);
 }
+#home-screen .home-btn.btn-rated  { border-color: #ccaa33; color: #ccaa33; }
+#home-screen .home-btn.btn-rated:hover  { border-color: #ffdd66; box-shadow: 0 8px 24px #ccaa3344; }
 #home-screen .home-btn.btn-battle { border-color: #6644aa; }
 #home-screen .home-btn.btn-battle:hover { border-color: #aa88ff; box-shadow: 0 8px 24px #9966ff44; }
 #home-screen .home-btn.btn-hotseat { border-color: #446688; }
@@ -1856,14 +1858,16 @@ button.danger:hover { background: #6a2a2a; }
   <div class="home-title">DCG</div>
   <div class="home-subtitle">デジタルカードゲーム</div>
   <div class="home-buttons">
-    <button class="home-btn btn-battle"  onclick="showLobbyFromHome()">⚔️ AI対戦</button>
+    <button class="home-btn btn-rated"   onclick="showRatedFromHome()">🏆 レート戦</button>
+    <button class="home-btn btn-battle"  onclick="showLobbyFromHome()">⚔️ AI対戦（練習）</button>
     <button class="home-btn btn-hotseat" onclick="startHotseat()">👥 2人対戦（同デバイス）</button>
     <button class="home-btn btn-deck"    onclick="showDeckBuilder()">📖 デッキ構築</button>
     <button class="home-btn btn-ai"      onclick="showAIFromHome()">🧠 AI学習</button>
     <button class="home-btn btn-tutorial" onclick="showTutorial()">❓ 遊び方</button>
   </div>
   <div id="home-record"></div>
-  <div class="home-version">v1.4.0 — イラスト＋バグ修正</div>
+  <div id="home-elo" style="font-size:13px;margin-top:4px;"></div>
+  <div class="home-version">v1.5.0 — レート戦</div>
 </div>
 
 <!-- Tutorial Overlay -->
@@ -3874,6 +3878,39 @@ function checkDeath() {
   }
 }
 
+// ── Elo レーティングシステム ──────────────────────────────────
+const ELO_TIERS = [
+  { name: 'Bronze',   min: 0,    max: 999,  color: '#cd7f32', icon: '🥉', mctsScale: 0.15, mistakeRate: 0.30 },
+  { name: 'Silver',   min: 1000, max: 1299, color: '#a0a0b0', icon: '🥈', mctsScale: 0.40, mistakeRate: 0.15 },
+  { name: 'Gold',     min: 1300, max: 1599, color: '#ccaa33', icon: '🥇', mctsScale: 1.00, mistakeRate: 0.05 },
+  { name: 'Platinum', min: 1600, max: 1899, color: '#88ccff', icon: '💎', mctsScale: 2.00, mistakeRate: 0.01 },
+  { name: 'Master',   min: 1900, max: 9999, color: '#ff88ff', icon: '👑', mctsScale: 4.00, mistakeRate: 0.00 },
+];
+let RATED_MODE = false;
+let RATED_OPP_RATING = 1500;
+
+function eloGetRating() {
+  try { return JSON.parse(localStorage.getItem('dcg_elo') || '{"rating":1500}').rating; } catch(e) { return 1500; }
+}
+function eloSaveRating(r) {
+  try { localStorage.setItem('dcg_elo', JSON.stringify({rating: Math.max(0, Math.round(r))})); } catch(e) {}
+}
+function eloTierOf(r) {
+  return ELO_TIERS.find(t => r >= t.min && r <= t.max) || ELO_TIERS[ELO_TIERS.length - 1];
+}
+function eloCalcDelta(myRating, oppRating, won) {
+  const K = 32;
+  const expected = 1 / (1 + Math.pow(10, (oppRating - myRating) / 400));
+  return Math.round(K * ((won ? 1 : 0) - expected));
+}
+// Box-Muller正規分布で対戦相手レートを生成（σ≈100、中心=自分レート）
+function eloOppRatingForMyRating(myRating) {
+  let u, v, s;
+  do { u = Math.random() * 2 - 1; v = Math.random() * 2 - 1; s = u*u + v*v; } while (s >= 1 || s === 0);
+  const gauss = u * Math.sqrt(-2 * Math.log(s) / s);
+  return Math.max(0, Math.min(2500, Math.round(myRating + gauss * 100)));
+}
+
 function endGame(winner) {
   if (G.phase !== 'ended' && typeof NET_MODE !== 'undefined' && NET_MODE === 'local') {
     try {
@@ -3886,7 +3923,23 @@ function endGame(winner) {
   const who = NET_MODE === 'hotseat' ? (winner === 0 ? 'P1の' : 'P2の') : winner === 0 ? 'あなたの' : 'AIの';
   log(`ゲーム終了！ ${who}勝利！`, 'important');
   recordReplaySnapshot(`ゲーム終了 (${who}勝利)`);
-  showModal('ゲーム終了', `<p style="font-size:24px; text-align:center; margin:20px 0;">${who}勝利！</p><button onclick="closeModal();resetBoardAndRestart();" style="width:100%;padding:10px;margin-bottom:8px;">もう一度プレイ</button><button onclick="closeModal();showReplayViewer();" style="width:100%;padding:10px;margin-bottom:8px;background:#1a1a3a;border:1px solid #4444aa;color:#aaaaff;border-radius:6px;cursor:pointer;">📽️ リプレイを見る</button><button onclick="closeModal();resetBoardAndHome();" style="width:100%;padding:10px;background:#12121e;border:1px solid #4a4a6a;color:#aaaacc;border-radius:6px;cursor:pointer;">🏠 ホームに戻る</button>`);
+  // Elo処理
+  let _eloHtml = '';
+  if (RATED_MODE && NET_MODE === 'local') {
+    const oldR = eloGetRating();
+    const delta = eloCalcDelta(oldR, RATED_OPP_RATING, winner === 0);
+    const newR = oldR + delta;
+    eloSaveRating(newR);
+    RATED_MODE = false;
+    const tier = eloTierOf(newR);
+    const sign = delta >= 0 ? '+' : '';
+    _eloHtml = `<div style="text-align:center;margin:10px 0 14px;padding:10px;background:#111122;border-radius:8px;border:1px solid #2a2a4a;">
+      <div style="font-size:12px;color:#888;margin-bottom:4px;">レート変動</div>
+      <div style="font-size:24px;font-weight:bold;color:${delta>=0?'#44ff88':'#ff4444'}">${sign}${delta}</div>
+      <div style="font-size:15px;color:${tier.color};margin-top:4px;">${tier.icon} ${newR} — ${tier.name}</div>
+    </div>`;
+  }
+  showModal('ゲーム終了', `<p style="font-size:24px; text-align:center; margin:20px 0;">${who}勝利！</p>${_eloHtml}<button onclick="closeModal();resetBoardAndRestart();" style="width:100%;padding:10px;margin-bottom:8px;">もう一度プレイ</button><button onclick="closeModal();showReplayViewer();" style="width:100%;padding:10px;margin-bottom:8px;background:#1a1a3a;border:1px solid #4444aa;color:#aaaaff;border-radius:6px;cursor:pointer;">📽️ リプレイを見る</button><button onclick="closeModal();resetBoardAndHome();" style="width:100%;padding:10px;background:#12121e;border:1px solid #4a4a6a;color:#aaaacc;border-radius:6px;cursor:pointer;">🏠 ホームに戻る</button>`);
   G.phase = 'ended';
 }
 
@@ -7605,6 +7658,8 @@ function evalBoardScore(player) {
 }
 
 function aiPickBestCard(handItems) {
+  // Rated mode: lower tiers randomly skip optimal play
+  if (RATED_MODE && handItems.length > 0 && Math.random() < eloTierOf(RATED_OPP_RATING).mistakeRate) return null;
   const ai = G.players[1];
   const player = G.players[0];
   const myLife = ai.life, oppLife = player.life;
@@ -8186,13 +8241,16 @@ const MCTS_TIME_CRITICAL  = 800; // ms - 超終盤（ライフ<=5 or OC条件付
 const MCTS_TIME_BUDGET_MS = MCTS_TIME_NORMAL; // backward compat
 
 function mctsTimeBudget() {
-  if (!G) return MCTS_TIME_NORMAL;
+  const scale = RATED_MODE ? eloTierOf(RATED_OPP_RATING).mctsScale : 1.0;
+  if (!G) return Math.round(MCTS_TIME_NORMAL * scale);
   const p0 = G.players[0], p1 = G.players[1];
   const minLife = Math.min(p0.life, p1.life);
   const graveTotal = p0.graveyard.length + p1.graveyard.length;
-  if (minLife <= 5 || graveTotal >= 18) return MCTS_TIME_CRITICAL;
-  if (minLife <= 10 || G.turn >= 8) return MCTS_TIME_LATE;
-  return MCTS_TIME_NORMAL;
+  let base;
+  if (minLife <= 5 || graveTotal >= 18) base = MCTS_TIME_CRITICAL;
+  else if (minLife <= 10 || G.turn >= 8) base = MCTS_TIME_LATE;
+  else base = MCTS_TIME_NORMAL;
+  return Math.round(base * scale);
 }
 
 class MCTSNode {
@@ -10227,6 +10285,11 @@ function updateHomeRecord() {
   const total = w + l;
   const rate = total > 0 ? Math.round(w / total * 100) : 0;
   el.textContent = `戦績: ${w}勝 ${l}敗 (勝率${rate}%)`;
+  const eloEl = document.getElementById('home-elo');
+  if (eloEl) {
+    const r = eloGetRating(), t = eloTierOf(r);
+    eloEl.innerHTML = `<span style="color:${t.color}">${t.icon} ${t.name} ${r}</span>`;
+  }
 }
 
 // ── チュートリアル ────────────────────────────────────────────
@@ -10266,6 +10329,47 @@ function tutRender() {
 function showLobbyFromHome() {
   document.getElementById('home-screen').style.display = 'none';
   netShowLobby();
+}
+
+// ── レート戦 ─────────────────────────────────────────────────
+function showRatedFromHome() {
+  document.getElementById('home-screen').style.display = 'none';
+  const myR = eloGetRating();
+  const myT = eloTierOf(myR);
+  RATED_OPP_RATING = eloOppRatingForMyRating(myR);
+  const oppT = eloTierOf(RATED_OPP_RATING);
+  const dWin  = eloCalcDelta(myR, RATED_OPP_RATING, true);
+  const dLoss = eloCalcDelta(myR, RATED_OPP_RATING, false);
+  const intelligenceLabel = { Bronze:'初心者', Silver:'普通', Gold:'上級', Platinum:'エキスパート', Master:'最強' };
+  showModal('🏆 レート戦 マッチング', `
+    <div style="text-align:center;margin-bottom:14px;">
+      <div style="font-size:12px;color:#888;margin-bottom:4px;">あなたのレート</div>
+      <div style="font-size:28px;font-weight:bold;color:${myT.color}">${myT.icon} ${myR}</div>
+      <div style="font-size:13px;color:${myT.color}">${myT.name}</div>
+    </div>
+    <div style="background:#1a1a2a;border:1px solid #2a2a4a;border-radius:8px;padding:12px;margin-bottom:12px;">
+      <div style="font-size:11px;color:#888;margin-bottom:6px;">対戦相手</div>
+      <div style="font-size:20px;font-weight:bold;color:${oppT.color}">${oppT.icon} ${RATED_OPP_RATING} — ${oppT.name}</div>
+      <div style="font-size:12px;color:#666;margin-top:4px;">AI知能: ${intelligenceLabel[oppT.name]}</div>
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:14px;">
+      <div style="flex:1;text-align:center;background:#0a2a0a;border:1px solid #336633;border-radius:6px;padding:8px;">
+        <div style="font-size:11px;color:#666;">勝利</div>
+        <div style="font-size:20px;color:#44ff88;font-weight:bold;">+${dWin}</div>
+      </div>
+      <div style="flex:1;text-align:center;background:#2a0a0a;border:1px solid #663333;border-radius:6px;padding:8px;">
+        <div style="font-size:11px;color:#666;">敗北</div>
+        <div style="font-size:20px;color:#ff4444;font-weight:bold;">${dLoss}</div>
+      </div>
+    </div>
+    <button onclick="closeModal();startRatedBattle();" style="width:100%;padding:12px;background:#1a2a3a;border:1px solid #4466aa;color:#aaccff;border-radius:8px;font-size:14px;margin-bottom:8px;">▶ 対戦開始</button>
+    <button onclick="closeModal();showHomeScreen();" style="width:100%;padding:10px;background:#12121e;border:1px solid #4a4a6a;color:#aaaacc;border-radius:6px;cursor:pointer;">キャンセル</button>
+  `);
+}
+
+function startRatedBattle() {
+  RATED_MODE = true;
+  netStartLocal();
 }
 
 function showAIFromHome() {
