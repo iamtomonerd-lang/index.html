@@ -3888,82 +3888,84 @@ function trophyLoad() {
 function trophySave(t) {
   try { localStorage.setItem('dcg_trophy', JSON.stringify(t)); } catch(e) {}
 }
-// プレイヤーのデッキがどのプリセットに最も近いかを判定
-function detectDeckColor(mainCards) {
-  const ids = new Set(mainCards);
-  const wScore = DB_WHITE_MAIN.filter(id => ids.has(id)).length;
-  const rScore = DB_RED_MAIN.filter(id => ids.has(id)).length;
-  const bScore = DB_BLUE_MAIN.filter(id => ids.has(id)).length;
-  const max = Math.max(wScore, rScore, bScore);
-  if (max < 3) return 'custom';
-  if (wScore === max) return 'white';
-  if (rScore === max) return 'red';
-  return 'blue';
+// デッキ構築からユニークキーを生成（ソート済みカードリスト）
+function deckKey(mainCards) {
+  return [...mainCards].sort().join(',');
+}
+// ゲーム終了時のデッキ名を取得（dcg_decks_v2のactiveスロット名）
+function currentDeckName() {
+  try {
+    const v2 = localStorage.getItem('dcg_decks_v2');
+    if (v2) {
+      const data = JSON.parse(v2);
+      if (data && Array.isArray(data.slots) && typeof data.active === 'number') {
+        return data.slots[data.active].name || 'デッキ' + (data.active + 1);
+      }
+    }
+  } catch(e) {}
+  return 'デッキ1';
 }
 function trophyRecord(newRating, mainCards) {
   const t = trophyLoad();
   // 総合最高レート
   t.peakRating = Math.max(t.peakRating || 0, newRating);
-  // デッキ別最高レート
-  const color = detectDeckColor(mainCards);
+  // デッキ別最高レート（構築ごと）
   if (!t.deckPeak) t.deckPeak = {};
-  t.deckPeak[color] = Math.max(t.deckPeak[color] || 0, newRating);
+  const key = deckKey(mainCards);
+  const name = currentDeckName();
+  const prev = t.deckPeak[key] || { name, rating: 0, main: [...new Set(mainCards)] };
+  prev.name = name; // 名前は常に最新を使う
+  prev.rating = Math.max(prev.rating, newRating);
+  t.deckPeak[key] = prev;
   // カード別最高レート（デッキに入っている全カード）
   if (!t.cardPeak) t.cardPeak = {};
-  const uniqueCards = [...new Set(mainCards)];
-  uniqueCards.forEach(id => {
+  [...new Set(mainCards)].forEach(id => {
     t.cardPeak[id] = Math.max(t.cardPeak[id] || 0, newRating);
   });
   trophySave(t);
-  return { color };
 }
-
-const DECK_LABELS = { white: '⚪ 蒼穹の白', red: '🔴 SD攻撃者の赤', blue: '🔵 収集者の青', custom: '🎲 カスタム' };
 
 function showTrophyPanel() {
   const t = trophyLoad();
   const peak = t.peakRating || 0;
   const peakTier = eloTierOf(peak);
 
-  // デッキ別セクション
-  const deckColors = ['white', 'red', 'blue', 'custom'];
+  // デッキ別（構築単位）
+  const deckEntries = Object.values(t.deckPeak || {}).sort((a,b) => b.rating - a.rating);
   let deckHtml = '';
-  deckColors.forEach(c => {
-    const r = (t.deckPeak || {})[c] || 0;
-    if (!r) return;
-    const tier = eloTierOf(r);
-    deckHtml += `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid #1a1a2a;">
-      <span style="font-size:12px;">${DECK_LABELS[c]}</span>
-      <span style="color:${tier.color};font-size:13px;font-weight:bold;">${tier.icon} ${r}</span>
+  deckEntries.forEach(d => {
+    const tier = eloTierOf(d.rating);
+    deckHtml += `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 4px;border-bottom:1px solid #1a1a2a;">
+      <span style="font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:180px;">${d.name}</span>
+      <span style="color:${tier.color};font-size:13px;font-weight:bold;white-space:nowrap;">${tier.icon} ${d.rating}</span>
     </div>`;
   });
-  if (!deckHtml) deckHtml = '<div style="color:#555;font-size:12px;">まだ記録なし</div>';
+  if (!deckHtml) deckHtml = '<div style="color:#555;font-size:12px;padding:4px 0;">まだ記録なし</div>';
 
-  // カード別上位10件
+  // カード別（CARD_DB全カード）
   const cardPeak = t.cardPeak || {};
-  const cardEntries = Object.entries(cardPeak).sort((a,b) => b[1]-a[1]).slice(0, 10);
+  const allCards = Object.values(CARD_DB).filter(c => c.type !== 'land');
+  const sorted = [...allCards].sort((a,b) => (cardPeak[b.id]||0) - (cardPeak[a.id]||0));
   let cardHtml = '';
-  cardEntries.forEach(([id, r]) => {
-    const card = CARD_DB[id];
-    if (!card) return;
-    const tier = eloTierOf(r);
-    cardHtml += `<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid #1a1a2a;">
-      <span style="font-size:12px;">${card.icon||''} ${card.name}</span>
-      <span style="color:${tier.color};font-size:12px;font-weight:bold;">${tier.icon} ${r}</span>
+  sorted.forEach(card => {
+    const r = cardPeak[card.id] || 0;
+    const tier = r ? eloTierOf(r) : null;
+    cardHtml += `<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 4px;border-bottom:1px solid #111120;">
+      <span style="font-size:11px;">${card.icon||''} ${card.name}</span>
+      <span style="color:${tier?tier.color:'#444'};font-size:11px;font-weight:bold;">${tier?tier.icon+' '+r:'─'}</span>
     </div>`;
   });
-  if (!cardHtml) cardHtml = '<div style="color:#555;font-size:12px;">まだ記録なし</div>';
 
   showModal('🏆 トロフィー', `
-    <div style="text-align:center;margin-bottom:14px;padding:12px;background:#111122;border-radius:8px;border:1px solid #2a2a4a;">
-      <div style="font-size:12px;color:#888;margin-bottom:4px;">総合最高レート</div>
-      <div style="font-size:30px;font-weight:bold;color:${peakTier.color}">${peakTier.icon} ${peak||'─'}</div>
-      <div style="font-size:14px;color:${peakTier.color}">${peak ? peakTier.name : '未挑戦'}</div>
+    <div style="text-align:center;margin-bottom:12px;padding:10px;background:#111122;border-radius:8px;border:1px solid #2a2a4a;">
+      <div style="font-size:11px;color:#888;margin-bottom:4px;">総合最高レート</div>
+      <div style="font-size:28px;font-weight:bold;color:${peakTier.color}">${peak ? peakTier.icon+' '+peak : '─'}</div>
+      <div style="font-size:13px;color:${peakTier.color}">${peak ? peakTier.name : '未挑戦'}</div>
     </div>
-    <div style="font-size:12px;color:#888;margin-bottom:6px;">デッキ別最高レート</div>
-    <div style="margin-bottom:14px;">${deckHtml}</div>
-    <div style="font-size:12px;color:#888;margin-bottom:6px;">カード別最高レート（上位10）</div>
-    <div style="margin-bottom:12px;">${cardHtml}</div>
+    <div style="font-size:12px;color:#888;margin-bottom:4px;">デッキ別最高レート</div>
+    <div style="margin-bottom:12px;max-height:160px;overflow-y:auto;">${deckHtml}</div>
+    <div style="font-size:12px;color:#888;margin-bottom:4px;">カード別最高レート（全カード）</div>
+    <div style="max-height:200px;overflow-y:auto;margin-bottom:12px;">${cardHtml}</div>
     <button onclick="closeModal();" style="width:100%;padding:10px;background:#12121e;border:1px solid #4a4a6a;color:#aaaacc;border-radius:6px;cursor:pointer;">閉じる</button>
   `);
 }
