@@ -955,10 +955,10 @@ button.danger:hover { background: #6a2a2a; }
       minmax(0, 1fr)  /* 行4: AIフィールド ★ */
       11px            /* 行5: ヒントバー */
       minmax(0, 1fr)  /* 行6: プレイヤーフィールド ★ */
-      15px            /* 行7: 自分土地 */
-      24px            /* 行8: 自分情報 */
-      24px            /* 行9: ボタン */
-      min(92px, 19vh); /* 行10: 手札 ★ */
+      14px            /* 行7: 自分土地 */
+      22px            /* 行8: 自分情報 */
+      22px            /* 行9: ボタン */
+      min(116px, 24vh); /* 行10: 手札 ★ */
   }
 
   /* ── CXリング: 手札行に被らないよう行8-9に限定・縮小 ── */
@@ -998,10 +998,10 @@ button.danger:hover { background: #6a2a2a; }
   #player-avatar   { grid-column: 9 / 13; }
   #action-panel    { grid-column: 13 / 17; }
 
-  /* ── 手札カード: 見やすく大きく ── */
-  #player-hand.hand-zone { padding: 3px 6px 2px; gap: 0; }
-  #player-hand .card { width: 68px; height: 100px; margin-right: 3px; }
-  #player-hand .card .card-art { font-size: 30px; }
+  /* ── 手札カード: 全体が収まりイラストが全て見えるサイズ ── */
+  #player-hand.hand-zone { padding: 2px 6px; gap: 0; align-items: center; overflow: visible; }
+  #player-hand .card { width: 72px; height: min(108px, calc(100% - 4px)); margin-right: 3px; }
+  #player-hand .card .card-art { font-size: 32px; }
   #player-hand .card .card-name { font-size: 8px; }
   #player-hand .card .card-pt { font-size: 11px; }
   #player-hand .card .card-cost { font-size: 8px; }
@@ -2035,7 +2035,7 @@ button.danger:hover { background: #6a2a2a; }
   </div>
   <div id="home-record"></div>
   <div id="home-elo" style="font-size:13px;margin-top:4px;cursor:pointer;" onclick="showTrophyPanel()"></div>
-  <div class="home-version">v1.7.3 — スマホUI改善</div>
+  <div class="home-version">v1.7.4 — スマホUI改善</div>
 </div>
 
 <!-- Tutorial Overlay -->
