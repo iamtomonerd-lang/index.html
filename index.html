@@ -4479,6 +4479,7 @@ function endTurn() {
   G.blockMode = false;
   G.chargingMode = false;
   G.chargeUsedThisTurn = false;
+  G.iegekiRedirectTurn = [-1, -1];
 
   G.activePlayer = 1 - G.activePlayer;
   G.turn++;
@@ -5526,10 +5527,12 @@ function aiActivateChargedLands() {
   for (const land of [...ai.lands]) {
     const lc = CARD_DB[land.cardId];
     if (!land.chargeCard || !lc.chargedAbility || land.tapped) continue;
-    // kaizouReturn requires OC
-    if (lc.chargedAbility === 'kaizouReturn' && !isOCActive(1)) continue;
+    // kaizouReturn / kaizouReturnBlue requires OC
+    if ((lc.chargedAbility === 'kaizouReturn' || lc.chargedAbility === 'kaizouReturnBlue') && !isOCActive(1)) continue;
     // look3keep1white requires mana
     if (lc.chargedAbility === 'look3keep1white' && !canAfford(1, {W:3})) continue;
+    // look3keep1blue requires mana
+    if (lc.chargedAbility === 'look3keep1blue' && !canAfford(1, {U:3})) continue;
 
     const landInstId = land.instanceId;
     showAIThinking(true);
@@ -5553,6 +5556,18 @@ function aiActivateChargedLands() {
         if (simLand.tapped) return; simLand.tapped=true;
         const ws=p1.field.filter(c=>CARD_DB[c.cardId].color==='W');
         if (ws.length){const t=ws.reduce((a,b)=>sim.hp(a)<sim.hp(b)?a:b);t.tempToughness=(t.tempToughness||0)+1;}
+      } else if (lc.chargedAbility === 'look3keep1blue') {
+        if (!sim.canAfford(p1,{U:3})) return;
+        sim.payMana(p1,{U:3}); simLand.tapped=true;
+        if (p1.deck.length) p1.hand.push(p1.deck.shift());
+      } else if (lc.chargedAbility === 'kaizouReturnBlue') {
+        if (!sim.simIsOC(p1)||simLand.tapped) return;
+        p1.mana.U=(p1.mana.U||0)+3;
+        const ix=p1.lands.indexOf(simLand); if(ix!==-1){p1.lands.splice(ix,1);p1.landDeck.push(lc.id);}
+      } else if (lc.chargedAbility === 'giveDrawTriggerBlue') {
+        if (simLand.tapped) return; simLand.tapped=true;
+        // grant draw trigger: in sim, approximate as +0.5 hand advantage
+        if (p1.field.length) p1.hand.push(p1.deck.length?p1.deck.shift():'');
       }
     });
     showAIThinking(false);
@@ -6954,7 +6969,7 @@ function playHitei(player, handIndex) {
   const cardId = p.hand[handIndex];
   const card = CARD_DB[cardId];
   if (!canAfford(player, card.cost)) { log('マナ不足'); return; }
-  if (G.stack.length < 2) { log(`${card.name}: スタックに打ち消す対象がありません（2つ以上必要）`); return; }
+  if (G.stack.length < 1) { log(`${card.name}: スタックに打ち消す対象がありません`); return; }
   payMana(player, card.cost);
   p.hand.splice(handIndex, 1);
   log(`${card.name} をスタックに積んだ`, 'important');
@@ -7942,6 +7957,13 @@ class SimGame {
       const kills=(tgt.damage+2)>=(CARD_DB[tgt.cardId].toughness+(tgt.tempToughness||0));
       return (kills?w.fieldPower*(CARD_DB[tgt.cardId].power||1)+w.fieldCount:w.fieldPower*0.3)+w.handAdv*0.3;
     }
+    if (card.effect==='ao_geki') {
+      if (opp.field.length) { const t=opp.field.reduce((a,b)=>this.hp(b)<this.hp(a)?b:a); const k=(t.damage+3)>=(CARD_DB[t.cardId].toughness+(t.tempToughness||0)); return k?w.fieldPower*(CARD_DB[t.cardId].power||1)+w.fieldCount:w.fieldPower*0.5; }
+      return w.lifeAdv*3;
+    }
+    if (card.effect==='mizu_geki') return opp.field.length ? w.fieldCount*0.8+w.fieldPower*0.3 : 0;
+    if (card.effect==='hitei') return (this.state.stack||[]).length>=1 ? w.fieldPower*1.5 : -Infinity;
+    if (card.effect==='chishiki_no_seiri') return w.handAdv*1.2;
     return 0;
   }
 
@@ -7967,6 +7989,17 @@ class SimGame {
           this.simETB(ap,inst);
         }
       }
+    } else if (card.effect==='ao_geki') {
+      if (opp.field.length) { const t=opp.field.reduce((a,b)=>this.hp(b)<this.hp(a)?b:a); t.damage+=3; this.simCheckDeath(1-ap); }
+      else opp.life-=3;
+    } else if (card.effect==='mizu_geki') {
+      if (opp.field.length) { const t=opp.field.reduce((a,b)=>this.hp(b)<this.hp(a)?b:a); const ix=opp.field.indexOf(t); if(ix!==-1){opp.field.splice(ix,1); opp.hand.push(t.cardId);} }
+    } else if (card.effect==='hitei') {
+      if ((s.stack||[]).length>=1) s.stack.splice(s.stack.length-1,1);
+    } else if (card.effect==='chishiki_no_seiri') {
+      // draw 2, discard 1 (sim: net +1 hand)
+      for(let i=0;i<2;i++){if(me.deck.length)me.hand.push(me.deck.shift());}
+      if(me.hand.length>1){me.hand.shift();}
     }
   }
 
