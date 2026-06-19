@@ -1856,7 +1856,7 @@ button.danger:hover { background: #6a2a2a; }
     <button class="home-btn btn-tutorial" onclick="showTutorial()">❓ 遊び方</button>
   </div>
   <div id="home-record"></div>
-  <div class="home-version">v1.2.0 — 赤デッキ実装</div>
+  <div class="home-version">v1.3.0 — 青デッキ実装</div>
 </div>
 
 <!-- Tutorial Overlay -->
@@ -2165,6 +2165,106 @@ const CARD_DB = {
     produces:'C', icon:'🏠',
     text:'■起動(タップ)：1マナ生成\n■起動(タップ)：自分の赤のクリーチャー1体に「格闘」を与え、+1/+0する。これはこの土地がチャージされている時のみ起動できる',
     chargedAbility:'giveKakutouBuffRed'
+  },
+  // ─── 青デッキ ───
+  'omnieru': {
+    id:'omnieru', name:'万象蒐集会 部長 オムニエル', type:'creature', color:'U',
+    cost:{U:3,C:5}, power:4, toughness:4, icon:'👑',
+    ward:3, wardValue:3,
+    text:'■護法(3)：このクリーチャーを対象にする場合、追加で3マナ必要\n■出た時/ターン開始時：手札が5枚になるよう調整\n■このターン2枚目以降ドロー時：相手クリーチャーに2ダメージ\n■還元(タップ)：2枚引いて2枚底へ',
+    onDrawTrigger2nd:'damage2creature',
+    etb:'omnieru_hand5'
+  },
+  'aaka': {
+    id:'aaka', name:'万象蒐集会 副部長 アーカ', type:'creature', color:'U',
+    cost:{U:1,C:3}, power:2, toughness:2, icon:'📚',
+    kakutou:true,
+    text:'■格闘\n■攻撃時：1枚引く\n■〈C6〉2枚目ドロー時：+0/+1（永続）\n■〈C8〉+3/+3\n■〈OC〉ターン開始時：1枚引く',
+    onAttack:'draw1',
+    onDrawTrigger2ndC6:'buffSelfPlus01',
+    cx8Buff33:true,
+    ocTurnStartDraw:true
+  },
+  'chishiki_maju': {
+    id:'chishiki_maju', name:'知識集めの魔術師', type:'creature', color:'U',
+    cost:{U:1,C:1}, power:1, toughness:1, icon:'🔮',
+    text:'■出た時：1枚引く',
+    etb:'draw1'
+  },
+  'maju_gakusha': {
+    id:'maju_gakusha', name:'魔術の学者', type:'creature', color:'U',
+    cost:{U:1,C:3}, power:3, toughness:3, icon:'📖',
+    kakutou:true,
+    text:'■格闘\n■出た時：3ルック1(青)',
+    etb:'look3keep1blue'
+  },
+  'bu_in': {
+    id:'bu_in', name:'万象蒐集会部員', type:'creature', color:'U',
+    cost:{U:1,C:1}, power:1, toughness:1, icon:'📋',
+    text:'■このターン2枚目以降ドロー時：相手クリーチャーに3ダメージ',
+    onDrawTrigger2nd:'damage3creature'
+  },
+  'nexia': {
+    id:'nexia', name:'万象蒐集会 書紀 ネクサ', type:'creature', color:'U',
+    cost:{U:1,C:3}, power:3, toughness:3, icon:'📝',
+    text:'■出た時：1枚引く\n■このターン2枚目以降ドロー時：相手クリーチャーに3ダメージ\n■〈C8〉2枚目ドロー時：1枚引く（ターン1:自身）',
+    etb:'draw1',
+    onDrawTrigger2nd:'damage3creature',
+    onDrawTrigger2ndC8:'draw1self'
+  },
+  'ao_geki': {
+    id:'ao_geki', name:'青撃', type:'spell', color:'U',
+    cost:{U:1,C:1}, icon:'💧', quick:true,
+    text:'■Quick\n■1枚引く\n■相手コスト4以下クリーチャー1体に2ダメージ',
+    effect:'ao_geki'
+  },
+  'chishiki_no_seiri': {
+    id:'chishiki_no_seiri', name:'知識の整理', type:'spell', color:'U',
+    cost:{U:1,C:3}, icon:'🌀',
+    text:'■1枚引く\n■手札を好きな枚数底へ→1枚につき相手クリーチャーに2ダメージ\n■〈OC〉手札1枚以下の時：青クリーチャー展開',
+    effect:'chishiki_no_seiri'
+  },
+  'mizu_geki': {
+    id:'mizu_geki', name:'水撃', type:'spell', color:'U',
+    cost:{U:1,C:2}, icon:'🌊', quick:true,
+    text:'■Quick\n■相手クリーチャー1体を手札に戻す',
+    effect:'mizu_geki'
+  },
+  'hitei': {
+    id:'hitei', name:'否定', type:'spell', color:'U',
+    cost:{U:1,C:3}, icon:'🚫', quick:true,
+    text:'■Quick\n■スタックの一つ下を打ち消す',
+    effect:'hitei'
+  },
+  'hito_shima': {
+    id:'hito_shima', name:'人住まう島', type:'land', color:'U',
+    produces:'U', icon:'🏝️',
+    text:'■起動(タップ)：1マナ生成\n■起動(タップ)：3ルック1(青)。チャージ時のみ',
+    chargedAbility:'look3keep1blue'
+  },
+  'wasure_shima': {
+    id:'wasure_shima', name:'忘れ去られし島', type:'land', color:'U',
+    produces:'U', icon:'🌫️',
+    text:'■起動(タップ)：1マナ生成\n■チャージ時：1枚引く',
+    chargeDrawTrigger:true
+  },
+  'shigen_shima': {
+    id:'shigen_shima', name:'資源豊富な島', type:'land', color:'U',
+    produces:'U', icon:'💎',
+    text:'■起動(タップ)：1マナ生成\n■起動(タップ)：OC時、青3追加し土地デッキ底へ。チャージ時のみ',
+    chargedAbility:'kaizouReturnBlue'
+  },
+  'kemono_shima': {
+    id:'kemono_shima', name:'獣住む島', type:'land', color:'U',
+    produces:'U', icon:'🐋',
+    text:'■起動(タップ)：1マナ生成\n■還元：相手クリーチャー1体に5ダメージ',
+    chargedAbility:'damage5opponent'
+  },
+  'gakuin': {
+    id:'gakuin', name:'学院', type:'land', color:'C',
+    produces:'C', icon:'🏫',
+    text:'■起動(タップ)：1マナ生成\n■起動(タップ)：青クリーチャー1体に「攻撃時1枚引く」を付与。チャージ時のみ',
+    chargedAbility:'giveDrawTriggerBlue'
   },
 };
 
@@ -2522,7 +2622,51 @@ function drawCard(player) {
     return false;
   }
   const cardId = p.deck.shift();
-  return addCardToHand(player, cardId);
+  const result = addCardToHand(player, cardId);
+  if (!G.drawCount) G.drawCount = [0, 0];
+  G.drawCount[player] = (G.drawCount[player] || 0) + 1;
+  if (G.drawCount[player] >= 2) {
+    _fireDrawTrigger2nd(player);
+  }
+  return result;
+}
+
+function _fireDrawTrigger2nd(player) {
+  const opp = 1 - player;
+  G.players[player].field.forEach(creature => {
+    const card = CARD_DB[creature.cardId];
+    if (!card) return;
+    const dmg = card.onDrawTrigger2nd === 'damage2creature' ? 2
+              : card.onDrawTrigger2nd === 'damage3creature' ? 3 : 0;
+    if (dmg > 0 && G.players[opp].field.length > 0) {
+      const target = G.players[opp].field.reduce((a,b) =>
+        (getEffectiveToughness(opp,b) - b.damage) < (getEffectiveToughness(opp,a) - a.damage) ? b : a
+      );
+      applyDamageToCreature(opp, target.instanceId, dmg, player);
+      log(`${card.name}: 2枚目ドロー誘発 — ${CARD_DB[target.cardId]?.name||'?'}に${dmg}ダメージ`, 'damage');
+      checkDeath();
+    }
+    // アーカ C6: 2枚目ドロー時 +0/+1（永続）
+    if (card.onDrawTrigger2ndC6 === 'buffSelfPlus01' && getCXValue(player) >= 6) {
+      addPermanentBuff(player, creature.instanceId, 0, 1);
+      log(`${card.name} C6: 2枚目ドロー → +0/+1(永続)`);
+    }
+    // ネクサ C8: 2枚目ドロー時1枚引く（ターン1:自身）
+    if (card.onDrawTrigger2ndC8 === 'draw1self' && getCXValue(player) >= 8) {
+      if (creature._nexaDrawTurn !== G.turn) {
+        creature._nexaDrawTurn = G.turn;
+        const p2 = G.players[player];
+        if (p2.deck.length > 0) {
+          // Direct draw without triggering another 2nd-draw cycle
+          const cid = p2.deck.shift();
+          addCardToHand(player, cid);
+          G.drawCount[player]++;
+          log(`${card.name} C8: 2枚目ドロー → 1枚引く`);
+        }
+      }
+    }
+  });
+  render();
 }
 
 function placeLands(player, count) {
@@ -2758,6 +2902,22 @@ function playCardFromHand(player, handIndex) {
     }
     if (card.effect === 'iegeki') {
       playIegeki(player, handIndex);
+      return;
+    }
+    if (card.effect === 'ao_geki') {
+      playAoGeki(player, handIndex);
+      return;
+    }
+    if (card.effect === 'chishiki_no_seiri') {
+      playChishikiNoSeiri(player, handIndex);
+      return;
+    }
+    if (card.effect === 'mizu_geki') {
+      playMizuGeki(player, handIndex);
+      return;
+    }
+    if (card.effect === 'hitei') {
+      playHitei(player, handIndex);
       return;
     }
     payMana(player, card.cost);
@@ -3202,6 +3362,25 @@ function resolveETBEffect(player, instanceId) {
     doLookKeepColored(player, 3, 'R');
   } else if (card.etb === 'look2keep1red') {
     doLookKeepColored(player, 2, 'R');
+  } else if (card.etb === 'draw1') {
+    drawCard(player);
+    log(`${card.name} 出た時: 1枚引く`);
+    render(); updateHints();
+    continueStack();
+  } else if (card.etb === 'look3keep1blue') {
+    doLookKeepColored(player, 3, 'U');
+  } else if (card.etb === 'omnieru_hand5') {
+    // 出た時: 手札が5枚になるよう調整
+    while (p.hand.length < 5 && p.deck.length > 0) {
+      drawCard(player);
+    }
+    if (p.hand.length > 5) {
+      const excess = p.hand.splice(5);
+      excess.forEach(cid => p.deck.push(cid));
+    }
+    log(`${card.name} 出た時: 手札を5枚に調整`);
+    render(); updateHints();
+    continueStack();
   }
 }
 
@@ -4246,6 +4425,7 @@ function endTurn() {
 
   G.activePlayer = 1 - G.activePlayer;
   G.turn++;
+  G.drawCount = [0, 0];
   G.landPlacedThisTurn = 0;
   G.phase = 'untap';
 
@@ -4309,6 +4489,29 @@ function endTurn() {
   const isFirstPlayerFirstTurn = (ap === G.firstPlayer && G.turn === 1);
   if (!isFirstPlayerFirstTurn) drawCard(ap);
   G.firstTurn = false; // 旧フラグも互換のため更新
+
+  // オムニエル / アーカOC ターン開始時効果
+  G.players[ap].field.forEach(c => {
+    const card = CARD_DB[c.cardId];
+    if (!card) return;
+    if (card.id === 'omnieru') {
+      const p2 = G.players[ap];
+      while (p2.hand.length < 5 && p2.deck.length > 0) {
+        const cid = p2.deck.shift();
+        addCardToHand(ap, cid);
+        G.drawCount[ap]++;
+      }
+      if (p2.hand.length > 5) {
+        const excess = p2.hand.splice(5);
+        excess.forEach(cid => p2.deck.push(cid));
+      }
+      log(`${card.name} ターン開始時: 手札を5枚に調整`);
+    }
+    if (card.id === 'aaka' && isOCActive(ap)) {
+      drawCard(ap);
+      log(`${card.name} OC ターン開始時: 1枚引く`);
+    }
+  });
 
   G.phase = 'main';
   render();
@@ -4561,6 +4764,69 @@ function activateChargedLand(player, instId) {
           continueStack();
         }};
         log('白クリーチャーを選択（+0/+2永続）');
+        render(); updateHints();
+      }
+    });
+    renderStack();
+    openPriorityWindow(opp, null, `${landCard.name} 起動`);
+  } else if (landCard.chargedAbility === 'look3keep1blue') {
+    if (land.tapped) { log(`${landCard.name}: タップ済みのため起動できません`); return; }
+    if (!canAfford(player, {U:3})) { log('マナ不足 (青3)'); return; }
+    land.tapped = true;
+    payMana(player, {U:3});
+    log(`${landCard.name}: 3ルック1(青) → スタックに積む`);
+    G.stack.push({
+      name: `${landCard.name} 起動(3ルック1)`,
+      icon: landCard.icon || '✨',
+      owner: player,
+      resolve: () => { doLookKeepColored(player, 3, 'U'); render(); updateHints(); }
+    });
+    renderStack();
+    openPriorityWindow(opp, null, `${landCard.name} 起動`);
+  } else if (landCard.chargedAbility === 'kaizouReturnBlue') {
+    if (!isOCActive(player)) { log('OC未達成'); return; }
+    if (land.tapped) { log('タップ済み'); return; }
+    land.tapped = true;
+    log(`${landCard.name} 還元: スタックに積む`);
+    G.stack.push({
+      name: `${landCard.name} 起動(還元UUU)`,
+      icon: landCard.icon || '✨',
+      owner: player,
+      resolve: () => {
+        p.mana.U = (p.mana.U||0)+3;
+        const idx = p.lands.findIndex(l=>l.instanceId===instId);
+        if (idx !== -1) { p.lands.splice(idx,1); p.landDeck.push(land.cardId); }
+        log(`${landCard.name} 還元: 青3追加、土地デッキ底へ`, 'heal');
+        render(); updateHints();
+      }
+    });
+    renderStack();
+    openPriorityWindow(opp, null, `${landCard.name} 還元起動`);
+  } else if (landCard.chargedAbility === 'giveDrawTriggerBlue') {
+    if (land.tapped) { log('タップ済み'); return; }
+    const blues = G.players[player].field.filter(c => CARD_DB[c.cardId].color === 'U');
+    if (blues.length === 0) { log(`${landCard.name}: 青クリーチャーがいません`); return; }
+    land.tapped = true;
+    log(`${landCard.name}: 青クリーチャーに「攻撃時1枚引く」 → スタックに積む`);
+    G.stack.push({
+      name: `${landCard.name} 起動(攻撃時ドロー)`,
+      icon: landCard.icon || '✨',
+      owner: player,
+      resolve: () => {
+        const bs = G.players[player].field.filter(c => CARD_DB[c.cardId].color === 'U');
+        if (bs.length === 0) { log(`${landCard.name}: 青クリーチャーなし`); continueStack(); return; }
+        G.targetMode = { type:'ownCreature', sourcePlayer: player,
+          aiPick: pool => pool.filter(c => CARD_DB[c.cardId].color === 'U').reduce((a,b) => getEffectivePower(player,b) > getEffectivePower(player,a) ? b : a),
+          callback:(tgt) => {
+            const tc = G.players[player].field.find(x => x.instanceId === tgt.instId);
+            if (tc && CARD_DB[tc.cardId].color === 'U') {
+              tc.grantedDrawOnAttackTurn = G.turn;
+              log(`${landCard.name}: ${CARD_DB[tc.cardId].name}に「攻撃時1枚引く」を付与（このターン）`);
+            }
+            G.targetMode = null; render(); updateHints();
+            continueStack();
+          }};
+        log('青クリーチャーを選択（攻撃時1枚引く）');
         render(); updateHints();
       }
     });
@@ -4834,7 +5100,6 @@ function fireAttackTriggers(player, atkInstId) {
 
   // 2) 攻撃クリーチャー自身の「攻撃時」効果
   const card = CARD_DB[atk.cardId];
-  if (!card.onAttack) return;
   const dmgToCreature = (label, amount) => {
     triggerEffect(`${card.name} ${label}`, card.icon || '⚔️', player, () => {
       if (G.players[opp].field.length === 0) { log(`${card.name} ${label}: 対象なし`); return; }
@@ -4848,6 +5113,13 @@ function fireAttackTriggers(player, atkInstId) {
       render(); updateHints();
     });
   };
+  // 学院付与: grantedDrawOnAttackTurn
+  if (atk.grantedDrawOnAttackTurn === G.turn) {
+    triggerEffect(`${card.name} 攻撃時(学院)`, card.icon || '📚', player, () => {
+      drawCard(player); log(`${card.name}: 攻撃時1枚引く（学院付与）`); render(); updateHints();
+    });
+  }
+  if (!card.onAttack) return;
   if (card.onAttack === 'draw1') {
     triggerEffect(`${card.name} 攻撃時`, card.icon || '🐉', player, () => {
       drawCard(player); log(`${card.name} 攻撃時: 1枚引く`); render(); updateHints();
@@ -6470,6 +6742,195 @@ function meguruKaizou(instId) {
   render(); updateHints();
 }
 
+// ============================================================
+// 青デッキ スペル
+// ============================================================
+function playAoGeki(player, handIndex) {
+  const p = G.players[player];
+  const cardId = p.hand[handIndex];
+  const card = CARD_DB[cardId];
+  if (!canAfford(player, card.cost)) { log('マナ不足'); return; }
+  payMana(player, card.cost);
+  p.hand.splice(handIndex, 1);
+  log(`${card.name} をスタックに積んだ`, 'important');
+  const opp = 1 - player;
+  G.stack.push({ name: card.name, icon: card.icon||'💧', owner: player, resolve: () => {
+    p.graveyard.push(cardId);
+    drawCard(player); log(`${card.name}: 1枚引く`);
+    const targets = G.players[opp].field.filter(c => {
+      const cc = CARD_DB[c.cardId];
+      if (!cc || !cc.cost) return true;
+      return Object.values(cc.cost).reduce((a,b)=>a+b,0) <= 4;
+    });
+    if (targets.length === 0) { log(`${card.name}: コスト4以下クリーチャーなし`); render(); updateHints(); continueStack(); return; }
+    if (player === 1) {
+      const tgt = targets.reduce((a,b) => (getEffectiveToughness(opp,b)-b.damage) < (getEffectiveToughness(opp,a)-a.damage) ? b : a);
+      applyDamageToCreature(opp, tgt.instanceId, 2, player);
+      log(`AI ${card.name}: ${CARD_DB[tgt.cardId]?.name||'?'}に2ダメージ`,'damage');
+      checkDeath(); render(); updateHints(); continueStack(); return;
+    }
+    G.targetMode = { type:'opponentCreature', sourcePlayer:player,
+      filter: c => { const cc=CARD_DB[c.cardId]; if(!cc||!cc.cost) return true; return Object.values(cc.cost).reduce((a,b)=>a+b,0)<=4; },
+      callback:(tgt) => {
+        G.targetMode = null;
+        applyDamageToCreature(opp, tgt.instId, 2, player);
+        log(`${card.name}: 2ダメージ`,'damage');
+        checkDeath(); render(); updateHints(); continueStack();
+      }};
+    log(`${card.name}: 対象を選択（コスト4以下）`); render(); updateHints();
+  }});
+  renderStack(); render(); updateHints();
+  openPriorityWindow(1-player, G.priorityContinuation, `${card.name}に対応`);
+}
+
+function playMizuGeki(player, handIndex) {
+  const p = G.players[player];
+  const cardId = p.hand[handIndex];
+  const card = CARD_DB[cardId];
+  if (!canAfford(player, card.cost)) { log('マナ不足'); return; }
+  const opp = 1 - player;
+  if (G.players[opp].field.length === 0) { log(`${card.name}: 対象クリーチャーなし`); return; }
+  payMana(player, card.cost);
+  p.hand.splice(handIndex, 1);
+  log(`${card.name} をスタックに積んだ`, 'important');
+  G.stack.push({ name: card.name, icon: card.icon||'🌊', owner: player, resolve: () => {
+    p.graveyard.push(cardId);
+    const oppField = G.players[opp].field;
+    if (oppField.length === 0) { log(`${card.name}: 対象なし`); render(); updateHints(); continueStack(); return; }
+    if (player === 1) {
+      const tgt = oppField.reduce((a,b) => getEffectivePower(opp,b) > getEffectivePower(opp,a) ? b : a);
+      _bounceCreature(opp, tgt.instanceId);
+      log(`AI ${card.name}: ${CARD_DB[tgt.cardId]?.name||'?'}を手札に戻す`);
+      render(); updateHints(); continueStack(); return;
+    }
+    G.targetMode = { type:'opponentCreature', sourcePlayer:player, callback:(tgt) => {
+      G.targetMode = null;
+      const name = CARD_DB[G.players[opp].field.find(c=>c.instanceId===tgt.instId)?.cardId]?.name || '';
+      _bounceCreature(opp, tgt.instId);
+      log(`${card.name}: ${name}を手札に戻す`);
+      render(); updateHints(); continueStack();
+    }};
+    log(`${card.name}: 対象を選択（手札に戻す）`); render(); updateHints();
+  }});
+  renderStack(); render(); updateHints();
+  openPriorityWindow(1-player, G.priorityContinuation, `${card.name}に対応`);
+}
+
+function _bounceCreature(player, instId) {
+  const p = G.players[player];
+  const idx = p.field.findIndex(c => c.instanceId === instId);
+  if (idx === -1) return;
+  const inst = p.field.splice(idx, 1)[0];
+  p.hand.push(inst.cardId);
+  p.attackers = (p.attackers||[]).filter(id => id !== instId);
+  log(`${CARD_DB[inst.cardId]?.name||inst.cardId}: 手札に戻った`);
+}
+
+function playHitei(player, handIndex) {
+  const p = G.players[player];
+  const cardId = p.hand[handIndex];
+  const card = CARD_DB[cardId];
+  if (!canAfford(player, card.cost)) { log('マナ不足'); return; }
+  if (G.stack.length < 2) { log(`${card.name}: スタックに打ち消す対象がありません（2つ以上必要）`); return; }
+  payMana(player, card.cost);
+  p.hand.splice(handIndex, 1);
+  log(`${card.name} をスタックに積んだ`, 'important');
+  G.stack.push({ name: card.name, icon: card.icon||'🚫', owner: player, resolve: () => {
+    p.graveyard.push(cardId);
+    // このカード自体はtop→解決済み。次のtopが「一つ下」
+    if (G.stack.length >= 1) {
+      const target = G.stack.splice(G.stack.length - 1, 1)[0];
+      log(`${card.name}: 「${target.name}」を打ち消した`, 'important');
+    } else {
+      log(`${card.name}: 打ち消す対象なし`);
+    }
+    render(); updateHints(); continueStack();
+  }});
+  renderStack(); render(); updateHints();
+  openPriorityWindow(1-player, G.priorityContinuation, `${card.name}に対応`);
+}
+
+function playChishikiNoSeiri(player, handIndex) {
+  const p = G.players[player];
+  const cardId = p.hand[handIndex];
+  const card = CARD_DB[cardId];
+  if (!canAfford(player, card.cost)) { log('マナ不足'); return; }
+  payMana(player, card.cost);
+  p.hand.splice(handIndex, 1);
+  log(`${card.name} をスタックに積んだ`, 'important');
+  const opp = 1 - player;
+  G.stack.push({ name: card.name, icon: card.icon||'🌀', owner: player, resolve: () => {
+    drawCard(player); log(`${card.name}: 1枚引く`);
+    if (player === 1) {
+      p.graveyard.push(cardId);
+      render(); updateHints(); continueStack(); return;
+    }
+    _chishikiSelectDiscard(player, cardId, 0);
+  }});
+  renderStack(); render(); updateHints();
+  openPriorityWindow(1-player, G.priorityContinuation, `${card.name}に対応`);
+}
+
+function _chishikiSelectDiscard(player, spellId, damageCount) {
+  const p = G.players[player];
+  const card = CARD_DB[spellId];
+  const handCards = p.hand.map((cid, i) => {
+    const c = CARD_DB[cid];
+    return `<button onclick="G._awaitingModal=false;closeModal();_chishikiDiscardOne(${player},'${spellId}',${i},${damageCount})" style="width:100%;margin-bottom:6px;padding:6px;background:#1a1a3a;border:1px solid #4466aa;color:#aaccff;border-radius:4px;cursor:pointer;">${c?c.icon:'🃏'} ${c?c.name:cid}</button>`;
+  }).join('');
+  const ocDeploy = isOCActive(player) && p.hand.length <= 1;
+  G._awaitingModal = true;
+  showModal(card.name,
+    `<p style="margin-bottom:8px;">手札を底へ送る（送るたびに相手クリーチャーに2ダメージ）${damageCount>0?` [${damageCount}枚送り済み]`:''}</p>
+    ${handCards}
+    <button onclick="G._awaitingModal=false;closeModal();_chishikiFinish(${player},'${spellId}',${damageCount})" style="width:100%;padding:8px;background:#2a3a2a;border:1px solid #44aa44;color:#aaffaa;border-radius:4px;cursor:pointer;margin-top:4px;">✅ 完了${ocDeploy?' (OC: 青クリーチャー展開)':''}</button>`
+  );
+}
+
+function _chishikiDiscardOne(player, spellId, handIdx, damageCount) {
+  const p = G.players[player];
+  const opp = 1 - player;
+  const card = CARD_DB[spellId];
+  if (handIdx < 0 || handIdx >= p.hand.length) { _chishikiFinish(player, spellId, damageCount); return; }
+  const discardId = p.hand.splice(handIdx, 1)[0];
+  p.deck.push(discardId);
+  log(`${card.name}: ${CARD_DB[discardId]?.name||discardId}を底へ`);
+  damageCount++;
+  if (G.players[opp].field.length > 0) {
+    G.targetMode = { type:'opponentCreature', sourcePlayer:player, callback:(tgt) => {
+      G.targetMode = null;
+      applyDamageToCreature(opp, tgt.instId, 2, player);
+      log(`${card.name}: 相手クリーチャーに2ダメージ`,'damage');
+      checkDeath(); render(); updateHints();
+      _chishikiSelectDiscard(player, spellId, damageCount);
+    }};
+    log(`${card.name}: 2ダメージ対象を選択`); render(); updateHints();
+  } else {
+    _chishikiSelectDiscard(player, spellId, damageCount);
+  }
+}
+
+function _chishikiFinish(player, spellId, damageCount) {
+  const p = G.players[player];
+  const card = CARD_DB[spellId];
+  p.graveyard.push(spellId);
+  log(`${card.name}: 完了（${damageCount}枚底へ送り）`);
+  if (isOCActive(player) && p.hand.length <= 1) {
+    const blues = p.hand.filter(cid => CARD_DB[cid]?.color === 'U' && CARD_DB[cid]?.type === 'creature');
+    if (blues.length > 0 && p.field.length < 5) {
+      const deployId = blues[0];
+      const idx = p.hand.indexOf(deployId);
+      p.hand.splice(idx, 1);
+      const inst = newInstance(deployId);
+      inst.entryTurn = G.turn;
+      inst.sick = false;
+      p.field.push(inst);
+      log(`${card.name} OC: ${CARD_DB[deployId].name}を展開`,'heal');
+    }
+  }
+  render(); updateHints(); continueStack();
+}
+
 function updateHints() {
   const hint = document.getElementById('action-hint');
   // ボタンテキスト切替
@@ -7411,7 +7872,9 @@ class SimGame {
     if (card.etb==='damage1opponent') dealDmg(1);
     else if (card.etb==='damage2opponent_always_cx6damage3') dealDmg(2);
     else if (card.etb==='damage3opponent') dealDmg(3);
-    else if (card.etb==='look3keep1white' && me.deck.length) me.hand.push(me.deck.shift());
+    else if ((card.etb==='look3keep1white'||card.etb==='look3keep1blue'||card.etb==='look2keep1red') && me.deck.length) me.hand.push(me.deck.shift());
+    else if (card.etb==='draw1' && me.deck.length) me.hand.push(me.deck.shift());
+    else if (card.etb==='omnieru_hand5') { while(me.hand.length<5&&me.deck.length) me.hand.push(me.deck.shift()); }
     else if (card.etb==='mustAttackTarget') {
       if (opp.field.length) {
         const weakest=opp.field.reduce((a,b)=>(CARD_DB[a.cardId].power||0)<=(CARD_DB[b.cardId].power||0)?a:b);
@@ -9828,6 +10291,9 @@ const DB_WHITE_LAND = ['hito_heichi','wasure_heichi','shigen_heichi','kemono_hei
 const DB_RED_MAIN = ['hayaashi_goblin','kururu','aka_madoushi','daikokubashira','ayumu',
   'michiru','meguru','raigeki','akageki','iegeki'];
 const DB_RED_LAND = ['hito_yama','wasure_yama','shigen_yama','kemono_yama','daikazoku_ie'];
+const DB_BLUE_MAIN = ['omnieru','aaka','chishiki_maju','maju_gakusha','bu_in','nexia',
+  'ao_geki','chishiki_no_seiri','mizu_geki','hitei'];
+const DB_BLUE_LAND = ['hito_shima','wasure_shima','shigen_shima','kemono_shima','gakuin'];
 
 function dbRenderCollection() {
   const el = document.getElementById('db-collection-list');
@@ -9865,9 +10331,10 @@ function dbRenderCollection() {
   };
 
   let html = '';
-  html += `<div style="display:flex;gap:6px;margin-bottom:8px;">
-    <button onclick="dbLoadPreset('white')" style="flex:1;padding:6px;background:#2a2a3a;border:1px solid #888844;color:#ffffcc;border-radius:6px;cursor:pointer;font-size:11px;">⚪ 白デッキを読込</button>
-    <button onclick="dbLoadPreset('red')" style="flex:1;padding:6px;background:#3a1a1a;border:1px solid #cc4422;color:#ffcccc;border-radius:6px;cursor:pointer;font-size:11px;">🔴 赤デッキを読込</button>
+  html += `<div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap;">
+    <button onclick="dbLoadPreset('white')" style="flex:1;padding:6px;background:#2a2a3a;border:1px solid #888844;color:#ffffcc;border-radius:6px;cursor:pointer;font-size:11px;">⚪ 白デッキ</button>
+    <button onclick="dbLoadPreset('red')" style="flex:1;padding:6px;background:#3a1a1a;border:1px solid #cc4422;color:#ffcccc;border-radius:6px;cursor:pointer;font-size:11px;">🔴 赤デッキ</button>
+    <button onclick="dbLoadPreset('blue')" style="flex:1;padding:6px;background:#1a1a3a;border:1px solid #2244cc;color:#aaccff;border-radius:6px;cursor:pointer;font-size:11px;">🔵 青デッキ</button>
   </div>`;
   html += '<div class="db-section-label">⚪ 白 — クリーチャー / スペル</div>';
   DB_WHITE_MAIN.forEach(id => { html += renderMainRow(id); });
@@ -9877,14 +10344,18 @@ function dbRenderCollection() {
   DB_RED_MAIN.forEach(id => { html += renderMainRow(id); });
   html += '<div class="db-section-label">🔴 赤 — 土地</div>';
   DB_RED_LAND.forEach(id => { html += renderLandRow(id); });
+  html += '<div class="db-section-label">🔵 青 — クリーチャー / スペル</div>';
+  DB_BLUE_MAIN.forEach(id => { html += renderMainRow(id); });
+  html += '<div class="db-section-label">🔵 青 — 土地</div>';
+  DB_BLUE_LAND.forEach(id => { html += renderLandRow(id); });
 
   el.innerHTML = html;
 }
 
 // プリセットデッキ読込（現在のスロットを上書き）
 function dbLoadPreset(color) {
-  const mains = color === 'red' ? DB_RED_MAIN : DB_WHITE_MAIN;
-  const lands = color === 'red' ? DB_RED_LAND : DB_WHITE_LAND;
+  const mains = color === 'red' ? DB_RED_MAIN : color === 'blue' ? DB_BLUE_MAIN : DB_WHITE_MAIN;
+  const lands = color === 'red' ? DB_RED_LAND : color === 'blue' ? DB_BLUE_LAND : DB_WHITE_LAND;
   const main = [];
   mains.forEach(id => { for (let i=0;i<4;i++) main.push(id); }); // 10種×4 = 40
   const land = [];
@@ -9894,7 +10365,7 @@ function dbLoadPreset(color) {
   dbStoreCurrentToSlot();
   dbPersistSlots();
   dbRenderAll();
-  log(`${color === 'red' ? '赤' : '白'}デッキプリセットを読み込みました`);
+  log(`${color === 'red' ? '赤' : color === 'blue' ? '青' : '白'}デッキプリセットを読み込みました`);
 }
 
 // ── デッキ構築: 右上パネルに効果テキストを表示 ──
