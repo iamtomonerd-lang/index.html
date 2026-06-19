@@ -3908,7 +3908,7 @@ function eloOppRatingForMyRating(myRating) {
   let u, v, s;
   do { u = Math.random() * 2 - 1; v = Math.random() * 2 - 1; s = u*u + v*v; } while (s >= 1 || s === 0);
   const gauss = u * Math.sqrt(-2 * Math.log(s) / s);
-  return Math.max(0, Math.min(2500, Math.round(myRating + gauss * 100)));
+  return Math.max(0, Math.min(2500, Math.round(myRating + gauss * 300)));
 }
 
 function endGame(winner) {
