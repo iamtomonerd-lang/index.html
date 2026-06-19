@@ -487,6 +487,28 @@ body {
 .card.entering { animation: cardEnter 0.45s cubic-bezier(.2,1.4,.5,1) forwards; }
 .card.attacking-up   { animation: cardAttackUp   0.4s ease-out, attackShimmer 0.4s ease-out; }
 .card.attacking-down { animation: cardAttackDown 0.4s ease-out, attackShimmer 0.4s ease-out; }
+/* ── 新アニメーション ── */
+@keyframes drawSlide { from { transform: translateY(-40px) scale(0.85); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes landTapGlow { 0%{box-shadow:0 0 0 #aaffaa;} 40%{box-shadow:0 0 18px 4px #aaffaa88;} 100%{box-shadow:none;} }
+@keyframes ocFlash { 0%{opacity:0;} 15%{opacity:0.55;} 100%{opacity:0;} }
+@keyframes spellResolveFlash { 0%{opacity:0;transform:scale(0.7);} 30%{opacity:1;transform:scale(1.12);} 100%{opacity:0;transform:scale(1.4);} }
+@keyframes collisionBurst { 0%{opacity:1;transform:scale(0.5);} 60%{opacity:1;transform:scale(1.6);} 100%{opacity:0;transform:scale(2.2);} }
+@keyframes particleFly { 0%{opacity:1;transform:translate(0,0) scale(1);} 100%{opacity:0;transform:translate(var(--px),var(--py)) scale(0);} }
+@keyframes confettiFall { 0%{opacity:1;transform:translateY(0) rotate(0deg);} 100%{opacity:0;transform:translateY(100vh) rotate(720deg);} }
+@keyframes winOverlay { 0%{opacity:0;} 30%{opacity:0.7;} 100%{opacity:0;} }
+@keyframes loseOverlay { 0%{opacity:0;} 60%{opacity:0.6;} 100%{opacity:0.6;} }
+@keyframes eloFloat { 0%{opacity:1;transform:translateX(-50%) translateY(0) scale(1.3);} 100%{opacity:0;transform:translateX(-50%) translateY(-80px) scale(1);} }
+@keyframes tierPromo { 0%{opacity:0;transform:translateX(-50%) scale(0.4) rotate(-10deg);} 50%{opacity:1;transform:translateX(-50%) scale(1.2) rotate(3deg);} 80%{transform:translateX(-50%) scale(0.95);} 100%{opacity:0;transform:translateX(-50%) scale(1.05);} }
+@keyframes trophyPop { 0%{opacity:0;transform:translateX(-50%) scale(0) rotate(-20deg);} 60%{transform:translateX(-50%) scale(1.25) rotate(5deg);} 100%{opacity:1;transform:translateX(-50%) scale(1) rotate(0deg);} }
+.card.draw-anim { animation: drawSlide 0.35s cubic-bezier(.2,1.4,.5,1); }
+#oc-flash-overlay { position:fixed;inset:0;pointer-events:none;z-index:999;background:radial-gradient(ellipse at 50% 50%,#aaffaa88 0%,transparent 70%);opacity:0; }
+#win-overlay  { position:fixed;inset:0;pointer-events:none;z-index:998;background:radial-gradient(ellipse at 50% 40%,#ffee8888 0%,transparent 70%);opacity:0; }
+#lose-overlay { position:fixed;inset:0;pointer-events:none;z-index:998;background:#000;opacity:0; }
+#spell-resolve-ring { position:fixed;width:90px;height:90px;border-radius:50%;border:3px solid #aaccff;pointer-events:none;z-index:997;display:none; }
+#collision-burst { position:fixed;width:60px;height:60px;border-radius:50%;background:radial-gradient(#ffcc44,#ff440000);pointer-events:none;z-index:997;display:none; }
+#elo-float-el { position:fixed;left:50%;top:40%;font-size:32px;font-weight:bold;pointer-events:none;z-index:1001;opacity:0; }
+#tier-promo-el { position:fixed;left:50%;top:30%;font-size:28px;font-weight:bold;pointer-events:none;z-index:1002;opacity:0;text-align:center; }
+#trophy-pop-el { position:fixed;left:50%;top:35%;font-size:48px;pointer-events:none;z-index:1003;opacity:0; }
 /* ライフフラッシュ */
 .life-display.life-hit  { animation: lifeHit  0.6s ease-out; }
 .life-display.life-heal { animation: lifeHeal 0.6s ease-out; }
@@ -1870,7 +1892,7 @@ button.danger:hover { background: #6a2a2a; }
   </div>
   <div id="home-record"></div>
   <div id="home-elo" style="font-size:13px;margin-top:4px;cursor:pointer;" onclick="showTrophyPanel()"></div>
-  <div class="home-version">v1.6.0 — レート戦＋トロフィー</div>
+  <div class="home-version">v1.7.0 — アニメーション強化</div>
 </div>
 
 <!-- Tutorial Overlay -->
@@ -1966,6 +1988,16 @@ button.danger:hover { background: #6a2a2a; }
 
 <!-- Phase Flash -->
 <div id="phase-flash"></div>
+
+<!-- Animation Overlays -->
+<div id="oc-flash-overlay"></div>
+<div id="win-overlay"></div>
+<div id="lose-overlay"></div>
+<div id="spell-resolve-ring"></div>
+<div id="collision-burst"></div>
+<div id="elo-float-el"></div>
+<div id="tier-promo-el"></div>
+<div id="trophy-pop-el"></div>
 
 
 <!-- Modal -->
@@ -2407,6 +2439,7 @@ let G; // global game state
 
 function initGame() {
   if (typeof REPLAY_HISTORY !== 'undefined') REPLAY_HISTORY = []; // 新ゲームでリプレイ履歴をクリア
+  _prevCX = [0, 0];
   const firstPlayer = Math.random() < 0.5 ? 0 : 1; // 先手後手ランダム
   G = {
     turn: 1,
@@ -2637,6 +2670,7 @@ function drawCard(player) {
   }
   const cardId = p.deck.shift();
   const result = addCardToHand(player, cardId);
+  animDrawCard(player);
   if (!G.drawCount) G.drawCount = [0, 0];
   G.drawCount[player] = (G.drawCount[player] || 0) + 1;
   if (G.drawCount[player] >= 2) {
@@ -2709,6 +2743,7 @@ function tapLandForMana(player, instId) {
   const p = G.players[player];
   const land = p.lands.find(l => l.instanceId === instId);
   if (!land || land.tapped) return false;
+  animLandTap(instId);
   land.tapped = true;
   const card = CARD_DB[land.cardId];
   const manaType = card.produces || 'C';
@@ -3763,6 +3798,13 @@ function applyDamageToCreature(player, instId, amount, sourcePlayer, opts) {
   }
   c.damage += amount;
   showCreatureDamage(instId, amount);
+  if (sourcePlayer !== undefined && sourcePlayer !== null) {
+    const srcField = G.players[sourcePlayer] ? G.players[sourcePlayer].field : [];
+    const atkInst = srcField.find(x => x.attacking);
+    const atkEl = atkInst ? getCardEl(atkInst.instanceId) : (srcField.length ? getCardEl(srcField[0].instanceId) : null);
+    const tgtEl = getCardEl(instId);
+    if (atkEl || tgtEl) animCombatCollision(atkEl, tgtEl);
+  }
   checkCreatureDeath(player, instId, sourcePlayer);
 }
 
@@ -3866,6 +3908,7 @@ function checkCreatureDeath(player, instId, sourcePlayer) {
   }
   if (dead) {
     showDestroyAnimation(instId);
+    animDestroyParticle(instId);
     p.field.splice(idx, 1);
     p.graveyard.push(c.cardId);
     if (G._battleDestroyedInstIds) G._battleDestroyedInstIds.add(instId);
@@ -3879,6 +3922,158 @@ function checkDeath() {
   for (let i = 0; i < 2; i++) {
     if (G.players[i].life <= 0) { endGame(1 - i); }
   }
+}
+
+// ── アニメーション関数群 ────────────────────────────────────────
+let _prevCX = [0, 0];
+
+function animDrawCard(player) {
+  if (player !== (typeof NET_MY_IDX !== 'undefined' ? NET_MY_IDX : 0)) return;
+  setTimeout(() => {
+    const hand = document.getElementById('player-hand-row');
+    if (!hand) return;
+    const cards = hand.querySelectorAll('.card');
+    const last = cards[cards.length - 1];
+    if (last) { last.classList.add('draw-anim'); setTimeout(() => last.classList.remove('draw-anim'), 400); }
+  }, 60);
+}
+
+function animLandTap(instId) {
+  setTimeout(() => {
+    const el = document.querySelector(`[data-inst="${instId}"]`);
+    if (el) { el.style.animation='none'; el.offsetHeight; el.style.animation='landTapGlow 0.5s ease-out'; setTimeout(()=>{el.style.animation='';},500); }
+  }, 10);
+}
+
+function animCXChange(player, newVal) {
+  const old = _prevCX[player];
+  if (newVal > old) {
+    const ringId = player === (typeof NET_MY_IDX !== 'undefined' ? NET_MY_IDX : 0) ? 'player-cx-ring' : 'opp-cx-ring';
+    const el = document.getElementById(ringId);
+    if (el) {
+      el.style.transition = 'stroke 0.2s';
+      el.style.stroke = '#aaffaa';
+      setTimeout(() => { el.style.stroke = ''; el.style.transition = ''; }, 400);
+    }
+    if (newVal >= 10 && old < 10) animOCReached(player);
+  }
+  _prevCX[player] = newVal;
+}
+
+function animOCReached(player) {
+  const el = document.getElementById('oc-flash-overlay');
+  if (!el) return;
+  el.style.animation = 'none'; el.offsetHeight;
+  el.style.animation = 'ocFlash 1.2s forwards';
+  const myIdx = typeof NET_MY_IDX !== 'undefined' ? NET_MY_IDX : 0;
+  showPhaseFlash('⚡ OC 解放！', player === myIdx ? 'あなたのOCが発動' : '相手のOCが発動');
+}
+
+function animSpellResolve(x, y) {
+  const el = document.getElementById('spell-resolve-ring');
+  if (!el) return;
+  el.style.left = (x - 45) + 'px'; el.style.top = (y - 45) + 'px';
+  el.style.display = 'block'; el.style.animation = 'none'; el.offsetHeight;
+  el.style.animation = 'spellResolveFlash 0.5s forwards';
+  setTimeout(() => { el.style.display = 'none'; }, 600);
+}
+
+function animCombatCollision(atkEl, blkEl) {
+  const el = document.getElementById('collision-burst');
+  if (!el) return;
+  let cx, cy;
+  if (atkEl && blkEl) {
+    const ar = atkEl.getBoundingClientRect(), br = blkEl.getBoundingClientRect();
+    cx = (ar.left + ar.right + br.left + br.right) / 4;
+    cy = (ar.top + ar.bottom + br.top + br.bottom) / 4;
+  } else if (atkEl) {
+    const r = atkEl.getBoundingClientRect();
+    cx = (r.left + r.right) / 2; cy = (r.top + r.bottom) / 2;
+  } else if (blkEl) {
+    const r = blkEl.getBoundingClientRect();
+    cx = (r.left + r.right) / 2; cy = (r.top + r.bottom) / 2;
+  } else return;
+  el.style.left = (cx - 30) + 'px'; el.style.top = (cy - 30) + 'px';
+  el.style.display = 'block'; el.style.animation = 'none'; el.offsetHeight;
+  el.style.animation = 'collisionBurst 0.45s forwards';
+  setTimeout(() => { el.style.display = 'none'; }, 500);
+}
+
+function animDestroyParticle(instId) {
+  const el = document.querySelector(`[data-inst="${instId}"]`);
+  if (!el) return;
+  const r = el.getBoundingClientRect();
+  const cx = (r.left + r.right) / 2, cy = (r.top + r.bottom) / 2;
+  const colors = ['#ff4444','#ff8800','#ffcc00','#ff44aa','#ffffff'];
+  for (let i = 0; i < 10; i++) {
+    const p = document.createElement('div');
+    const angle = (i / 10) * Math.PI * 2;
+    const dist = 40 + Math.random() * 40;
+    p.style.cssText = `position:fixed;width:8px;height:8px;border-radius:50%;z-index:990;
+      background:${colors[i % colors.length]};left:${cx-4}px;top:${cy-4}px;pointer-events:none;
+      --px:${Math.cos(angle)*dist}px;--py:${Math.sin(angle)*dist}px;
+      animation:particleFly 0.6s ease-out forwards;animation-delay:${i*0.02}s;`;
+    document.body.appendChild(p);
+    setTimeout(() => p.remove(), 700);
+  }
+}
+
+function animGameWin() {
+  const el = document.getElementById('win-overlay');
+  if (el) { el.style.animation='none'; el.offsetHeight; el.style.animation='winOverlay 2s forwards'; }
+  const colors = ['#ffcc00','#ff4488','#44aaff','#44ff88','#ff8800','#ffffff'];
+  for (let i = 0; i < 40; i++) {
+    const c = document.createElement('div');
+    const size = 6 + Math.random() * 8;
+    c.style.cssText = `position:fixed;width:${size}px;height:${size}px;border-radius:${Math.random()>.5?'50%':'2px'};
+      background:${colors[Math.floor(Math.random()*colors.length)]};
+      left:${Math.random()*100}vw;top:-10px;z-index:1000;pointer-events:none;
+      animation:confettiFall ${1.5+Math.random()*2}s ease-in forwards;animation-delay:${Math.random()*1}s;`;
+    document.body.appendChild(c);
+    setTimeout(() => c.remove(), 4000);
+  }
+}
+
+function animGameLose() {
+  const el = document.getElementById('lose-overlay');
+  if (!el) return;
+  el.style.animation = 'none'; el.offsetHeight;
+  el.style.animation = 'loseOverlay 1.5s forwards';
+  setTimeout(() => { el.style.opacity = '0'; el.style.animation = ''; }, 3500);
+}
+
+function animEloChange(delta, newR, oldTier, newTier) {
+  const el = document.getElementById('elo-float-el');
+  if (!el) return;
+  const sign = delta >= 0 ? '+' : '';
+  el.textContent = sign + delta;
+  el.style.color = delta >= 0 ? '#44ff88' : '#ff4444';
+  el.style.animation = 'none'; el.offsetHeight;
+  el.style.animation = 'eloFloat 2s forwards';
+  if (newTier && oldTier && newTier.name !== oldTier.name && delta > 0) {
+    setTimeout(() => animTierPromotion(newTier), 800);
+  }
+}
+
+function animTierPromotion(tier) {
+  const el = document.getElementById('tier-promo-el');
+  if (!el) return;
+  el.innerHTML = `${tier.icon}<br><span style="font-size:18px;color:${tier.color}">${tier.name} 昇格！</span>`;
+  el.style.animation = 'none'; el.offsetHeight;
+  el.style.animation = 'tierPromo 2.5s forwards';
+}
+
+function animTrophyGet(rank) {
+  const el = document.getElementById('trophy-pop-el');
+  if (!el) return;
+  el.textContent = rank.icon;
+  el.style.animation = 'none'; el.offsetHeight;
+  el.style.animation = 'trophyPop 1.5s forwards';
+  setTimeout(() => { el.style.opacity = '0'; el.style.animation = ''; }, 2000);
+}
+
+function getCardEl(instId) {
+  return document.querySelector(`[data-inst="${instId}"]`);
 }
 
 // ── トロフィー・実績 ──────────────────────────────────────────
@@ -4036,10 +4231,16 @@ function endGame(winner) {
   const who = NET_MODE === 'hotseat' ? (winner === 0 ? 'P1の' : 'P2の') : winner === 0 ? 'あなたの' : 'AIの';
   log(`ゲーム終了！ ${who}勝利！`, 'important');
   recordReplaySnapshot(`ゲーム終了 (${who}勝利)`);
+  // 勝敗アニメ
+  if (NET_MODE === 'local') {
+    if (winner === 0) setTimeout(animGameWin, 200);
+    else setTimeout(animGameLose, 200);
+  }
   // Elo処理
   let _eloHtml = '';
   if (RATED_MODE && NET_MODE === 'local') {
     const oldR = eloGetRating();
+    const oldTier = eloTierOf(oldR);
     const delta = eloCalcDelta(oldR, RATED_OPP_RATING, winner === 0);
     const newR = oldR + delta;
     eloSaveRating(newR);
@@ -4049,12 +4250,19 @@ function endGame(winner) {
     const playerLandCards = p0.lands.map(l=>l.cardId).concat(p0.landDeck||[]);
     trophyRecord(newR, playerMainCards, playerLandCards);
     RATED_MODE = false;
-    const tier = eloTierOf(newR);
+    const newTier = eloTierOf(newR);
+    setTimeout(() => animEloChange(delta, newR, oldTier, newTier), 700);
+    // トロフィー新獲得チェック
+    const tData = trophyLoad();
+    const allUsed = [...new Set([...playerMainCards, ...playerLandCards])];
+    const topRank = allUsed.map(id => cardTrophyRank(tData.cardPeak[id]||0)).filter(Boolean)
+      .sort((a,b) => b.icon.length - a.icon.length)[0];
+    if (topRank) setTimeout(() => animTrophyGet(topRank), 1400);
     const sign = delta >= 0 ? '+' : '';
     _eloHtml = `<div style="text-align:center;margin:10px 0 14px;padding:10px;background:#111122;border-radius:8px;border:1px solid #2a2a4a;">
       <div style="font-size:12px;color:#888;margin-bottom:4px;">レート変動</div>
       <div style="font-size:24px;font-weight:bold;color:${delta>=0?'#44ff88':'#ff4444'}">${sign}${delta}</div>
-      <div style="font-size:15px;color:${tier.color};margin-top:4px;">${tier.icon} ${newR} — ${tier.name}</div>
+      <div style="font-size:15px;color:${newTier.color};margin-top:4px;">${newTier.icon} ${newR} — ${newTier.name}</div>
     </div>`;
   }
   showModal('ゲーム終了', `<p style="font-size:24px; text-align:center; margin:20px 0;">${who}勝利！</p>${_eloHtml}<button onclick="closeModal();resetBoardAndRestart();" style="width:100%;padding:10px;margin-bottom:8px;">もう一度プレイ</button><button onclick="closeModal();showReplayViewer();" style="width:100%;padding:10px;margin-bottom:8px;background:#1a1a3a;border:1px solid #4444aa;color:#aaaaff;border-radius:6px;cursor:pointer;">📽️ リプレイを見る</button><button onclick="closeModal();resetBoardAndHome();" style="width:100%;padding:10px;background:#12121e;border:1px solid #4a4a6a;color:#aaaacc;border-radius:6px;cursor:pointer;">🏠 ホームに戻る</button>`);
@@ -5637,6 +5845,8 @@ function resolveStack() {
   if (G.stack.length === 0) return;
   const item = G.stack.pop();
   log(`スタックを解決: ${item.name}`);
+  const stackEl = document.getElementById('stack-display');
+  if (stackEl) { const r = stackEl.getBoundingClientRect(); animSpellResolve((r.left+r.right)/2, (r.top+r.bottom)/2); }
   if (item.resolve) item.resolve();
   render();
 }
@@ -6663,6 +6873,8 @@ function updateCXRings() {
   const oppCX = G.players[opp] ? getCXValue(opp) : 0;
   const meOC = isOCActive(me);
   const oppOC = isOCActive(opp);
+  animCXChange(me, meCX);
+  animCXChange(opp, oppCX);
   updateRing('player-cx-ring', 'player-cx-text', 'player-cx-area', meCX, meOC, true);
   updateRing('opp-cx-ring', 'opp-cx-text', 'opp-cx-area', oppCX, oppOC, false);
 }
