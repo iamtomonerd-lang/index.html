@@ -4206,7 +4206,7 @@ function eloTierOf(r) {
   return ELO_TIERS.find(t => r >= t.min && r <= t.max) || ELO_TIERS[ELO_TIERS.length - 1];
 }
 function eloCalcDelta(myRating, oppRating, won) {
-  const K = 32;
+  const K = 10;
   const expected = 1 / (1 + Math.pow(10, (oppRating - myRating) / 400));
   return Math.round(K * ((won ? 1 : 0) - expected));
 }
