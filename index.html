@@ -3102,7 +3102,7 @@ function fireLandEntersTriggers(sourcePlayer) {
     if (card.landEnterBuff11) {
       triggerEffect(`${card.name} 誘発(ランド)`, card.icon||'🎆', sourcePlayer, () => {
         const instNow = p.field.find(c => c.instanceId === _instId);
-        if (instNow) { instNow.tempPow = (instNow.tempPow||0)+1; instNow.tempTou = (instNow.tempTou||0)+1; log(`${card.name}: +1/+1`, 'heal'); }
+        if (instNow) { instNow.tempPower = (instNow.tempPower||0)+1; instNow.tempToughness = (instNow.tempToughness||0)+1; log(`${card.name}: +1/+1`, 'heal'); }
         render();
       });
     }
@@ -3275,7 +3275,6 @@ function destroyCreatureByEffect(player, instId, sourceName) {
   if (idx === -1) return false;
   const inst = p.field[idx];
   const card = CARD_DB[inst.cardId];
-  // フォクリア保護
   if (inst._protectedThisTurn) { log(`${card.name}: このターン離れない（フォクリア保護）`); return false; }
   // 置換: ダメージ以外で離れる時、手札1枚を捨てて残ってもよい
   if (card.replaceLeaveWithDiscard && p.hand.length > 0) {
@@ -3462,6 +3461,7 @@ function placeLands(player, count) {
     const card = CARD_DB[cardId];
     // wasure_heichi: draw when charged (chargeCard set later via charge action)
     // chargeDrawTrigger fires when chargeCard is set — handled in chargeToLand
+    fireLandEntersTriggers(player);
   }
 }
 
@@ -4773,6 +4773,7 @@ function checkCreatureDeath(player, instId, sourcePlayer) {
   const permBuff = getPermanentBuff(c.instanceId);
   const toughness = card.toughness + (c.tempToughness||0) + permBuff.toughness + getCXBonus(player, c).toughness;
   const dead = c.damage >= toughness || (c.damage > 0 && c._deathtouched);
+  if (dead && c._protectedThisTurn) { log(`${card.name}: このターン離れない（フォクリア保護）`); return false; }
   if (dead && c.noDamageKill) {
     // 介善■2 置き換え効果: 離れる代わりに現在のP/Tを入れ替える（ダメージは引き継ぐ）
     c.noDamageKill = false;
@@ -4793,7 +4794,6 @@ function checkCreatureDeath(player, instId, sourcePlayer) {
     return false;
   }
   if (dead) {
-    if (c._protectedThisTurn) { log(`${card.name}: このターン離れない（フォクリア保護）`); c.damage = 0; c._deathtouched = false; return false; }
     showDestroyAnimation(instId);
     animDestroyParticle(instId);
     p.field.splice(idx, 1);
@@ -5613,13 +5613,12 @@ function resolveSingleCombat(atkPlayer, atkInstId, kakutouTargetId, blockerInstI
       // 接死
       if (atkCard.deathtouch && atkPow > 0) blkInst._deathtouched = true;
       if (blkCard.deathtouch && blkPow > 0 && !atkInvuln) atkInst._deathtouched = true;
-      // 貫通: 超過ダメージは相手プレイヤーへ
+      log(`${atkCard.name} vs ${blkCard.name}: ${atkPow}/${atkInvuln ? 0 : blkPow}ダメージ交換`, 'damage');
       if (atkCard.trample) {
         const blkTou = getEffectiveToughness(opp, blkInst);
         const excess = Math.max(0, atkPow - blkTou);
         if (excess > 0) { G.players[opp].life -= excess; showFloatDamage(excess, opp === 1 ? 'ai' : 'player'); log(`${atkCard.name} 貫通: ${excess}超過ダメージ`, 'damage'); }
       }
-      log(`${atkCard.name} vs ${blkCard.name}: ${atkPow}/${atkInvuln ? 0 : blkPow}ダメージ交換`, 'damage');
       checkCreatureDeath(opp, blockerInstId, atkPlayer);
       checkCreatureDeath(atkPlayer, atkInstId, opp);
       // onBlock triggers → push to stack
@@ -5868,11 +5867,11 @@ function endTurn() {
   G.pendingKakutouInstId = null;
   G.kaizen_used_names.clear(); // 介善OCの「ターン1:同名」制限はターン毎にリセット
   G.players.forEach(p => {
-    p.field.forEach(c => { c.tempPower = 0; c.tempToughness = 0; delete c._protectedThisTurn; });
+    p.field.forEach(c => { c.tempPower = 0; c.tempToughness = 0; });
     p.mana = {R:0,U:0,G:0,W:0,B:0,C:0};
   });
-  G.players[0].field.forEach(c => { c.noDamageKill = false; });
-  G.players[1].field.forEach(c => { c.noDamageKill = false; });
+  G.players[0].field.forEach(c => { c.noDamageKill = false; c._protectedThisTurn = false; });
+  G.players[1].field.forEach(c => { c.noDamageKill = false; c._protectedThisTurn = false; });
   G.kaizenBlockDraw = -1;
   G.attackMode = false;
   G.blockMode = false;
@@ -6060,7 +6059,6 @@ function chargeToLand(landInstId) {
     drawCard(charger);
     log(`${landCard.name}: カードを1枚引く`);
   }
-  // ランドが場に出た時の誘発
   fireLandEntersTriggers(charger);
   render(); updateHints();
 }
@@ -6091,7 +6089,7 @@ function activateChargedLand(player, instId) {
   } else if (landCard.chargedAbility === 'kaizouReturn') {
     // shigen_heichi: OC + tap -> produce WW, send to land deck bottom
     if (!isOCActive(player)) { log('OC未達成'); return; }
-    if (land.tapped) { log('タップ済み'); return; }
+    if (land.tapped && !canKaizouTappedLand(player)) { log('タップ済み（フォルクスOCで解除可能）'); return; }
     land.tapped = true;
     log(`${landCard.name} 還元: スタックに積む`);
     G.stack.push({
@@ -6152,7 +6150,7 @@ function activateChargedLand(player, instId) {
   } else if (landCard.chargedAbility === 'kaizouReturnRed') {
     // shigen_yama: OC + tap -> produce RRR, send to land deck bottom
     if (!isOCActive(player)) { log('OC未達成'); return; }
-    if (land.tapped) { log('タップ済み'); return; }
+    if (land.tapped && !canKaizouTappedLand(player)) { log('タップ済み（フォルクスOCで解除可能）'); return; }
     land.tapped = true;
     log(`${landCard.name} 還元: スタックに積む`);
     G.stack.push({
@@ -6244,7 +6242,7 @@ function activateChargedLand(player, instId) {
     openPriorityWindow(opp, null, `${landCard.name} 起動`);
   } else if (landCard.chargedAbility === 'kaizouReturnBlue') {
     if (!isOCActive(player)) { log('OC未達成'); return; }
-    if (land.tapped) { log('タップ済み'); return; }
+    if (land.tapped && !canKaizouTappedLand(player)) { log('タップ済み（フォルクスOCで解除可能）'); return; }
     land.tapped = true;
     log(`${landCard.name} 還元: スタックに積む`);
     G.stack.push({
@@ -6309,7 +6307,7 @@ function activateChargedLand(player, instId) {
   } else if (landCard.chargedAbility === 'kaizouReturnBlack') {
     // 資源豊富な沼: OC + tap → 黒3生成、土地デッキ底へ
     if (!isOCActive(player)) { log('OC未達成'); return; }
-    if (land.tapped) { log('タップ済み'); return; }
+    if (land.tapped && !canKaizouTappedLand(player)) { log('タップ済み（フォルクスOCで解除可能）'); return; }
     land.tapped = true;
     log(`${landCard.name} 還元: スタックに積む`);
     G.stack.push({
@@ -6326,19 +6324,6 @@ function activateChargedLand(player, instId) {
     });
     renderStack();
     openPriorityWindow(opp, null, `${landCard.name} 還元起動`);
-  } else if (landCard.chargedAbility === 'mill4') {
-    // 荒れた墓: タップ → 自分の山札から4枚墓地に置く
-    if (land.tapped) { log('タップ済み'); return; }
-    land.tapped = true;
-    log(`${landCard.name}: 切削4 → スタックに積む`);
-    G.stack.push({
-      name: `${landCard.name} 起動(切削4)`,
-      icon: landCard.icon || '⚰️',
-      owner: player,
-      resolve: () => { millCards(player, 4); render(); updateHints(); continueStack(); }
-    });
-    renderStack();
-    openPriorityWindow(opp, null, `${landCard.name} 起動`);
   } else if (landCard.chargedAbility === 'look3keep1green') {
     // 人住まう森: タップ + 緑3 → 3ルック1(緑)
     if (land.tapped) { log(`${landCard.name}: タップ済みのため起動できません`); return; }
@@ -6357,7 +6342,7 @@ function activateChargedLand(player, instId) {
   } else if (landCard.chargedAbility === 'kaizouReturnGreen') {
     // 資源豊富な森: OC + tap → 緑3生成、土地デッキ底へ
     if (!isOCActive(player)) { log('OC未達成'); return; }
-    if (land.tapped && !canKaizouTappedLand(player)) { log('タップ済み'); return; }
+    if (land.tapped && !canKaizouTappedLand(player)) { log('タップ済み（フォルクスOCで解除可能）'); return; }
     land.tapped = true;
     log(`${landCard.name} 還元: スタックに積む`);
     G.stack.push({
@@ -6366,8 +6351,8 @@ function activateChargedLand(player, instId) {
       owner: player,
       resolve: () => {
         p.mana.G = (p.mana.G||0)+3;
-        const idx2 = p.lands.findIndex(l=>l.instanceId===instId);
-        if (idx2 !== -1) { p.lands.splice(idx2,1); p.landDeck.push(land.cardId); }
+        const idx = p.lands.findIndex(l=>l.instanceId===instId);
+        if (idx !== -1) { p.lands.splice(idx,1); p.landDeck.push(land.cardId); }
         log(`${landCard.name} 還元: 緑3追加、土地デッキ底へ`, 'heal');
         render(); updateHints();
       }
@@ -6384,6 +6369,19 @@ function activateChargedLand(player, instId) {
       icon: landCard.icon || '🎪',
       owner: player,
       resolve: () => { doKaitaku(player, 1); render(); updateHints(); continueStack(); }
+    });
+    renderStack();
+    openPriorityWindow(opp, null, `${landCard.name} 起動`);
+  } else if (landCard.chargedAbility === 'mill4') {
+    // 荒れた墓: タップ → 自分の山札から4枚墓地に置く
+    if (land.tapped) { log('タップ済み'); return; }
+    land.tapped = true;
+    log(`${landCard.name}: 切削4 → スタックに積む`);
+    G.stack.push({
+      name: `${landCard.name} 起動(切削4)`,
+      icon: landCard.icon || '⚰️',
+      owner: player,
+      resolve: () => { millCards(player, 4); render(); updateHints(); continueStack(); }
     });
     renderStack();
     openPriorityWindow(opp, null, `${landCard.name} 起動`);
@@ -7049,6 +7047,27 @@ function aiDoActivateChargedLand(landInstId) {
       log(`AI ${lc.name}: 白クリーチャー+0/+2(永続)`);
     }
     render();
+  } else if (lc.chargedAbility === 'kaizouReturnGreen') {
+    if (!isOCActive(1) || land.tapped) return;
+    land.tapped = true;
+    ai.mana.G = (ai.mana.G||0)+3;
+    const idx = ai.lands.findIndex(l=>l.instanceId===landInstId);
+    if (idx !== -1) { ai.lands.splice(idx,1); ai.landDeck.push(land.cardId); }
+    log(`AI ${lc.name} 還元: 緑3追加、土地デッキ底へ`, 'heal');
+    render();
+  } else if (lc.chargedAbility === 'look3keep1green') {
+    if (land.tapped || !canAfford(1, {G:3})) return;
+    land.tapped = true;
+    payMana(1, {G:3});
+    doLookKeepColored(1, 3, 'G');
+    log(`AI ${lc.name}: 3ルック1(緑)`);
+    render();
+  } else if (lc.chargedAbility === 'kaitaku1land') {
+    if (land.tapped) return;
+    land.tapped = true;
+    doKaitaku(1, 1);
+    log(`AI ${lc.name}: 開拓1`);
+    render();
   }
 }
 
@@ -7058,7 +7077,8 @@ function aiActivateChargedLands() {
     const lc = CARD_DB[land.cardId];
     if (!land.chargeCard || !lc.chargedAbility || land.tapped) continue;
     // kaizouReturn / kaizouReturnBlue requires OC
-    if ((lc.chargedAbility === 'kaizouReturn' || lc.chargedAbility === 'kaizouReturnBlue') && !isOCActive(1)) continue;
+    if ((lc.chargedAbility === 'kaizouReturn' || lc.chargedAbility === 'kaizouReturnBlue' || lc.chargedAbility === 'kaizouReturnGreen') && !isOCActive(1)) continue;
+    if (lc.chargedAbility === 'look3keep1green' && !canAfford(1, {G:3})) continue;
     // look3keep1white requires mana
     if (lc.chargedAbility === 'look3keep1white' && !canAfford(1, {W:3})) continue;
     // look3keep1blue requires mana
@@ -8195,15 +8215,15 @@ function handleFieldClick(player, instId) {
       return;
     }
 
-    // フォクリア: 攻撃 or 還元(クリーチャー1体保護) を選択
-    if (card.id === 'foklya') {
+    // フォクリア: 攻撃 or 還元(クリーチャーを守る) を選択
+    if (card.activated === 'foklya_protect') {
       const canAtk = canCreatureAttack(actP, inst);
       if (NET_MODE === 'host' && actP === 1) { if (canAtk) startSingleAttack(actP, instId); return; }
       const canKaizou = G.players[actP].lands.length > 0 && G.players[actP].field.length > 0;
       const html = `
         <p style="margin-bottom:10px;">${card.name} の使用方法を選択:</p>
         <button onclick="closeModal(); startSingleAttack(${actP},${instId});" style="width:100%;margin-bottom:8px;padding:8px;${canAtk?'':'opacity:0.4;cursor:not-allowed;'}" ${canAtk?'':'disabled'}>⚔️ 攻撃する</button>
-        <button onclick="closeModal(); foklyaActivateProtect(${actP},${instId});" style="width:100%;padding:8px;${canKaizou?'':'opacity:0.4;cursor:not-allowed;'}" ${canKaizou?'':'disabled'}>🌳 還元: クリーチャー1体をこのターン保護</button>
+        <button onclick="closeModal(); foklyaActivateProtect(${actP},${instId});" style="width:100%;padding:8px;${canKaizou?'':'opacity:0.4;cursor:not-allowed;'}" ${canKaizou?'':'disabled'}>♻️ 還元: クリーチャー1体を守る</button>
       `;
       showModal(card.name, html);
       return;
@@ -8299,14 +8319,13 @@ function handleLandClick(player, instId) {
 
   // 起動効果はすべてクイック: フェイズ・ターン問わずタップ可能
   if (land.chargeCard && landCard.chargedAbility) {
-    const tappedOk = !land.tapped || canKaizouTappedLand(lp);
-    if (tappedOk) {
+    if (!land.tapped) {
       const canActivate = (landCard.chargedAbility !== 'look3keep1white' || canAfford(lp, {W:3}))
         && (landCard.chargedAbility !== 'look3keep1red' || canAfford(lp, {R:3}))
         && (landCard.chargedAbility !== 'look3keep1black' || canAfford(lp, {B:3}))
         && (landCard.chargedAbility !== 'look3keep1green' || canAfford(lp, {G:3}))
-        && (landCard.chargedAbility !== 'kaizouReturnBlack' || isOCActive(lp))
-        && (landCard.chargedAbility !== 'kaizouReturnGreen' || isOCActive(lp));
+        && ((landCard.chargedAbility !== 'kaizouReturnGreen') || isOCActive(lp))
+        && ((landCard.chargedAbility !== 'kaizouReturnBlack') || isOCActive(lp));
       const abilityLabel = landCard.text.split('\n').find(l => l.includes('起動') && l.includes('チャージ')) || landCard.text.split('\n')[1] || '特殊能力';
       const html = `
         <p style="margin-bottom:10px;">${landCard.name} の使用方法を選択:</p>
@@ -9138,16 +9157,16 @@ const KEYWORD_DEFS = {
   '還元': '土地を土地デッキの底に戻すことをコストに起動する能力',
   '速攻': '召喚酔いしない（場に出たターンから攻撃できる）',
   '接死': 'このクリーチャーが与えた戦闘ダメージが1点以上なら、そのクリーチャーを破壊する',
-  '貫通': '戦闘ダメージがブロッカーのタフネスを超えた分、相手プレイヤーに与える',
-  '開拓': '自分の土地デッキから土地を1枚探し、タップ状態で場に出す',
-  'サーチ': '自分の山札から好きなカード1枚を手札に加える',
-  'C9': 'C値が9以上のとき効果が発動',
   '2回攻撃': 'このターン最初の攻撃時にアンタップし、もう一度攻撃できる',
   'Quick': '相手ターン・戦闘中でも使用できる',
   'C6': 'C値が6以上のとき効果が発動',
   'C7': 'C値が7以上のとき効果が発動',
   'C8': 'C値が8以上のとき効果が発動',
+  'C9': 'C値が9以上のとき効果が発動',
   'OC': 'C値が10以上（オーバーチャージ）のとき効果が発動',
+  '貫通': '戦闘ダメージがブロッカーのタフネスを超えた分、相手プレイヤーに与える',
+  '開拓': '自分の土地デッキから土地を1枚探し、タップ状態で場に出す',
+  'サーチ': '自分の山札から好きなカード1枚を手札に加える',
 };
 
 function kwTipHtml(kw) {
@@ -12419,11 +12438,11 @@ const DB_RED_LAND = ['hito_yama','wasure_yama','shigen_yama','kemono_yama','daik
 const DB_BLUE_MAIN = ['omnieru','aaka','chishiki_maju','maju_gakusha','bu_in','nexia',
   'ao_geki','chishiki_no_seiri','mizu_geki','hitei'];
 const DB_BLUE_LAND = ['hito_shima','wasure_shima','shigen_shima','kemono_shima','gakuin'];
-const DB_GREEN_MAIN = ['foklya','tami_kaitaku','folkusu','kaitakusha','mori_kansha','gen_jurei','mori_tami','iwai_tami','matsuri_otoko','kaitaku_miko'];
-const DB_GREEN_LAND = ['hito_mori','wasure_mori','shigen_mori','kemono_mori','matsuri_kaijo'];
 const DB_BLACK_MAIN = ['shiki','ren','yami_jouhouya','skeleton_senshi','itazura_obake',
   'haka_zombie','taisei_zombie','hakaatsume_yatoware','shigoeki','kurogeki'];
 const DB_BLACK_LAND = ['hito_numa','wasure_numa','shigen_numa','kemono_numa','areta_haka'];
+const DB_GREEN_MAIN = ['foklya','tami_kaitaku','folkusu','kaitakusha','mori_kansha','gen_jurei','mori_tami','iwai_tami','matsuri_otoko','kaitaku_miko'];
+const DB_GREEN_LAND = ['hito_mori','wasure_mori','shigen_mori','kemono_mori','matsuri_kaijo'];
 
 function dbRenderCollection() {
   const el = document.getElementById('db-collection-list');
