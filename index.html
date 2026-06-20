@@ -2067,7 +2067,7 @@ button.danger:hover { background: #6a2a2a; }
   </div>
   <div id="home-record"></div>
   <div id="home-elo" style="font-size:13px;margin-top:4px;cursor:pointer;" onclick="showTrophyPanel()"></div>
-  <div class="home-version">v1.8.0 — 破壊者の黒 追加</div>
+  <div class="home-version">v1.9.0 — 育成者の緑 追加</div>
 </div>
 
 <!-- Tutorial Overlay -->
@@ -2592,6 +2592,110 @@ const CARD_DB = {
     text:'■起動(タップ):1マナ生成\n■起動(タップ):自分の山札から4枚墓地に置く。チャージ時のみ',
     chargedAbility:'mill4'
   },
+  // ============================================================
+  // GREEN CARD DATABASE (SD育成者の緑)
+  // ============================================================
+  'foklya': {
+    id:'foklya', name:'村長樹妃 フォクリア', type:'creature', color:'G',
+    cost:{C:3,G:3}, power:6, toughness:6, subtype:'', icon:'🌳',
+    keywords:['格闘','貫通'],
+    text:'■格闘　■貫通\n■出た時、2枚還元してもよい。そうした時、2枚引く\n■ランドが出た時、相手に2ダメージ\n■起動(還元):自分のクリーチャー1体選ぶ。それはこのターン離れない',
+    kakutou:true, trample:true, etb:'foklya_kaizou2draw2', landEnterDamage2:true, activated:'foklya_protect'
+  },
+  'tami_kaitaku': {
+    id:'tami_kaitaku', name:'民による開拓', type:'spell', color:'G',
+    cost:{C:1,G:2}, icon:'🌱',
+    keywords:[],
+    text:'■開拓:1',
+    effect:'kaitaku1spell'
+  },
+  'folkusu': {
+    id:'folkusu', name:'古樹従 フォルクス', type:'creature', color:'G',
+    cost:{G:4}, power:4, toughness:3, subtype:'ツリーフォーク', icon:'🌲',
+    keywords:['格闘','貫通','C6','C8','OC'],
+    text:'■格闘　■貫通\n〈C6〉\n■出た時、開拓1\n〈C8〉\n■＋3/＋3\n〈OC〉\n■自分の還元はタップしている土地でも行える',
+    kakutou:true, trample:true, etb:'folkusu_c6_kaitaku', cx8Buff33:true, ocKaizouTapped:true
+  },
+  'kaitakusha': {
+    id:'kaitakusha', name:'開拓者', type:'creature', color:'G',
+    cost:{C:1,G:3}, power:3, toughness:3, subtype:'人間', icon:'⛏️',
+    keywords:[],
+    text:'■出た時、開拓:1',
+    etb:'kaitaku1'
+  },
+  'mori_kansha': {
+    id:'mori_kansha', name:'森への感謝', type:'spell', color:'G',
+    cost:{G:4}, icon:'🍀',
+    keywords:['OC'],
+    text:'（1）相手クリーチャー1体に自分の土地の枚数分ダメージ\n（2）開拓:1\n〈OC〉\n自分の土地を2枚還元してもよい。そうした時、手札からマナ総量6以下のクリーチャー1体出す',
+    effect:'mori_kansha'
+  },
+  'gen_jurei': {
+    id:'gen_jurei', name:'源の樹霊', type:'creature', color:'G',
+    cost:{C:3,G:3}, power:4, toughness:4, subtype:'ツリーフォーク', icon:'🌿',
+    keywords:['格闘'],
+    text:'■格闘\n■サーチ1',
+    kakutou:true, etb:'search1'
+  },
+  'mori_tami': {
+    id:'mori_tami', name:'森の民', type:'creature', color:'G',
+    cost:{G:1}, power:2, toughness:2, subtype:'', icon:'🧑‍🌾',
+    keywords:['格闘'],
+    text:'■格闘',
+    kakutou:true
+  },
+  'iwai_tami': {
+    id:'iwai_tami', name:'祝いの民', type:'creature', color:'G',
+    cost:{G:2}, power:2, toughness:2, subtype:'人間', icon:'🎊',
+    keywords:[],
+    text:'■自分の場にランドが出た時、相手クリーチャー1体に１ダメージ',
+    landEnterDamage1creature:true
+  },
+  'matsuri_otoko': {
+    id:'matsuri_otoko', name:'祭り男', type:'creature', color:'G',
+    cost:{C:1,G:1}, power:1, toughness:1, subtype:'人間', icon:'🎆',
+    keywords:[],
+    text:'■自分の場にランドが出た時、＋1/＋1',
+    landEnterBuff11:true
+  },
+  'kaitaku_miko': {
+    id:'kaitaku_miko', name:'開拓祭りの巫女', type:'creature', color:'G',
+    cost:{C:1,G:4}, power:4, toughness:3, subtype:'', icon:'⛩️',
+    keywords:['格闘','C9'],
+    text:'■格闘\n■出た時、開拓：1\n〈C9〉\n■自分の場にランドが出た時、1枚引く',
+    kakutou:true, etb:'kaitaku1', cx9LandEnterDraw:true
+  },
+  // LANDS (Green)
+  'hito_mori': {
+    id:'hito_mori', name:'人住まう森', type:'land', color:'G',
+    produces:'G', icon:'🌾',
+    text:'■起動(タップ)：緑1マナ生成\n■起動(タップ&緑3)：3ルック1(緑)。チャージ時のみ',
+    chargedAbility:'look3keep1green'
+  },
+  'wasure_mori': {
+    id:'wasure_mori', name:'忘れ去られし森', type:'land', color:'G',
+    produces:'G', icon:'🌫️',
+    text:'■起動(タップ)：緑1マナ生成\n■この土地がチャージされた時、1枚引く',
+    chargeDrawTrigger:true
+  },
+  'shigen_mori': {
+    id:'shigen_mori', name:'資源豊富な森', type:'land', color:'G',
+    produces:'G', icon:'🌴',
+    text:'■起動(タップ):緑1マナ生成\n〈OC〉\n■起動(自身の還元):緑3マナ生成。チャージ時のみ',
+    chargedAbility:'kaizouReturnGreen'
+  },
+  'kemono_mori': {
+    id:'kemono_mori', name:'獣住む森', type:'land', color:'G',
+    produces:'G', icon:'🐗',
+    text:'■起動(タップ):緑1マナ生成\n■起動(自身の還元):相手クリーチャー1体に5ダメージ。チャージ時のみ',
+    chargedAbility:'damage5opponent'
+  },
+  'matsuri_kaijo': {
+    id:'matsuri_kaijo', name:'祭りの会場', type:'land', color:'C',
+    produces:'C', icon:'🎪',
+    text:'■起動(タップ):1マナ生成\n■起動(タップ):開拓1。チャージ時のみ',
+    chargedAbility:'kaitaku1land'
+  },
 };
 
 // Build decks
@@ -2959,6 +3063,195 @@ function drawCard(player) {
   return result;
 }
 
+// ── 緑メカニクス共通ヘルパー ──────────────────────────────────
+
+// ランドが場に出た時の誘発処理（開拓・チャージ後に呼ぶ）
+function fireLandEntersTriggers(sourcePlayer) {
+  const p = G.players[sourcePlayer];
+  const opp = 1 - sourcePlayer;
+  p.field.forEach(inst => {
+    const card = CARD_DB[inst.cardId];
+    if (!card) return;
+    const _instId = inst.instanceId;
+    if (card.landEnterDamage2) {
+      triggerEffect(`${card.name} 誘発(ランド)`, card.icon||'🌳', sourcePlayer, () => {
+        G.players[opp].life -= 2;
+        showFloatDamage(2, opp === 1 ? 'ai' : 'player');
+        log(`${card.name}: 相手に2ダメージ`, 'damage');
+        render();
+      });
+    }
+    if (card.landEnterDamage1creature) {
+      triggerEffect(`${card.name} 誘発(ランド)`, card.icon||'🎊', sourcePlayer, () => {
+        if (G.players[opp].field.length === 0) { log(`${card.name}: 対象なし`); render(); continueStack(); return; }
+        if (sourcePlayer === 0) {
+          G.targetMode = { type:'opponentCreature', sourcePlayer:0, callback:(tgt) => {
+            applyDamageToCreature(opp, tgt.instId, 1, sourcePlayer);
+            log(`${card.name}: 相手クリーチャーに1ダメージ`, 'damage');
+            G.targetMode = null; render(); updateHints(); continueStack();
+          }};
+          render(); updateHints();
+        } else {
+          const tgt = G.players[opp].field[0];
+          applyDamageToCreature(opp, tgt.instanceId, 1, sourcePlayer);
+          log(`AI ${card.name}: 相手クリーチャーに1ダメージ`, 'damage');
+          render(); updateHints(); continueStack();
+        }
+      });
+    }
+    if (card.landEnterBuff11) {
+      triggerEffect(`${card.name} 誘発(ランド)`, card.icon||'🎆', sourcePlayer, () => {
+        const instNow = p.field.find(c => c.instanceId === _instId);
+        if (instNow) { instNow.tempPow = (instNow.tempPow||0)+1; instNow.tempTou = (instNow.tempTou||0)+1; log(`${card.name}: +1/+1`, 'heal'); }
+        render();
+      });
+    }
+    if (card.cx9LandEnterDraw && getCXValue(sourcePlayer) >= 9) {
+      triggerEffect(`${card.name} 誘発(ランドC9)`, card.icon||'⛩️', sourcePlayer, () => {
+        drawCard(sourcePlayer);
+        log(`${card.name} 〈C9〉: ランド誘発で1枚引く`);
+        render();
+      });
+    }
+  });
+}
+
+// 開拓: 土地デッキからn枚を場に出す（タップ状態）
+function doKaitaku(player, n) {
+  const p = G.players[player];
+  if (p.landDeck.length === 0) { log('土地デッキが空です'); return; }
+  if (player === 0) {
+    _promptKaitaku(player, n);
+  } else {
+    let placed = 0;
+    while (placed < n && p.landDeck.length > 0) {
+      const cardId = p.landDeck.shift();
+      p.lands.push({ cardId, instanceId: G.nextId++, tapped: true, chargeCard: null });
+      log(`AI 開拓: ${CARD_DB[cardId].name} を場に出す`, 'heal');
+      fireLandEntersTriggers(player);
+      placed++;
+    }
+    render(); updateHints();
+  }
+}
+
+function _promptKaitaku(player, remaining) {
+  const p = G.players[player];
+  if (remaining <= 0 || p.landDeck.length === 0) { render(); updateHints(); return; }
+  const unique = [...new Set(p.landDeck)];
+  const btns = unique.map(id => {
+    const c = CARD_DB[id];
+    return `<button onclick="closeModal();G._awaitingModal=false;_pickKaitaku(0,'${id}',${remaining-1});" style="margin:4px;padding:6px 14px;background:#1a3a1a;border:1px solid #44aa44;color:#aaffaa;border-radius:4px;cursor:pointer;">${c.icon||'🌿'} ${c.name}</button>`;
+  }).join('');
+  showModal('開拓：土地を選ぶ', `<p>土地デッキから1枚選んで場に出す（残り${remaining}）</p>${btns}<button onclick="closeModal();G._awaitingModal=false;render();updateHints();" style="margin:4px;padding:6px 14px;background:#555;border:none;color:#ccc;border-radius:4px;cursor:pointer;">スキップ</button>`);
+  G._awaitingModal = true;
+}
+
+function _pickKaitaku(player, cardId, remaining) {
+  const p = G.players[player];
+  const idx = p.landDeck.indexOf(cardId);
+  if (idx === -1) { render(); updateHints(); return; }
+  p.landDeck.splice(idx, 1);
+  p.lands.push({ cardId, instanceId: G.nextId++, tapped: true, chargeCard: null });
+  log(`開拓: ${CARD_DB[cardId].name} を場に出す`, 'heal');
+  fireLandEntersTriggers(player);
+  if (remaining > 0) _promptKaitaku(player, remaining);
+  else { render(); updateHints(); }
+}
+
+// サーチ: 山札から好きなカード1枚を手札に加える
+function doSearch(player, n) {
+  const p = G.players[player];
+  if (p.deck.length === 0) { log('山札が空です'); return; }
+  if (player === 0) {
+    _promptSearch(player, n);
+  } else {
+    for (let i = 0; i < n && p.deck.length > 0; i++) {
+      const best = p.deck.reduce((a,b) => (totalCost(CARD_DB[a] && CARD_DB[a].cost||{}) >= totalCost(CARD_DB[b] && CARD_DB[b].cost||{})) ? a : b);
+      const idx = p.deck.indexOf(best);
+      p.deck.splice(idx, 1);
+      p.hand.push(best);
+      log(`AI サーチ: ${CARD_DB[best].name} を手札に加える`, 'heal');
+    }
+    for (let j = p.deck.length - 1; j > 0; j--) { const k = Math.floor(Math.random()*(j+1)); [p.deck[j],p.deck[k]]=[p.deck[k],p.deck[j]]; }
+    render(); updateHints();
+  }
+}
+
+function _promptSearch(player, remaining) {
+  const p = G.players[player];
+  if (remaining <= 0 || p.deck.length === 0) { render(); updateHints(); return; }
+  const unique = [...new Set(p.deck)];
+  const btns = unique.map(id => {
+    const c = CARD_DB[id];
+    return `<button onclick="closeModal();G._awaitingModal=false;_pickSearch(0,'${id}',${remaining-1});" style="margin:4px;padding:6px 14px;background:#1a3a1a;border:1px solid #44aa44;color:#aaffaa;border-radius:4px;cursor:pointer;">${c.icon||'📄'} ${c.name}</button>`;
+  }).join('');
+  showModal('サーチ：カードを選ぶ', `<p>山札から1枚選んで手札に加える</p><div style="max-height:200px;overflow-y:auto;">${btns}</div>`);
+  G._awaitingModal = true;
+}
+
+function _pickSearch(player, cardId, remaining) {
+  const p = G.players[player];
+  const idx = p.deck.indexOf(cardId);
+  if (idx === -1) { render(); updateHints(); return; }
+  p.deck.splice(idx, 1);
+  p.hand.push(cardId);
+  log(`サーチ: ${CARD_DB[cardId].name} を手札に加える`, 'heal');
+  for (let j = p.deck.length - 1; j > 0; j--) { const k = Math.floor(Math.random()*(j+1)); [p.deck[j],p.deck[k]]=[p.deck[k],p.deck[j]]; }
+  if (remaining > 0) _promptSearch(player, remaining);
+  else { render(); updateHints(); }
+}
+
+// フォクリア ETB: 2枚還元してもよい → 2枚引く
+function foklyaDoKaizou2Draw2(player) {
+  const p = G.players[player];
+  const avail = p.lands.filter(l => true); // all lands can be returned
+  if (avail.length < 2) { render(); updateHints(); return; }
+  const take = avail.slice(0, 2);
+  take.forEach(l => {
+    const idx = p.lands.findIndex(x => x.instanceId === l.instanceId);
+    if (idx !== -1) { p.lands.splice(idx, 1); p.landDeck.push(l.cardId); }
+  });
+  drawCard(player); drawCard(player);
+  log(`フォクリア 還元×2: 2枚引く`, 'heal');
+  render(); updateHints();
+}
+
+// フォクリア 起動(還元): クリーチャー1体を今ターン保護
+function foklyaActivateProtect(player, foklyaInstId) {
+  const p = G.players[player];
+  if (p.lands.length === 0) { log('フォクリア 還元: 土地がありません'); return; }
+  const land = p.lands[0];
+  p.lands.splice(0, 1);
+  p.landDeck.push(land.cardId);
+  log(`フォクリア 還元: ${CARD_DB[land.cardId].name} を土地デッキ底へ`);
+  if (player === 0) {
+    const owned = p.field;
+    if (owned.length === 0) { render(); updateHints(); return; }
+    const btns = owned.map(inst => {
+      const c = CARD_DB[inst.cardId];
+      return `<button onclick="closeModal();G._awaitingModal=false;_foklyaProtectPick(0,${inst.instanceId});" style="margin:4px;padding:6px 14px;background:#1a3a1a;border:1px solid #44aa44;color:#aaffaa;border-radius:4px;cursor:pointer;">${c.icon||'🌳'} ${c.name}</button>`;
+    }).join('');
+    showModal('フォクリア 保護', `<p>このターン離れなくするクリーチャーを選ぶ</p>${btns}`);
+    G._awaitingModal = true;
+  } else {
+    const tgt = p.field[0];
+    if (tgt) { tgt._protectedThisTurn = true; log(`AI フォクリア: ${CARD_DB[tgt.cardId].name} を保護`); }
+    render(); updateHints();
+  }
+}
+
+function _foklyaProtectPick(player, instId) {
+  const inst = G.players[player].field.find(c => c.instanceId === instId);
+  if (inst) { inst._protectedThisTurn = true; log(`フォクリア: ${CARD_DB[inst.cardId].name} を保護（このターン離れない）`, 'heal'); }
+  render(); updateHints();
+}
+
+// フォルクス OC: タップ済み土地でも還元できるか
+function canKaizouTappedLand(player) {
+  return isOCActive(player) && G.players[player].field.some(inst => CARD_DB[inst.cardId] && CARD_DB[inst.cardId].ocKaizouTapped);
+}
+
 // ── 黒メカニクス共通ヘルパー ──────────────────────────────────
 // 山札の上からn枚を墓地に置く（切削）。実際に置いた枚数を返す
 function millCards(player, n) {
@@ -2982,6 +3275,8 @@ function destroyCreatureByEffect(player, instId, sourceName) {
   if (idx === -1) return false;
   const inst = p.field[idx];
   const card = CARD_DB[inst.cardId];
+  // フォクリア保護
+  if (inst._protectedThisTurn) { log(`${card.name}: このターン離れない（フォクリア保護）`); return false; }
   // 置換: ダメージ以外で離れる時、手札1枚を捨てて残ってもよい
   if (card.replaceLeaveWithDiscard && p.hand.length > 0) {
     let useReplace = false;
@@ -3428,6 +3723,14 @@ function playCardFromHand(player, handIndex) {
     }
     if (card.effect === 'shigoeki') {
       playShigoeki(player, handIndex);
+      return;
+    }
+    if (card.effect === 'kaitaku1spell') {
+      playKaitaku1Spell(player, handIndex);
+      return;
+    }
+    if (card.effect === 'mori_kansha') {
+      playMoriKansha(player, handIndex);
       return;
     }
     payMana(player, card.cost);
@@ -3925,6 +4228,33 @@ function resolveETBEffect(player, instanceId) {
   } else if (card.etb === 'shiki_distribute') {
     // 死を食らうもの シキ: 自分の墓地の枚数分、相手クリーチャー1体と相手プレイヤーに割り振る
     resolveShikiDistribute(player);
+  } else if (card.etb === 'foklya_kaizou2draw2') {
+    // フォクリア: 2枚還元してもよい → 2枚引く
+    const avail = p.lands;
+    if (avail.length >= 2) {
+      if (player === 0) {
+        showModal('フォクリア 出た時', `<p>土地を2枚還元して2枚引きますか？</p><button onclick="closeModal();G._awaitingModal=false;foklyaDoKaizou2Draw2(0);" style="margin:4px;padding:6px 14px;background:#1a3a1a;border:1px solid #44aa44;color:#aaffaa;border-radius:4px;cursor:pointer;">還元して2枚引く</button><button onclick="closeModal();G._awaitingModal=false;continueStack();render();updateHints();" style="margin:4px;padding:6px 14px;background:#555;border:none;color:#ccc;border-radius:4px;cursor:pointer;">しない</button>`);
+        G._awaitingModal = true;
+        return;
+      } else {
+        foklyaDoKaizou2Draw2(player);
+      }
+    }
+    continueStack();
+  } else if (card.etb === 'folkusu_c6_kaitaku') {
+    // フォルクス C6: 開拓1
+    if (getCXValue(player) >= 6) {
+      doKaitaku(player, 1);
+    }
+    continueStack();
+  } else if (card.etb === 'kaitaku1' || card.etb === 'kaitaku1spell') {
+    // 開拓者・開拓祭りの巫女: 開拓1
+    doKaitaku(player, 1);
+    continueStack();
+  } else if (card.etb === 'search1') {
+    // 源の樹霊: サーチ1
+    doSearch(player, 1);
+    continueStack();
   }
 }
 
@@ -4463,6 +4793,7 @@ function checkCreatureDeath(player, instId, sourcePlayer) {
     return false;
   }
   if (dead) {
+    if (c._protectedThisTurn) { log(`${card.name}: このターン離れない（フォクリア保護）`); c.damage = 0; c._deathtouched = false; return false; }
     showDestroyAnimation(instId);
     animDestroyParticle(instId);
     p.field.splice(idx, 1);
@@ -5282,6 +5613,12 @@ function resolveSingleCombat(atkPlayer, atkInstId, kakutouTargetId, blockerInstI
       // 接死
       if (atkCard.deathtouch && atkPow > 0) blkInst._deathtouched = true;
       if (blkCard.deathtouch && blkPow > 0 && !atkInvuln) atkInst._deathtouched = true;
+      // 貫通: 超過ダメージは相手プレイヤーへ
+      if (atkCard.trample) {
+        const blkTou = getEffectiveToughness(opp, blkInst);
+        const excess = Math.max(0, atkPow - blkTou);
+        if (excess > 0) { G.players[opp].life -= excess; showFloatDamage(excess, opp === 1 ? 'ai' : 'player'); log(`${atkCard.name} 貫通: ${excess}超過ダメージ`, 'damage'); }
+      }
       log(`${atkCard.name} vs ${blkCard.name}: ${atkPow}/${atkInvuln ? 0 : blkPow}ダメージ交換`, 'damage');
       checkCreatureDeath(opp, blockerInstId, atkPlayer);
       checkCreatureDeath(atkPlayer, atkInstId, opp);
@@ -5531,7 +5868,7 @@ function endTurn() {
   G.pendingKakutouInstId = null;
   G.kaizen_used_names.clear(); // 介善OCの「ターン1:同名」制限はターン毎にリセット
   G.players.forEach(p => {
-    p.field.forEach(c => { c.tempPower = 0; c.tempToughness = 0; });
+    p.field.forEach(c => { c.tempPower = 0; c.tempToughness = 0; delete c._protectedThisTurn; });
     p.mana = {R:0,U:0,G:0,W:0,B:0,C:0};
   });
   G.players[0].field.forEach(c => { c.noDamageKill = false; });
@@ -5723,6 +6060,8 @@ function chargeToLand(landInstId) {
     drawCard(charger);
     log(`${landCard.name}: カードを1枚引く`);
   }
+  // ランドが場に出た時の誘発
+  fireLandEntersTriggers(charger);
   render(); updateHints();
 }
 
@@ -6000,6 +6339,54 @@ function activateChargedLand(player, instId) {
     });
     renderStack();
     openPriorityWindow(opp, null, `${landCard.name} 起動`);
+  } else if (landCard.chargedAbility === 'look3keep1green') {
+    // 人住まう森: タップ + 緑3 → 3ルック1(緑)
+    if (land.tapped) { log(`${landCard.name}: タップ済みのため起動できません`); return; }
+    if (!canAfford(player, {G:3})) { log('マナ不足 (緑3)'); return; }
+    land.tapped = true;
+    payMana(player, {G:3});
+    log(`${landCard.name}: 3ルック1(緑) → スタックに積む`);
+    G.stack.push({
+      name: `${landCard.name} 起動(3ルック1)`,
+      icon: landCard.icon || '✨',
+      owner: player,
+      resolve: () => { doLookKeepColored(player, 3, 'G'); render(); updateHints(); }
+    });
+    renderStack();
+    openPriorityWindow(opp, null, `${landCard.name} 起動`);
+  } else if (landCard.chargedAbility === 'kaizouReturnGreen') {
+    // 資源豊富な森: OC + tap → 緑3生成、土地デッキ底へ
+    if (!isOCActive(player)) { log('OC未達成'); return; }
+    if (land.tapped && !canKaizouTappedLand(player)) { log('タップ済み'); return; }
+    land.tapped = true;
+    log(`${landCard.name} 還元: スタックに積む`);
+    G.stack.push({
+      name: `${landCard.name} 起動(還元GGG)`,
+      icon: landCard.icon || '✨',
+      owner: player,
+      resolve: () => {
+        p.mana.G = (p.mana.G||0)+3;
+        const idx2 = p.lands.findIndex(l=>l.instanceId===instId);
+        if (idx2 !== -1) { p.lands.splice(idx2,1); p.landDeck.push(land.cardId); }
+        log(`${landCard.name} 還元: 緑3追加、土地デッキ底へ`, 'heal');
+        render(); updateHints();
+      }
+    });
+    renderStack();
+    openPriorityWindow(opp, null, `${landCard.name} 還元起動`);
+  } else if (landCard.chargedAbility === 'kaitaku1land') {
+    // 祭りの会場: タップ → 開拓1
+    if (land.tapped) { log('タップ済み'); return; }
+    land.tapped = true;
+    log(`${landCard.name}: 開拓1 → スタックに積む`);
+    G.stack.push({
+      name: `${landCard.name} 起動(開拓1)`,
+      icon: landCard.icon || '🎪',
+      owner: player,
+      resolve: () => { doKaitaku(player, 1); render(); updateHints(); continueStack(); }
+    });
+    renderStack();
+    openPriorityWindow(opp, null, `${landCard.name} 起動`);
   }
 }
 
@@ -6137,6 +6524,13 @@ function resolveCombat() {
         // 接死: ダメージ>0で相手を破壊フラグ
         if (atkCard.deathtouch && atkPow > 0) blocker._deathtouched = true;
         if (blkCard.deathtouch && blkPow > 0) attacker._deathtouched = true;
+
+        // 貫通: 超過ダメージは相手プレイヤーへ
+        if (atkCard.trample) {
+          const blkTou = getEffectiveToughness(1, blocker);
+          const excess = Math.max(0, atkPow - blkTou);
+          if (excess > 0) { ai.life -= excess; showFloatDamage(excess, 'ai'); log(`${atkCard.name} 貫通: ${excess}超過ダメージ`, 'damage'); }
+        }
 
         const blockerDied = checkCreatureDeath(1, blkId, 0);
         G.combatBlockersAlive[blkId] = !blockerDied;
@@ -7801,6 +8195,20 @@ function handleFieldClick(player, instId) {
       return;
     }
 
+    // フォクリア: 攻撃 or 還元(クリーチャー1体保護) を選択
+    if (card.id === 'foklya') {
+      const canAtk = canCreatureAttack(actP, inst);
+      if (NET_MODE === 'host' && actP === 1) { if (canAtk) startSingleAttack(actP, instId); return; }
+      const canKaizou = G.players[actP].lands.length > 0 && G.players[actP].field.length > 0;
+      const html = `
+        <p style="margin-bottom:10px;">${card.name} の使用方法を選択:</p>
+        <button onclick="closeModal(); startSingleAttack(${actP},${instId});" style="width:100%;margin-bottom:8px;padding:8px;${canAtk?'':'opacity:0.4;cursor:not-allowed;'}" ${canAtk?'':'disabled'}>⚔️ 攻撃する</button>
+        <button onclick="closeModal(); foklyaActivateProtect(${actP},${instId});" style="width:100%;padding:8px;${canKaizou?'':'opacity:0.4;cursor:not-allowed;'}" ${canKaizou?'':'disabled'}>🌳 還元: クリーチャー1体をこのターン保護</button>
+      `;
+      showModal(card.name, html);
+      return;
+    }
+
     // シキ: 攻撃 or 還元(お互い自軍1体破壊) を選択
     if (card.id === 'shiki') {
       const canAtk = canCreatureAttack(actP, inst);
@@ -7891,11 +8299,14 @@ function handleLandClick(player, instId) {
 
   // 起動効果はすべてクイック: フェイズ・ターン問わずタップ可能
   if (land.chargeCard && landCard.chargedAbility) {
-    if (!land.tapped) {
+    const tappedOk = !land.tapped || canKaizouTappedLand(lp);
+    if (tappedOk) {
       const canActivate = (landCard.chargedAbility !== 'look3keep1white' || canAfford(lp, {W:3}))
         && (landCard.chargedAbility !== 'look3keep1red' || canAfford(lp, {R:3}))
         && (landCard.chargedAbility !== 'look3keep1black' || canAfford(lp, {B:3}))
-        && ((landCard.chargedAbility !== 'kaizouReturnBlack') || isOCActive(lp));
+        && (landCard.chargedAbility !== 'look3keep1green' || canAfford(lp, {G:3}))
+        && (landCard.chargedAbility !== 'kaizouReturnBlack' || isOCActive(lp))
+        && (landCard.chargedAbility !== 'kaizouReturnGreen' || isOCActive(lp));
       const abilityLabel = landCard.text.split('\n').find(l => l.includes('起動') && l.includes('チャージ')) || landCard.text.split('\n')[1] || '特殊能力';
       const html = `
         <p style="margin-bottom:10px;">${landCard.name} の使用方法を選択:</p>
@@ -8206,6 +8617,99 @@ function playHitei(player, handIndex) {
   }});
   renderStack(); render(); updateHints();
   openPriorityWindow(1-player, G.priorityContinuation, `${card.name}に対応`);
+}
+
+// ── 民による開拓: 開拓1 ──
+function playKaitaku1Spell(player, handIndex) {
+  const p = G.players[player];
+  const card = CARD_DB[p.hand[handIndex]];
+  payMana(player, card.cost);
+  p.hand.splice(handIndex, 1);
+  p.graveyard.push(card.id);
+  G.stack.push({
+    name: `${card.name}`, icon: card.icon||'🌱', owner: player,
+    resolve: () => { doKaitaku(player, 1); render(); updateHints(); continueStack(); }
+  });
+  renderStack(); render(); updateHints();
+  openPriorityWindow(1-player, null, `${card.name}に対応`);
+}
+
+// ── 森への感謝: (1)土地数分ダメージ (2)開拓1 OC:還元2→クリーチャー展開 ──
+function playMoriKansha(player, handIndex) {
+  const p = G.players[player];
+  const card = CARD_DB[p.hand[handIndex]];
+  const opp = 1-player;
+  const ocAtCast = isOCActive(player);
+  payMana(player, card.cost);
+  p.hand.splice(handIndex, 1);
+  p.graveyard.push(card.id);
+  G.stack.push({
+    name: `${card.name}`, icon: card.icon||'🍀', owner: player,
+    resolve: () => {
+      const dmg = p.lands.length;
+      if (G.players[opp].field.length === 0) {
+        log(`${card.name}: 対象なし、ダメージスキップ`);
+        _moriKanshaStep2(player, ocAtCast);
+        return;
+      }
+      if (player === 0) {
+        G.targetMode = { type:'opponentCreature', sourcePlayer:player, callback:(tgt) => {
+          applyDamageToCreature(opp, tgt.instId, dmg, player);
+          log(`${card.name}: ${dmg}ダメージ`, 'damage');
+          G.targetMode = null;
+          _moriKanshaStep2(player, ocAtCast);
+        }};
+        render(); updateHints();
+      } else {
+        const tgt = G.players[opp].field[0];
+        applyDamageToCreature(opp, tgt.instanceId, dmg, player);
+        log(`AI ${card.name}: ${dmg}ダメージ`, 'damage');
+        _moriKanshaStep2(player, ocAtCast);
+      }
+    }
+  });
+  renderStack(); render(); updateHints();
+  openPriorityWindow(opp, null, `${card.name}に対応`);
+}
+
+function _moriKanshaStep2(player, ocAtCast) {
+  doKaitaku(player, 1);
+  if (ocAtCast && G.players[player].lands.length >= 2) {
+    const p = G.players[player];
+    if (player === 0) {
+      const eligible = p.hand.filter(id => { const c = CARD_DB[id]; return c && c.type==='creature' && totalCost(c.cost||{}) <= 6; });
+      if (eligible.length > 0) {
+        const btns = [...new Set(eligible)].map(id => {
+          const c = CARD_DB[id];
+          return `<button onclick="closeModal();G._awaitingModal=false;_moriKanshaOCPlay(0,'${id}');" style="margin:4px;padding:6px 14px;background:#1a3a1a;border:1px solid #44aa44;color:#aaffaa;border-radius:4px;cursor:pointer;">${c.icon||'🌿'} ${c.name}</button>`;
+        }).join('');
+        showModal('森への感謝 〈OC〉', `<p>土地2枚還元して手札からマナ総量6以下のクリーチャーを出しますか？</p>${btns}<button onclick="closeModal();G._awaitingModal=false;render();updateHints();" style="margin:4px;padding:6px 14px;background:#555;border:none;color:#ccc;border-radius:4px;cursor:pointer;">しない</button>`);
+        G._awaitingModal = true;
+        return;
+      }
+    } else {
+      const eligible = p.hand.filter(id => { const c = CARD_DB[id]; return c && c.type==='creature' && totalCost(c.cost||{}) <= 6; });
+      if (eligible.length > 0) {
+        _moriKanshaOCPlay(player, eligible[0]);
+      }
+    }
+  }
+  render(); updateHints();
+}
+
+function _moriKanshaOCPlay(player, cardId) {
+  const p = G.players[player];
+  if (p.lands.length < 2) { render(); updateHints(); return; }
+  const take = p.lands.slice(0, 2);
+  take.forEach(l => { const idx = p.lands.findIndex(x=>x.instanceId===l.instanceId); if(idx!==-1){p.lands.splice(idx,1);p.landDeck.push(l.cardId);} });
+  log(`森への感謝 OC: 土地2枚還元`);
+  const hi = p.hand.indexOf(cardId);
+  if (hi === -1) { render(); updateHints(); return; }
+  p.hand.splice(hi, 1);
+  const inst = { cardId, instanceId: G.nextId++, damage:0, tapped:false, entryTurn: G.turn };
+  p.field.push(inst);
+  log(`森への感謝 OC: ${CARD_DB[cardId].name} を場に出す`, 'heal');
+  render(); updateHints();
 }
 
 // ── 黒撃: 相手クリーチャー1体を破壊 ──
@@ -8634,6 +9138,10 @@ const KEYWORD_DEFS = {
   '還元': '土地を土地デッキの底に戻すことをコストに起動する能力',
   '速攻': '召喚酔いしない（場に出たターンから攻撃できる）',
   '接死': 'このクリーチャーが与えた戦闘ダメージが1点以上なら、そのクリーチャーを破壊する',
+  '貫通': '戦闘ダメージがブロッカーのタフネスを超えた分、相手プレイヤーに与える',
+  '開拓': '自分の土地デッキから土地を1枚探し、タップ状態で場に出す',
+  'サーチ': '自分の山札から好きなカード1枚を手札に加える',
+  'C9': 'C値が9以上のとき効果が発動',
   '2回攻撃': 'このターン最初の攻撃時にアンタップし、もう一度攻撃できる',
   'Quick': '相手ターン・戦闘中でも使用できる',
   'C6': 'C値が6以上のとき効果が発動',
@@ -11911,6 +12419,8 @@ const DB_RED_LAND = ['hito_yama','wasure_yama','shigen_yama','kemono_yama','daik
 const DB_BLUE_MAIN = ['omnieru','aaka','chishiki_maju','maju_gakusha','bu_in','nexia',
   'ao_geki','chishiki_no_seiri','mizu_geki','hitei'];
 const DB_BLUE_LAND = ['hito_shima','wasure_shima','shigen_shima','kemono_shima','gakuin'];
+const DB_GREEN_MAIN = ['foklya','tami_kaitaku','folkusu','kaitakusha','mori_kansha','gen_jurei','mori_tami','iwai_tami','matsuri_otoko','kaitaku_miko'];
+const DB_GREEN_LAND = ['hito_mori','wasure_mori','shigen_mori','kemono_mori','matsuri_kaijo'];
 const DB_BLACK_MAIN = ['shiki','ren','yami_jouhouya','skeleton_senshi','itazura_obake',
   'haka_zombie','taisei_zombie','hakaatsume_yatoware','shigoeki','kurogeki'];
 const DB_BLACK_LAND = ['hito_numa','wasure_numa','shigen_numa','kemono_numa','areta_haka'];
@@ -11956,6 +12466,7 @@ function dbRenderCollection() {
     <button onclick="dbLoadPreset('red')" style="flex:1;padding:6px;background:#3a1a1a;border:1px solid #cc4422;color:#ffcccc;border-radius:6px;cursor:pointer;font-size:11px;">🔴 赤デッキ</button>
     <button onclick="dbLoadPreset('blue')" style="flex:1;padding:6px;background:#1a1a3a;border:1px solid #2244cc;color:#aaccff;border-radius:6px;cursor:pointer;font-size:11px;">🔵 青デッキ</button>
     <button onclick="dbLoadPreset('black')" style="flex:1;padding:6px;background:#1a0a1a;border:1px solid #884488;color:#ddaadd;border-radius:6px;cursor:pointer;font-size:11px;">⚫ 黒デッキ</button>
+    <button onclick="dbLoadPreset('green')" style="flex:1;padding:6px;background:#0a1a0a;border:1px solid #44aa44;color:#aaffaa;border-radius:6px;cursor:pointer;font-size:11px;">🟢 緑デッキ</button>
   </div>`;
   html += '<div class="db-section-label">⚪ 白 — クリーチャー / スペル</div>';
   DB_WHITE_MAIN.forEach(id => { html += renderMainRow(id); });
@@ -11973,14 +12484,18 @@ function dbRenderCollection() {
   DB_BLACK_MAIN.forEach(id => { html += renderMainRow(id); });
   html += '<div class="db-section-label">⚫ 黒 — 土地</div>';
   DB_BLACK_LAND.forEach(id => { html += renderLandRow(id); });
+  html += '<div class="db-section-label">🟢 緑 — クリーチャー / スペル</div>';
+  DB_GREEN_MAIN.forEach(id => { html += renderMainRow(id); });
+  html += '<div class="db-section-label">🟢 緑 — 土地</div>';
+  DB_GREEN_LAND.forEach(id => { html += renderLandRow(id); });
 
   el.innerHTML = html;
 }
 
 // プリセットデッキ読込（現在のスロットを上書き）
 function dbLoadPreset(color) {
-  const mains = color === 'red' ? DB_RED_MAIN : color === 'blue' ? DB_BLUE_MAIN : color === 'black' ? DB_BLACK_MAIN : DB_WHITE_MAIN;
-  const lands = color === 'red' ? DB_RED_LAND : color === 'blue' ? DB_BLUE_LAND : color === 'black' ? DB_BLACK_LAND : DB_WHITE_LAND;
+  const mains = color === 'red' ? DB_RED_MAIN : color === 'blue' ? DB_BLUE_MAIN : color === 'black' ? DB_BLACK_MAIN : color === 'green' ? DB_GREEN_MAIN : DB_WHITE_MAIN;
+  const lands = color === 'red' ? DB_RED_LAND : color === 'blue' ? DB_BLUE_LAND : color === 'black' ? DB_BLACK_LAND : color === 'green' ? DB_GREEN_LAND : DB_WHITE_LAND;
   const main = [];
   mains.forEach(id => { for (let i=0;i<4;i++) main.push(id); }); // 10種×4 = 40
   const land = [];
@@ -11990,7 +12505,7 @@ function dbLoadPreset(color) {
   dbStoreCurrentToSlot();
   dbPersistSlots();
   dbRenderAll();
-  const colorName = color === 'red' ? '赤' : color === 'blue' ? '青' : color === 'black' ? '黒' : '白';
+  const colorName = color === 'red' ? '赤' : color === 'blue' ? '青' : color === 'black' ? '黒' : color === 'green' ? '緑' : '白';
   log(`${colorName}デッキプリセットを読み込みました`);
 }
 
