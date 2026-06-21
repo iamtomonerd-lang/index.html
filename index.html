@@ -5025,9 +5025,10 @@ function trophyRenameDeck(key) {
 }
 
 function showTrophyPanel() {
-  const t = trophyLoad();
-  const peak = t.peakRating || 0;
-  const peakTier = eloTierOf(peak);
+  try {
+    const t = trophyLoad();
+    const peak = t.peakRating || 0;
+    const peakTier = eloTierOf(peak);
 
   // デッキ別（構築単位、名前編集可）
   const deckEntries = Object.entries(t.deckPeak || {}).sort((a,b) => b[1].rating - a[1].rating);
@@ -5070,6 +5071,10 @@ function showTrophyPanel() {
     <div style="max-height:200px;overflow-y:auto;margin-bottom:12px;">${cardHtml}</div>
     <button onclick="closeModal();" style="width:100%;padding:10px;background:#12121e;border:1px solid #4a4a6a;color:#aaaacc;border-radius:6px;cursor:pointer;">閉じる</button>
   `);
+  } catch(e) {
+    console.error('トロフィーパネル表示エラー:', e);
+    showModal('エラー', `<p>トロフィー情報の表示に失敗しました：</p><p style="color:#ff6666;font-size:12px;">${e.message}</p><button onclick="closeModal();" style="width:100%;padding:10px;">OK</button>`);
+  }
 }
 
 // ── Elo レーティングシステム ──────────────────────────────────
