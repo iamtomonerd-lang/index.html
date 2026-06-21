@@ -9554,20 +9554,60 @@ let CARD_STATS = {};       // バランス統計 {cardId: {played, wins}} シミ
 let AI_DECK_COUNTS = null; // AI自動構築デッキ {cardId: 枚数} null=デフォルト(全カード4枚)
 let AI_LAND_COUNTS = null; // AI自動構築土地デッキ {landId: 枚数} null=デフォルト(各2枚)
 const AI_LAND_POOL = ['hito_heichi','wasure_heichi','shigen_heichi','kemono_heichi','serashia_miyako'];
-// 前回localStorageに保存した学習データがあれば自動復元
-try {
-  const saved = localStorage.getItem('dcg_ai_weights');
-  if (saved) {
-    const data = JSON.parse(saved);
-    if (data.weights && data._version === AI_WEIGHTS_VERSION) {
-      AI_WEIGHTS = { ...AI_WEIGHTS, ...data.weights };
-      if (data.stats) AI_TRAIN_STATS = { ...AI_TRAIN_STATS, ...data.stats };
-      if (data.cardStats) CARD_STATS = data.cardStats;
-      if (data.aiDeck) AI_DECK_COUNTS = data.aiDeck;
-      if (data.aiLand) AI_LAND_COUNTS = data.aiLand;
+
+// 5色ごとのAI学習データ
+const AI_COLOR_KEYS = { white:'dcg_ai_white', red:'dcg_ai_red', blue:'dcg_ai_blue', black:'dcg_ai_black', green:'dcg_ai_green' };
+let AI_CURRENT_COLOR = null; // 現在訓練中の色
+
+// AIの色別学習データをlocalStorageから読み込む
+function loadAIColorWeights(colorKey) {
+  try {
+    const lsKey = AI_COLOR_KEYS[colorKey];
+    if (!lsKey) return false;
+    const saved = localStorage.getItem(lsKey);
+    if (saved) {
+      const data = JSON.parse(saved);
+      if (data.weights && data._version === AI_WEIGHTS_VERSION) {
+        AI_WEIGHTS = { ...AI_WEIGHTS_DEFAULT, ...data.weights };
+        AI_TRAIN_STATS = { games: 0, wins: 0, epoch: 0, ...(data.stats||{}) };
+        CARD_STATS = data.cardStats || {};
+        AI_DECK_COUNTS = data.aiDeck || null;
+        AI_LAND_COUNTS = data.aiLand || null;
+        AI_CURRENT_COLOR = colorKey;
+        return true;
+      }
     }
-  }
-} catch(e) {}
+  } catch(e) {}
+  return false;
+}
+
+// AIの色別学習データをlocalStorageに保存する
+function saveAIColorWeights(colorKey) {
+  try {
+    const lsKey = AI_COLOR_KEYS[colorKey];
+    if (!lsKey) return;
+    const data = { _version: AI_WEIGHTS_VERSION, weights: AI_WEIGHTS, stats: AI_TRAIN_STATS, cardStats: CARD_STATS, aiDeck: AI_DECK_COUNTS, aiLand: AI_LAND_COUNTS };
+    localStorage.setItem(lsKey, JSON.stringify(data));
+  } catch(e) {}
+}
+
+// 前回localStorageに保存した学習データがあれば自動復現（デフォルトは白）
+if (!loadAIColorWeights('white')) {
+  try {
+    const saved = localStorage.getItem('dcg_ai_weights'); // 旧形式の互換性
+    if (saved) {
+      const data = JSON.parse(saved);
+      if (data.weights && data._version === AI_WEIGHTS_VERSION) {
+        AI_WEIGHTS = { ...AI_WEIGHTS, ...data.weights };
+        if (data.stats) AI_TRAIN_STATS = { ...AI_TRAIN_STATS, ...data.stats };
+        if (data.cardStats) CARD_STATS = data.cardStats;
+        if (data.aiDeck) AI_DECK_COUNTS = data.aiDeck;
+        if (data.aiLand) AI_LAND_COUNTS = data.aiLand;
+        AI_CURRENT_COLOR = 'white';
+      }
+    }
+  } catch(e) {}
+}
 
 function evalBoardScore(player) {
   const me = G.players[player], opp = G.players[1-player];
@@ -10830,11 +10870,10 @@ async function startTraining(limitMode, limitValue, gamesPerBatch, onProgress) {
     if (onProgress) onProgress(totalPlayed, limitMode==='games'?totalGames:null, (totalWins/totalPlayed*100).toFixed(1), elapsed, limitMode==='time'?limitValue*1000:null);
   }
   AI_TRAIN_STATS.epoch++;
-  // 学習終了時にlocalStorageへ自動保存（統計・デッキ込み）
-  try {
-    localStorage.setItem('dcg_ai_weights', JSON.stringify(
-      {_version:AI_WEIGHTS_VERSION, weights:AI_WEIGHTS, stats:AI_TRAIN_STATS, cardStats:CARD_STATS, aiDeck:AI_DECK_COUNTS, aiLand:AI_LAND_COUNTS}));
-  } catch(e) {}
+  // 学習終了時に色別localStorageへ自動保存（統計・デッキ込み）
+  if (AI_CURRENT_COLOR) {
+    saveAIColorWeights(AI_CURRENT_COLOR);
+  }
   return currentWeights;
 }
 
@@ -10874,8 +10913,10 @@ function mutateLandCounts(d) {
 function saveWeightsToFile() {
   const data={_version:AI_WEIGHTS_VERSION, weights:AI_WEIGHTS, stats:AI_TRAIN_STATS, cardStats:CARD_STATS, aiDeck:AI_DECK_COUNTS, aiLand:AI_LAND_COUNTS};
   const json=JSON.stringify(data,null,2);
-  // 常にlocalStorageにも保存（ブラウザ内バックアップ）
-  try { localStorage.setItem('dcg_ai_weights', json); } catch(e) {}
+  // 常に色別localStorageにも保存（ブラウザ内バックアップ）
+  if (AI_CURRENT_COLOR) {
+    saveAIColorWeights(AI_CURRENT_COLOR);
+  }
   const isIOS=/iPhone|iPad|iPod/i.test(navigator.userAgent) ||
     (navigator.platform==='MacIntel' && navigator.maxTouchPoints>1); // iPadOS13+はMac偽装
   if (isIOS) {
@@ -10998,8 +11039,18 @@ function showPasteImport() {
 }
 
 function showTrainingPanel() {
+  const colorOpts = RATED_COLOR_DEFS.map(c => `<option value="${c.key}" ${AI_CURRENT_COLOR===c.key?'selected':''}>${c.icon} ${c.label}</option>`).join('');
   const html=`
     <div style="display:flex;flex-direction:column;gap:10px;font-size:12px;">
+      <div style="background:#0a2a2a;border:1px solid #226666;border-radius:4px;padding:8px;">
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;margin-bottom:6px;">
+          <span style="color:#aaaaff;font-weight:bold;">📚 訓練色選択:</span>
+          <select id="train-color" onchange="switchTrainColor(this.value)" style="background:#1a1a2a;color:#aaffaa;border:1px solid #226666;padding:4px 6px;border-radius:4px;">
+            ${colorOpts}
+          </select>
+        </label>
+        <div style="color:#888;font-size:11px;">選択した色のAIを訓練 (50万戦推奨)</div>
+      </div>
       <div style="color:#aaa;">学習データ: ${AI_TRAIN_STATS.games}戦 / エポック${AI_TRAIN_STATS.epoch} / σ=${_mutationSigma.toFixed(3)}</div>
       <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
         <label>指定方法:</label>
@@ -11286,6 +11337,18 @@ function uiTrainModeChange() {
   const mode=document.querySelector('input[name="train-mode"]:checked')?.value||'time';
   document.getElementById('train-time-row').style.display=mode==='time'?'flex':'none';
   document.getElementById('train-games-row').style.display=mode==='games'?'flex':'none';
+}
+
+// 訓練色を切り替え、その色のAI重みを読み込む
+function switchTrainColor(colorKey) {
+  if (AI_CURRENT_COLOR && AI_CURRENT_COLOR !== colorKey) {
+    // 前の色のAI重みを保存
+    saveAIColorWeights(AI_CURRENT_COLOR);
+  }
+  // 新しい色のAI重みを読み込む
+  loadAIColorWeights(colorKey);
+  document.getElementById('train-status').textContent = `✅ ${RATED_COLOR_DEFS.find(c=>c.key===colorKey).label}に切り替え (${AI_TRAIN_STATS.games}戦)`;
+  if (typeof showTrainingPanel === 'function') setTimeout(() => showTrainingPanel(), 300);
 }
 
 async function uiStartTraining() {
@@ -12328,7 +12391,11 @@ function showRatedFromHome() {
 }
 
 function startRatedBattle() {
-  if (RATED_OPP_COLOR) setAIDeckToColor(RATED_OPP_COLOR);
+  if (RATED_OPP_COLOR) {
+    // 対戦相手の色に応じたAI学習済み重みを読み込む
+    loadAIColorWeights(RATED_OPP_COLOR.key);
+    setAIDeckToColor(RATED_OPP_COLOR);
+  }
   RATED_MODE = true;
   netStartLocal();
 }
