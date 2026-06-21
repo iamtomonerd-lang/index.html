@@ -11635,7 +11635,7 @@ function _resetFreezeTimer() {
 function _startFreezeDetector() {
   if (_freezeCheckInterval) clearInterval(_freezeCheckInterval);
   _freezeCheckInterval = setInterval(() => {
-    if (G.phase === 'ended' || G.mulliganMode) return;
+    if (!G || G.phase === 'ended' || G.mulliganMode) return;
     const elapsed = Date.now() - _lastActionTime;
     if (elapsed > FREEZE_THRESHOLD_MS) {
       const el = document.getElementById('debug-freeze-warn');
