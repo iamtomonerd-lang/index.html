@@ -2067,7 +2067,7 @@ button.danger:hover { background: #6a2a2a; }
   </div>
   <div id="home-record"></div>
   <div id="home-elo" style="font-size:13px;margin-top:4px;cursor:pointer;" onclick="showTrophyPanel()"></div>
-  <div class="home-version">v2.0.0 — AI攻撃フロー修正</div>
+  <div class="home-version">v2.0.1 — 攻撃処理二重発火バグ修正</div>
 </div>
 
 <!-- Tutorial Overlay -->
@@ -6815,6 +6815,8 @@ function closePriorityAndResolve() {
     render();
     if (G.targetMode && G.targetMode.sourcePlayer === 1) { aiAutoPickTarget(); }
     if (G.targetMode || G._awaitingModal) return; // 非同期待機中 → continueStack()を待つ
+    // continueStack()が既に_pendingContをクリアして続行を処理済みなら二重発火しない
+    if (G._pendingCont === null) return;
     G._pendingCont = null;
     G._pendingReason = '';
     // まだスタックが残っていれば: fastResolveなら即解決、それ以外は優先権ウィンドウ
@@ -6843,6 +6845,7 @@ function _resolveNextFast(cont, reason) {
   renderStack(); render();
   if (G.targetMode && G.targetMode.sourcePlayer === 1) { aiAutoPickTarget(); }
   if (G.targetMode || G._awaitingModal) return; // 非同期待機中
+  if (G._pendingCont === null) return; // continueStack()が既に続行を処理済み
   G._pendingCont = null;
   G._pendingReason = '';
   if (G.stack.length > 0) {
