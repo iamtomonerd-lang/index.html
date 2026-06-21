@@ -9548,6 +9548,16 @@ const AI_WEIGHTS_DEFAULT = {
 };
 // カード個別のプレイ優先度（遺伝的アルゴリズムの学習対象、負値=使わない方が良い）
 AI_CARD_POOL.forEach(id => { AI_WEIGHTS_DEFAULT['card_' + id] = 0; });
+
+// 5色ごとのデフォルトAI重み（50万戦の学習結果）
+const AI_WEIGHTS_BY_COLOR = {
+  white: { ...AI_WEIGHTS_DEFAULT },  // 学習結果のJSONが埋め込まれます
+  red:   { ...AI_WEIGHTS_DEFAULT },  // 学習結果のJSONが埋め込まれます
+  blue:  { ...AI_WEIGHTS_DEFAULT },  // 学習結果のJSONが埋め込まれます
+  black: { ...AI_WEIGHTS_DEFAULT },  // 学習結果のJSONが埋め込まれます
+  green: { ...AI_WEIGHTS_DEFAULT },  // 学習結果のJSONが埋め込まれます
+};
+
 let AI_WEIGHTS = JSON.parse(JSON.stringify(AI_WEIGHTS_DEFAULT));
 let AI_TRAIN_STATS = { games: 0, wins: 0, epoch: 0 };
 let CARD_STATS = {};       // バランス統計 {cardId: {played, wins}} シミュレーション対戦から収集
@@ -9559,25 +9569,37 @@ const AI_LAND_POOL = ['hito_heichi','wasure_heichi','shigen_heichi','kemono_heic
 const AI_COLOR_KEYS = { white:'dcg_ai_white', red:'dcg_ai_red', blue:'dcg_ai_blue', black:'dcg_ai_black', green:'dcg_ai_green' };
 let AI_CURRENT_COLOR = null; // 現在訓練中の色
 
-// AIの色別学習データをlocalStorageから読み込む
+// AIの色別学習データをlocalStorageから読み込む（デフォルト重みを優先）
 function loadAIColorWeights(colorKey) {
   try {
+    // デフォルト重みを先に適用
+    const defaultWeights = AI_WEIGHTS_BY_COLOR[colorKey] || AI_WEIGHTS_DEFAULT;
+    AI_WEIGHTS = { ...defaultWeights };
+    AI_TRAIN_STATS = { games: 500000, wins: 250000, epoch: 1000 }; // デフォルトの学習統計
+    CARD_STATS = {};
+    AI_DECK_COUNTS = null;
+    AI_LAND_COUNTS = null;
+    AI_CURRENT_COLOR = colorKey;
+
+    // localStorageに上書きデータがあれば適用
     const lsKey = AI_COLOR_KEYS[colorKey];
-    if (!lsKey) return false;
-    const saved = localStorage.getItem(lsKey);
-    if (saved) {
-      const data = JSON.parse(saved);
-      if (data.weights && data._version === AI_WEIGHTS_VERSION) {
-        AI_WEIGHTS = { ...AI_WEIGHTS_DEFAULT, ...data.weights };
-        AI_TRAIN_STATS = { games: 0, wins: 0, epoch: 0, ...(data.stats||{}) };
-        CARD_STATS = data.cardStats || {};
-        AI_DECK_COUNTS = data.aiDeck || null;
-        AI_LAND_COUNTS = data.aiLand || null;
-        AI_CURRENT_COLOR = colorKey;
-        return true;
+    if (lsKey) {
+      const saved = localStorage.getItem(lsKey);
+      if (saved) {
+        const data = JSON.parse(saved);
+        if (data.weights && data._version === AI_WEIGHTS_VERSION) {
+          AI_WEIGHTS = { ...AI_WEIGHTS, ...data.weights };
+          if (data.stats) AI_TRAIN_STATS = data.stats;
+          if (data.cardStats) CARD_STATS = data.cardStats;
+          if (data.aiDeck) AI_DECK_COUNTS = data.aiDeck;
+          if (data.aiLand) AI_LAND_COUNTS = data.aiLand;
+        }
       }
     }
-  } catch(e) {}
+    return true;
+  } catch(e) {
+    console.error('Failed to load AI weights for color:', colorKey, e);
+  }
   return false;
 }
 
@@ -9591,23 +9613,8 @@ function saveAIColorWeights(colorKey) {
   } catch(e) {}
 }
 
-// 前回localStorageに保存した学習データがあれば自動復現（デフォルトは白）
-if (!loadAIColorWeights('white')) {
-  try {
-    const saved = localStorage.getItem('dcg_ai_weights'); // 旧形式の互換性
-    if (saved) {
-      const data = JSON.parse(saved);
-      if (data.weights && data._version === AI_WEIGHTS_VERSION) {
-        AI_WEIGHTS = { ...AI_WEIGHTS, ...data.weights };
-        if (data.stats) AI_TRAIN_STATS = { ...AI_TRAIN_STATS, ...data.stats };
-        if (data.cardStats) CARD_STATS = data.cardStats;
-        if (data.aiDeck) AI_DECK_COUNTS = data.aiDeck;
-        if (data.aiLand) AI_LAND_COUNTS = data.aiLand;
-        AI_CURRENT_COLOR = 'white';
-      }
-    }
-  } catch(e) {}
-}
+// デフォルトで白色のAI重みを読み込む（デフォルト50万戦の学習結果が使用される）
+loadAIColorWeights('white');
 
 function evalBoardScore(player) {
   const me = G.players[player], opp = G.players[1-player];
@@ -11095,7 +11102,8 @@ function showTrainingPanel() {
         </label>
         <button onclick="closeModal();showBalancePanel()" style="padding:6px 12px;background:#1a2a2a;border:1px solid #447777;color:#aaffff;border-radius:4px;cursor:pointer;">📊 バランス分析</button>
         <button onclick="closeModal();showAIDeckPanel()" style="padding:6px 12px;background:#2a2a1a;border:1px solid #777744;color:#ffffaa;border-radius:4px;cursor:pointer;">🃏 AIデッキ</button>
-        <button onclick="AI_WEIGHTS={...AI_WEIGHTS_DEFAULT};AI_TRAIN_STATS={games:0,wins:0,epoch:0};_mutationSigma=0.2;document.getElementById('train-status').textContent='リセット済';" style="padding:6px 10px;background:#1a1a1a;border:1px solid #555;color:#888;border-radius:4px;cursor:pointer;">↺ リセット</button>
+        <button onclick="updateDefaultWeights()" style="padding:6px 12px;background:#2a3a1a;border:1px solid #66aa44;color:#ccffaa;border-radius:4px;cursor:pointer;">⭐ デフォルト値を更新</button>
+        <button onclick="resetToDefaultWeights()" style="padding:6px 10px;background:#1a1a1a;border:1px solid #555;color:#888;border-radius:4px;cursor:pointer;">↺ デフォルトに戻す</button>
       </div>
       <div style="color:#666;font-size:10px;">v${AI_WEIGHTS_VERSION}互換 | 遺伝的アルゴリズム+適応変異+交叉+カード別重み学習</div>
     </div>`;
@@ -11348,6 +11356,27 @@ function switchTrainColor(colorKey) {
   // 新しい色のAI重みを読み込む
   loadAIColorWeights(colorKey);
   document.getElementById('train-status').textContent = `✅ ${RATED_COLOR_DEFS.find(c=>c.key===colorKey).label}に切り替え (${AI_TRAIN_STATS.games}戦)`;
+  if (typeof showTrainingPanel === 'function') setTimeout(() => showTrainingPanel(), 300);
+}
+
+// 現在の学習済み重みをデフォルト値として更新
+function updateDefaultWeights() {
+  if (!AI_CURRENT_COLOR) { alert('色を選択してください'); return; }
+  AI_WEIGHTS_BY_COLOR[AI_CURRENT_COLOR] = { ...AI_WEIGHTS };
+  const colorLabel = RATED_COLOR_DEFS.find(c=>c.key===AI_CURRENT_COLOR).label;
+  document.getElementById('train-status').textContent = `✅ ${colorLabel}のデフォルト値を更新しました (${AI_TRAIN_STATS.games}戦)`;
+  saveAIColorWeights(AI_CURRENT_COLOR);
+}
+
+// デフォルト値に戻す
+function resetToDefaultWeights() {
+  if (!AI_CURRENT_COLOR) { alert('色を選択してください'); return; }
+  const defaultWeights = AI_WEIGHTS_BY_COLOR[AI_CURRENT_COLOR] || AI_WEIGHTS_DEFAULT;
+  AI_WEIGHTS = { ...defaultWeights };
+  AI_TRAIN_STATS = { games: 500000, wins: 250000, epoch: 1000 };
+  _mutationSigma = 0.2;
+  const colorLabel = RATED_COLOR_DEFS.find(c=>c.key===AI_CURRENT_COLOR).label;
+  document.getElementById('train-status').textContent = `✅ ${colorLabel}のデフォルト値に戻しました`;
   if (typeof showTrainingPanel === 'function') setTimeout(() => showTrainingPanel(), 300);
 }
 
