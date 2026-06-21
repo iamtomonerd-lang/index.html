@@ -2067,7 +2067,7 @@ button.danger:hover { background: #6a2a2a; }
   </div>
   <div id="home-record"></div>
   <div id="home-elo" style="font-size:13px;margin-top:4px;cursor:pointer;" onclick="showTrophyPanel()"></div>
-  <div class="home-version">v2.0.1 — 攻撃処理二重発火バグ修正</div>
+  <div class="home-version">v2.0.2 — AI格闘必ず実行に修正</div>
 </div>
 
 <!-- Tutorial Overlay -->
@@ -7533,8 +7533,13 @@ function aiAttack() {
   if (isLethal) {
     attackerInsts = candidates;
   } else {
-    const mustAtk = candidates.filter(c => c.mustAttack);
-    const optional = candidates.filter(c => !c.mustAttack);
+    // 出たターンのカクトウクリーチャーはMCTS評価が不正確なため必ず格闘を試みる
+    const kakutouMust = candidates.filter(c => {
+      const cd = CARD_DB[c.cardId];
+      return c.sick && cd.kakutou && c.entryTurn === G.turn;
+    });
+    const mustAtk = [...candidates.filter(c => c.mustAttack), ...kakutouMust.filter(c => !c.mustAttack)];
+    const optional = candidates.filter(c => !c.mustAttack && !(c.sick && CARD_DB[c.cardId].kakutou && c.entryTurn === G.turn));
     // MCTSで最善の攻撃者セットを決定（mustAttackは強制含む）
     showAIThinking(true);
     const mctsSet = mctsPickAttackers(optional);
