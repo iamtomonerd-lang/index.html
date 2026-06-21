@@ -2067,7 +2067,7 @@ button.danger:hover { background: #6a2a2a; }
   </div>
   <div id="home-record"></div>
   <div id="home-elo" style="font-size:13px;margin-top:4px;cursor:pointer;" onclick="showTrophyPanel()"></div>
-  <div class="home-version">v1.9.9 — AI訓練済み重み実装</div>
+  <div class="home-version">v2.0.0 — AI攻撃フロー修正</div>
 </div>
 
 <!-- Tutorial Overlay -->
@@ -3143,7 +3143,7 @@ function _promptKaitaku(player, remaining) {
     const c = CARD_DB[id];
     return `<button onclick="closeModal();G._awaitingModal=false;_pickKaitaku(0,'${id}',${remaining-1});" style="margin:4px;padding:6px 14px;background:#1a3a1a;border:1px solid #44aa44;color:#aaffaa;border-radius:4px;cursor:pointer;">${c.icon||'🌿'} ${c.name}</button>`;
   }).join('');
-  showModal('開拓：土地を選ぶ', `<p>土地デッキから1枚選んで場に出す（残り${remaining}）</p>${btns}<button onclick="closeModal();G._awaitingModal=false;render();updateHints();" style="margin:4px;padding:6px 14px;background:#555;border:none;color:#ccc;border-radius:4px;cursor:pointer;">スキップ</button>`);
+  showModal('開拓：土地を選ぶ', `<p>土地デッキから1枚選んで場に出す（残り${remaining}）</p>${btns}<button onclick="closeModal();G._awaitingModal=false;continueStack();render();updateHints();" style="margin:4px;padding:6px 14px;background:#555;border:none;color:#ccc;border-radius:4px;cursor:pointer;">スキップ</button>`);
   G._awaitingModal = true;
 }
 
@@ -3156,7 +3156,7 @@ function _pickKaitaku(player, cardId, remaining) {
   log(`開拓: ${CARD_DB[cardId].name} を場に出す`, 'heal');
   fireLandEntersTriggers(player);
   if (remaining > 0) _promptKaitaku(player, remaining);
-  else { render(); updateHints(); }
+  else { render(); updateHints(); continueStack(); }
 }
 
 // サーチ: 山札から好きなカード1枚を手札に加える
@@ -3186,7 +3186,7 @@ function _promptSearch(player, remaining) {
     const c = CARD_DB[id];
     return `<button onclick="closeModal();G._awaitingModal=false;_pickSearch(0,'${id}',${remaining-1});" style="margin:4px;padding:6px 14px;background:#1a3a1a;border:1px solid #44aa44;color:#aaffaa;border-radius:4px;cursor:pointer;">${c.icon||'📄'} ${c.name}</button>`;
   }).join('');
-  showModal('サーチ：カードを選ぶ', `<p>山札から1枚選んで手札に加える</p><div style="max-height:200px;overflow-y:auto;">${btns}</div>`);
+  showModal('サーチ：カードを選ぶ', `<p>山札から1枚選んで手札に加える</p><div style="max-height:200px;overflow-y:auto;">${btns}</div><button onclick="closeModal();G._awaitingModal=false;continueStack();render();updateHints();" style="margin:8px 4px 0;padding:6px 14px;background:#555;border:none;color:#ccc;border-radius:4px;cursor:pointer;">スキップ</button>`);
   G._awaitingModal = true;
 }
 
@@ -3199,7 +3199,7 @@ function _pickSearch(player, cardId, remaining) {
   log(`サーチ: ${CARD_DB[cardId].name} を手札に加える`, 'heal');
   for (let j = p.deck.length - 1; j > 0; j--) { const k = Math.floor(Math.random()*(j+1)); [p.deck[j],p.deck[k]]=[p.deck[k],p.deck[j]]; }
   if (remaining > 0) _promptSearch(player, remaining);
-  else { render(); updateHints(); }
+  else { render(); updateHints(); continueStack(); }
 }
 
 // フォクリア ETB: 2枚還元してもよい → 2枚引く
@@ -4243,16 +4243,27 @@ function resolveETBEffect(player, instanceId) {
     continueStack();
   } else if (card.etb === 'folkusu_c6_kaitaku') {
     // フォルクス C6: 開拓1
-    if (getCXValue(player) >= 6) {
+    if (getCXValue(player) >= 6 && player === 1) {
       doKaitaku(player, 1);
+    } else if (getCXValue(player) >= 6 && player === 0) {
+      doKaitaku(player, 1); // sets _awaitingModal; _pickKaitaku will call continueStack
+      return;
     }
     continueStack();
   } else if (card.etb === 'kaitaku1' || card.etb === 'kaitaku1spell') {
     // 開拓者・開拓祭りの巫女: 開拓1
+    if (player === 0) {
+      doKaitaku(player, 1); // sets _awaitingModal; _pickKaitaku will call continueStack
+      return;
+    }
     doKaitaku(player, 1);
     continueStack();
   } else if (card.etb === 'search1') {
     // 源の樹霊: サーチ1
+    if (player === 0) {
+      doSearch(player, 1); // sets _awaitingModal; _pickSearch will call continueStack
+      return;
+    }
     doSearch(player, 1);
     continueStack();
   }
