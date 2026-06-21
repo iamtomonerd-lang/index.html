@@ -5151,6 +5151,17 @@ function endGame(winner) {
       <div style="font-size:24px;font-weight:bold;color:${delta>=0?'#44ff88':'#ff4444'}">${sign}${delta}</div>
       <div style="font-size:15px;color:${newTier.color};margin-top:4px;">${newTier.icon} ${newR} — ${newTier.name}</div>
     </div>`;
+  } else if (NET_MODE === 'local') {
+    // 非レート対戦でもトロフィーを記録（基準レート=1500）
+    const p0 = G.players[0];
+    const playerMainCards = p0.deck.concat(p0.hand, p0.field.map(c=>c.cardId), p0.graveyard, p0.exile||[]);
+    const playerLandCards = p0.lands.map(l=>l.cardId).concat(p0.landDeck||[]);
+    trophyRecord(1500, playerMainCards, playerLandCards);
+    const tData = trophyLoad();
+    const allUsed = [...new Set([...playerMainCards, ...playerLandCards])];
+    const topRank = allUsed.map(id => cardTrophyRank(tData.cardPeak[id]||0)).filter(Boolean)
+      .sort((a,b) => b.icon.length - a.icon.length)[0];
+    if (topRank) setTimeout(() => animTrophyGet(topRank), 1400);
   }
   showModal('ゲーム終了', `<p style="font-size:24px; text-align:center; margin:20px 0;">${who}勝利！</p>${_eloHtml}<button onclick="closeModal();resetBoardAndRestart();" style="width:100%;padding:10px;margin-bottom:8px;">もう一度プレイ</button><button onclick="closeModal();showReplayViewer();" style="width:100%;padding:10px;margin-bottom:8px;background:#1a1a3a;border:1px solid #4444aa;color:#aaaaff;border-radius:6px;cursor:pointer;">📽️ リプレイを見る</button><button onclick="closeModal();resetBoardAndHome();" style="width:100%;padding:10px;background:#12121e;border:1px solid #4a4a6a;color:#aaaacc;border-radius:6px;cursor:pointer;">🏠 ホームに戻る</button>`);
   G.phase = 'ended';
