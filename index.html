@@ -9549,13 +9549,13 @@ const AI_WEIGHTS_DEFAULT = {
 // カード個別のプレイ優先度（遺伝的アルゴリズムの学習対象、負値=使わない方が良い）
 AI_CARD_POOL.forEach(id => { AI_WEIGHTS_DEFAULT['card_' + id] = 0; });
 
-// 5色ごとのデフォルトAI重み（50万戦の学習結果）
+// 5色ごとのデフォルトAI重み（GA訓練済み）
 const AI_WEIGHTS_BY_COLOR = {
-  white: { ...AI_WEIGHTS_DEFAULT },  // 学習結果のJSONが埋め込まれます
-  red:   { ...AI_WEIGHTS_DEFAULT },  // 学習結果のJSONが埋め込まれます
-  blue:  { ...AI_WEIGHTS_DEFAULT },  // 学習結果のJSONが埋め込まれます
-  black: { ...AI_WEIGHTS_DEFAULT },  // 学習結果のJSONが埋め込まれます
-  green: { ...AI_WEIGHTS_DEFAULT },  // 学習結果のJSONが埋め込まれます
+  white: {"_version":3.3167447192035264,"life":1.7381841831975373,"fieldPower":1.5825724936556838,"fieldToughness":-1.3466340096452105,"fieldCount":0.5859891279819026,"handAdv":0.40731278291790235,"threshold":0.2265404864770395,"blockRisk":1.9312776544889783,"manaEff":0.0569123259130237,"lateLifeBonus":1.485150879788745,"earlyFieldBonus":1.2616243807240535,"attackBias":1.3146395995969304},
+  red: {"_version":2.8247218026516934,"life":1.9946166859084533,"fieldPower":0.43404655374371415,"fieldToughness":-0.1134492873469306,"fieldCount":2.4111028616291064,"handAdv":0.39098495392084665,"threshold":-0.32024321532222383,"blockRisk":0.2553157531424105,"manaEff":0.39652807414732805,"lateLifeBonus":0.7814233715673672,"earlyFieldBonus":-0.10252745806955918,"attackBias":1.0900091398110843},
+  blue: {"_version":2.7600338727029583,"life":1.5162663392934754,"fieldPower":0.054393817196375316,"fieldToughness":-0.3261014734229055,"fieldCount":0.5624219597979176,"handAdv":1.0721034171747037,"threshold":0.7683417770129424,"blockRisk":0.8654341499174704,"manaEff":0.8606444215817621,"lateLifeBonus":1.728068363152647,"earlyFieldBonus":-0.19674927257588282,"attackBias":0.6575112110255236},
+  black: {"_version":2.5834701387189725,"life":2.634203866921577,"fieldPower":0.959855620418557,"fieldToughness":-0.39932244569373887,"fieldCount":0.5090036811684187,"handAdv":0.052084965102066415,"threshold":0.29007008814628354,"blockRisk":1.5113573723998444,"manaEff":0.28783845232396443,"lateLifeBonus":1.142940040863002,"earlyFieldBonus":-0.6106690187796376,"attackBias":0.05868881990214782},
+  green: {"_version":3.7023490205374174,"life":1.608589414366043,"fieldPower":0.38530587756828366,"fieldToughness":0.19124289225406887,"fieldCount":1.6515276437340753,"handAdv":0.14396764139991136,"threshold":0.28368384301751365,"blockRisk":0.4700807925823994,"manaEff":1.2718997984489877,"lateLifeBonus":0.46957894086459917,"earlyFieldBonus":-0.12094708387591013,"attackBias":1.5706485340064686},
 };
 
 let AI_WEIGHTS = JSON.parse(JSON.stringify(AI_WEIGHTS_DEFAULT));
