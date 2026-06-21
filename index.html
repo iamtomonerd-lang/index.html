@@ -12263,6 +12263,27 @@ function showLobbyFromHome() {
 }
 
 // ── レート戦 ─────────────────────────────────────────────────
+const RATED_COLOR_DEFS = [
+  { key:'white', label:'白', icon:'⚪', color:'#ffffcc', mainList: () => DB_WHITE_MAIN, landList: () => DB_WHITE_LAND },
+  { key:'red',   label:'赤', icon:'🔴', color:'#ffcccc', mainList: () => DB_RED_MAIN,   landList: () => DB_RED_LAND   },
+  { key:'blue',  label:'青', icon:'🔵', color:'#aaccff', mainList: () => DB_BLUE_MAIN,  landList: () => DB_BLUE_LAND  },
+  { key:'black', label:'黒', icon:'⚫', color:'#ddaadd', mainList: () => DB_BLACK_MAIN, landList: () => DB_BLACK_LAND },
+  { key:'green', label:'緑', icon:'🟢', color:'#aaffaa', mainList: () => DB_GREEN_MAIN, landList: () => DB_GREEN_LAND },
+];
+let RATED_OPP_COLOR = null;
+
+function setAIDeckToColor(colorDef) {
+  const mainCounts = {};
+  colorDef.mainList().forEach(id => { mainCounts[id] = (mainCounts[id]||0) + 1; });
+  // × 4枚 (10種×4=40枚)
+  const main40 = {};
+  Object.keys(mainCounts).forEach(id => { main40[id] = 4; });
+  const landCounts = {};
+  colorDef.landList().forEach(id => { landCounts[id] = 2; });
+  AI_DECK_COUNTS = main40;
+  AI_LAND_COUNTS = landCounts;
+}
+
 function showRatedFromHome() {
   document.getElementById('home-screen').style.display = 'none';
   const myR = eloGetRating();
@@ -12272,6 +12293,8 @@ function showRatedFromHome() {
   const dWin  = eloCalcDelta(myR, RATED_OPP_RATING, true);
   const dLoss = eloCalcDelta(myR, RATED_OPP_RATING, false);
   const intelligenceLabel = { Bronze:'初心者', Silver:'普通', Gold:'上級', Platinum:'エキスパート', Master:'最強' };
+  // ランダムで対戦相手の色を決定
+  RATED_OPP_COLOR = RATED_COLOR_DEFS[Math.floor(Math.random() * RATED_COLOR_DEFS.length)];
   showModal('🏆 レート戦 マッチング', `
     <div style="text-align:center;margin-bottom:14px;">
       <div style="font-size:12px;color:#888;margin-bottom:4px;">あなたのレート</div>
@@ -12282,6 +12305,9 @@ function showRatedFromHome() {
       <div style="font-size:11px;color:#888;margin-bottom:6px;">対戦相手</div>
       <div style="font-size:20px;font-weight:bold;color:${oppT.color}">${oppT.icon} ${RATED_OPP_RATING} — ${oppT.name}</div>
       <div style="font-size:12px;color:#666;margin-top:4px;">AI知能: ${intelligenceLabel[oppT.name]}</div>
+      <div style="margin-top:8px;padding:6px 10px;background:#0a0a1a;border-radius:6px;display:inline-block;">
+        <span style="font-size:13px;color:${RATED_OPP_COLOR.color}">${RATED_OPP_COLOR.icon} ${RATED_OPP_COLOR.label}デッキ</span>
+      </div>
     </div>
     <div style="display:flex;gap:8px;margin-bottom:14px;">
       <div style="flex:1;text-align:center;background:#0a2a0a;border:1px solid #336633;border-radius:6px;padding:8px;">
@@ -12299,6 +12325,7 @@ function showRatedFromHome() {
 }
 
 function startRatedBattle() {
+  if (RATED_OPP_COLOR) setAIDeckToColor(RATED_OPP_COLOR);
   RATED_MODE = true;
   netStartLocal();
 }
