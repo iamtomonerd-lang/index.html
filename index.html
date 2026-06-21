@@ -5104,14 +5104,14 @@ function eloCalcDelta(myRating, oppRating, won) {
 }
 // Box-Muller正規分布で対戦相手レートを生成（σ≈100、中心=自分レート）
 function eloOppRatingForMyRating(myRating) {
-  // Box-Muller正規分布: σ=250で、近いレートほど当たりやすい
-  // σ=250の正規分布では、95%が±500以内、99%が±750以内に収まる
+  // Box-Muller正規分布: σ=125で、近いレートほど当たりやすい（±300制限）
+  // σ=125の正規分布では、95%が±250以内に収まる
   let u, v, s;
   do { u = Math.random() * 2 - 1; v = Math.random() * 2 - 1; s = u*u + v*v; } while (s >= 1 || s === 0);
   const gauss = u * Math.sqrt(-2 * Math.log(s) / s);
-  const sigma = 250;
+  const sigma = 125;
   const raw = Math.round(myRating + gauss * sigma);
-  return Math.max(0, Math.min(2500, raw));
+  return Math.max(0, Math.min(2500, Math.max(myRating - 300, Math.min(myRating + 300, raw))));
 }
 
 function endGame(winner) {
