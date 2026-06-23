@@ -2609,7 +2609,7 @@ button.danger:hover { background: #6a2a2a; }
   </div>
   <div id="home-record"></div>
   <div id="home-elo" style="font-size:13px;margin-top:4px;cursor:pointer;" onclick="showTrophyPanel()"></div>
-  <div class="home-version">v2.1.2</div>
+  <div class="home-version">v2.1.3</div>
 </div>
 
 <!-- Tutorial Overlay -->
@@ -13120,6 +13120,7 @@ const DB_BLACK_MAIN = ['shiki','ren','yami_jouhouya','skeleton_senshi','itazura_
 const DB_BLACK_LAND = ['hito_numa','wasure_numa','shigen_numa','kemono_numa','areta_haka'];
 const DB_GREEN_MAIN = ['foklya','tami_kaitaku','folkusu','kaitakusha','mori_kansha','gen_jurei','mori_tami','iwai_tami','matsuri_otoko','kaitaku_miko'];
 const DB_GREEN_LAND = ['hito_mori','wasure_mori','shigen_mori','kemono_mori','matsuri_kaijo'];
+const DB_COLORLESS_MAIN = ['test_golem'];
 
 function dbRenderCollection() {
   const el = document.getElementById('db-collection-list');
@@ -13184,6 +13185,8 @@ function dbRenderCollection() {
   DB_GREEN_MAIN.forEach(id => { html += renderMainRow(id); });
   html += '<div class="db-section-label">🟢 緑 — 土地</div>';
   DB_GREEN_LAND.forEach(id => { html += renderLandRow(id); });
+  html += '<div class="db-section-label">⚪ 無色 — クリーチャー / スペル</div>';
+  DB_COLORLESS_MAIN.forEach(id => { html += renderMainRow(id); });
 
   el.innerHTML = html;
 }
