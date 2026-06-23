@@ -2609,7 +2609,7 @@ button.danger:hover { background: #6a2a2a; }
   </div>
   <div id="home-record"></div>
   <div id="home-elo" style="font-size:13px;margin-top:4px;cursor:pointer;" onclick="showTrophyPanel()"></div>
-  <div class="home-version">v2.1.3</div>
+  <div class="home-version">v2.1.4</div>
 </div>
 
 <!-- Tutorial Overlay -->
@@ -13437,6 +13437,56 @@ function setupValidatorBoard(p0Life=20, p1Life=20) {
   };
 }
 
+// メインフェーズ検証用セットアップ：テストゴーレムのみ＆人住まう平地で固定
+function setupMainPhaseValidationBoard() {
+  let nextId = 1;
+  const mkPlayer = (life) => ({
+    life,
+    hand: [],
+    deck: Array(40).fill('test_golem').map((id, i) => ({
+      cardId: id,
+      instanceId: nextId++
+    })),
+    field: [],
+    lands: [],
+    landDeck: Array(5).fill('hitonokeisya').map((id, i) => ({
+      cardId: id,
+      instanceId: nextId++
+    })),
+    graveyard: [],
+    artifacts: [],
+    mana: {W:0,R:0,U:0,B:0,G:0,C:0},
+    manaTapped: {W:0,R:0,U:0,B:0,G:0,C:0}
+  });
+
+  const G = {
+    players: [mkPlayer(20), mkPlayer(20)],
+    turn: 1,
+    activePlayer: 0,
+    phase: 'untap',
+    firstPlayer: 0,
+    drawCount: [0,0],
+    discardedThisTurn: [false, false],
+    mustAttackCreatures: new Set(),
+    _awaitingModal: false,
+    _pendingCont: null,
+    stack: [],
+    targetMode: null,
+    nextInstanceId: nextId,
+    attackMode: false,
+    blockMode: false,
+    attackers: [[], []],
+    blockers: [{}, {}]
+  };
+
+  // P0の初期手札に土地を1枚追加
+  if (G.players[0].landDeck.length > 0) {
+    G.players[0].hand.push(G.players[0].landDeck.shift());
+  }
+
+  return G;
+}
+
 // ヘルパー関数：クリーチャー追加
 function addCreatureToValidatorField(G, player, cardId, options={}) {
   const card = CARD_DB[cardId];
@@ -14342,6 +14392,415 @@ const DEMO_SEQUENCES = {
             render();
             await sleep(600);
           }
+        }
+      }
+    ]
+  },
+  'main-phase-validation': {
+    name: 'メインフェーズ検証',
+    description: 'テストゴーレムのみで4ターン分の動作確認（土地プレイ→カード出し→攻撃）',
+    steps: [
+      {
+        label: 'セットアップ：テストゴーレムデッキ＆人住まう平地',
+        execute: async (G_arg) => {
+          const newG = setupMainPhaseValidationBoard();
+          // グローバルGを新しい盤面で上書き
+          for (const key of Object.keys(newG)) {
+            G[key] = newG[key];
+          }
+          render();
+          log('【デモ】メインフェーズ検証開始：デッキセットアップ完了');
+          await sleep(1000);
+        }
+      },
+      {
+        label: '先行T1：土地をプレイ',
+        execute: async (G) => {
+          G.activePlayer = 0;
+          G.phase = 'main';
+          const land = G.players[0].hand.find(c => CARD_DB[c.cardId].type === 'land');
+          if (land) {
+            const idx = G.players[0].hand.indexOf(land);
+            playCardFromHand(0, idx);
+            log('【デモ】P0 T1：土地（人住まう平地）をプレイ');
+          }
+          render();
+          await sleep(1000);
+        }
+      },
+      {
+        label: '先行T1：テストゴーレムを出す',
+        execute: async (G) => {
+          const card = G.players[0].hand[0];
+          if (card) {
+            playCardFromHand(0, 0);
+            log('【デモ】P0 T1：テストゴーレムを出す');
+          }
+          render();
+          await sleep(1200);
+        }
+      },
+      {
+        label: '先行T1：ターン終了 → 後手T1へ',
+        execute: async (G) => {
+          endTurn();
+          render();
+          log('【デモ】P0 T1 終了 → P1 T1 開始');
+          await sleep(1000);
+        }
+      },
+      {
+        label: '後手T1：土地をプレイ',
+        execute: async (G) => {
+          G.activePlayer = 1;
+          G.phase = 'main';
+          const land = G.players[1].landDeck.shift();
+          if (land) {
+            G.players[1].hand.push(land);
+            const idx = G.players[1].hand.indexOf(land);
+            playCardFromHand(1, idx);
+            log('【デモ】P1 T1：土地をプレイ');
+          }
+          render();
+          await sleep(1000);
+        }
+      },
+      {
+        label: '後手T1：テストゴーレムを出す',
+        execute: async (G) => {
+          const card = G.players[1].hand[0];
+          if (card) {
+            playCardFromHand(1, 0);
+            log('【デモ】P1 T1：テストゴーレムを出す');
+          }
+          render();
+          await sleep(1200);
+        }
+      },
+      {
+        label: '後手T1：ターン終了 → 先行T2へ',
+        execute: async (G) => {
+          endTurn();
+          render();
+          log('【デモ】P1 T1 終了 → P0 T2 開始');
+          await sleep(1000);
+        }
+      },
+      {
+        label: '先行T2：土地をプレイ＆テストゴーレムを出す',
+        execute: async (G) => {
+          G.activePlayer = 0;
+          G.phase = 'main';
+          const land = G.players[0].landDeck.shift();
+          if (land) {
+            G.players[0].hand.push(land);
+            const idx = G.players[0].hand.indexOf(land);
+            playCardFromHand(0, idx);
+            log('【デモ】P0 T2：土地をプレイ');
+            render();
+            await sleep(700);
+          }
+          const card = G.players[0].hand[0];
+          if (card) {
+            playCardFromHand(0, 0);
+            log('【デモ】P0 T2：テストゴーレムを出す');
+            render();
+            await sleep(1000);
+          }
+        }
+      },
+      {
+        label: '先行T2：前ターン出したテストゴーレムで攻撃',
+        execute: async (G) => {
+          const creatures = G.players[0].field.filter(c => CARD_DB[c.cardId].type === 'creature' && !c.tapped);
+          if (creatures.length > 0) {
+            const attacker = creatures[0];
+            startSingleAttack(0, attacker.instanceId);
+            log('【デモ】P0 T2：クリーチャーで攻撃');
+            render();
+            await sleep(1500);
+          }
+        }
+      },
+      {
+        label: '先行T2：攻撃完了 → ターン終了',
+        execute: async (G) => {
+          endTurn();
+          render();
+          log('【デモ】P0 T2 終了 → P1 T2 開始');
+          await sleep(1000);
+        }
+      },
+      {
+        label: '後手T2：土地をプレイ＆テストゴーレムを出す',
+        execute: async (G) => {
+          G.activePlayer = 1;
+          G.phase = 'main';
+          const land = G.players[1].landDeck.shift();
+          if (land) {
+            G.players[1].hand.push(land);
+            const idx = G.players[1].hand.indexOf(land);
+            playCardFromHand(1, idx);
+            log('【デモ】P1 T2：土地をプレイ');
+            render();
+            await sleep(700);
+          }
+          const card = G.players[1].hand[0];
+          if (card) {
+            playCardFromHand(1, 0);
+            log('【デモ】P1 T2：テストゴーレムを出す');
+            render();
+            await sleep(1000);
+          }
+        }
+      },
+      {
+        label: '後手T2：前ターン出したテストゴーレムで攻撃',
+        execute: async (G) => {
+          const creatures = G.players[1].field.filter(c => CARD_DB[c.cardId].type === 'creature' && !c.tapped);
+          if (creatures.length > 0) {
+            const attacker = creatures[0];
+            startSingleAttack(1, attacker.instanceId);
+            log('【デモ】P1 T2：クリーチャーで攻撃');
+            render();
+            await sleep(1500);
+          }
+        }
+      },
+      {
+        label: '後手T2：ターン終了 → 先行T3へ',
+        execute: async (G) => {
+          endTurn();
+          render();
+          log('【デモ】P1 T2 終了 → P0 T3 開始');
+          await sleep(1000);
+        }
+      },
+      {
+        label: '先行T3：土地をプレイ',
+        execute: async (G) => {
+          G.activePlayer = 0;
+          G.phase = 'main';
+          const land = G.players[0].landDeck.shift();
+          if (land) {
+            G.players[0].hand.push(land);
+            const idx = G.players[0].hand.indexOf(land);
+            playCardFromHand(0, idx);
+            log('【デモ】P0 T3：土地をプレイ');
+            render();
+            await sleep(1000);
+          }
+        }
+      },
+      {
+        label: '先行T3：前ターン出したテストゴーレムで攻撃',
+        execute: async (G) => {
+          const creatures = G.players[0].field.filter(c => CARD_DB[c.cardId].type === 'creature' && !c.tapped);
+          if (creatures.length > 0) {
+            const attacker = creatures[0];
+            startSingleAttack(0, attacker.instanceId);
+            log('【デモ】P0 T3：クリーチャーで攻撃');
+            render();
+            await sleep(1500);
+          }
+        }
+      },
+      {
+        label: '先行T3：テストゴーレムを出す',
+        execute: async (G) => {
+          const card = G.players[0].hand[0];
+          if (card) {
+            playCardFromHand(0, 0);
+            log('【デモ】P0 T3：テストゴーレムを出す');
+            render();
+            await sleep(1200);
+          }
+        }
+      },
+      {
+        label: '先行T3：ターン終了 → 後手T3へ',
+        execute: async (G) => {
+          endTurn();
+          render();
+          log('【デモ】P0 T3 終了 → P1 T3 開始');
+          await sleep(1000);
+        }
+      },
+      {
+        label: '後手T3：土地をプレイ',
+        execute: async (G) => {
+          G.activePlayer = 1;
+          G.phase = 'main';
+          const land = G.players[1].landDeck.shift();
+          if (land) {
+            G.players[1].hand.push(land);
+            const idx = G.players[1].hand.indexOf(land);
+            playCardFromHand(1, idx);
+            log('【デモ】P1 T3：土地をプレイ');
+            render();
+            await sleep(1000);
+          }
+        }
+      },
+      {
+        label: '後手T3：前ターン出したテストゴーレムで攻撃',
+        execute: async (G) => {
+          const creatures = G.players[1].field.filter(c => CARD_DB[c.cardId].type === 'creature' && !c.tapped);
+          if (creatures.length > 0) {
+            const attacker = creatures[0];
+            startSingleAttack(1, attacker.instanceId);
+            log('【デモ】P1 T3：クリーチャーで攻撃');
+            render();
+            await sleep(1500);
+          }
+        }
+      },
+      {
+        label: '後手T3：テストゴーレムを出す',
+        execute: async (G) => {
+          const card = G.players[1].hand[0];
+          if (card) {
+            playCardFromHand(1, 0);
+            log('【デモ】P1 T3：テストゴーレムを出す');
+            render();
+            await sleep(1200);
+          }
+        }
+      },
+      {
+        label: '後手T3：ターン終了 → 先行T4へ',
+        execute: async (G) => {
+          endTurn();
+          render();
+          log('【デモ】P1 T3 終了 → P0 T4 開始');
+          await sleep(1000);
+        }
+      },
+      {
+        label: '先行T4：土地を2枚プレイ',
+        execute: async (G) => {
+          G.activePlayer = 0;
+          G.phase = 'main';
+          for (let i = 0; i < 2; i++) {
+            const land = G.players[0].landDeck.shift();
+            if (land) {
+              G.players[0].hand.push(land);
+              const idx = G.players[0].hand.indexOf(land);
+              playCardFromHand(0, idx);
+              log(`【デモ】P0 T4：土地をプレイ (${i+1}/2)`);
+              render();
+              await sleep(600);
+            }
+          }
+          await sleep(400);
+        }
+      },
+      {
+        label: '先行T4：テストゴーレムを出す',
+        execute: async (G) => {
+          const card = G.players[0].hand[0];
+          if (card) {
+            playCardFromHand(0, 0);
+            log('【デモ】P0 T4：テストゴーレムを出す');
+            render();
+            await sleep(1000);
+          }
+        }
+      },
+      {
+        label: '先行T4：前ターン出したクリーチャー（2体）で攻撃',
+        execute: async (G) => {
+          const creatures = G.players[0].field.filter(c => CARD_DB[c.cardId].type === 'creature' && !c.tapped);
+          for (const attacker of creatures.slice(0, 2)) {
+            startSingleAttack(0, attacker.instanceId);
+            log(`【デモ】P0 T4：クリーチャーで攻撃`);
+            render();
+            await sleep(1200);
+          }
+        }
+      },
+      {
+        label: '先行T4：テストゴーレムを出す（2枚目）',
+        execute: async (G) => {
+          const card = G.players[0].hand[0];
+          if (card) {
+            playCardFromHand(0, 0);
+            log('【デモ】P0 T4：テストゴーレムを出す（2枚目）');
+            render();
+            await sleep(1200);
+          }
+        }
+      },
+      {
+        label: '先行T4：ターン終了 → 後手T4へ',
+        execute: async (G) => {
+          endTurn();
+          render();
+          log('【デモ】P0 T4 終了 → P1 T4 開始');
+          await sleep(1000);
+        }
+      },
+      {
+        label: '後手T4：土地を2枚プレイ',
+        execute: async (G) => {
+          G.activePlayer = 1;
+          G.phase = 'main';
+          for (let i = 0; i < 2; i++) {
+            const land = G.players[1].landDeck.shift();
+            if (land) {
+              G.players[1].hand.push(land);
+              const idx = G.players[1].hand.indexOf(land);
+              playCardFromHand(1, idx);
+              log(`【デモ】P1 T4：土地をプレイ (${i+1}/2)`);
+              render();
+              await sleep(600);
+            }
+          }
+          await sleep(400);
+        }
+      },
+      {
+        label: '後手T4：テストゴーレムを出す',
+        execute: async (G) => {
+          const card = G.players[1].hand[0];
+          if (card) {
+            playCardFromHand(1, 0);
+            log('【デモ】P1 T4：テストゴーレムを出す');
+            render();
+            await sleep(1000);
+          }
+        }
+      },
+      {
+        label: '後手T4：前ターン出したクリーチャー（2体）で攻撃',
+        execute: async (G) => {
+          const creatures = G.players[1].field.filter(c => CARD_DB[c.cardId].type === 'creature' && !c.tapped);
+          for (const attacker of creatures.slice(0, 2)) {
+            startSingleAttack(1, attacker.instanceId);
+            log(`【デモ】P1 T4：クリーチャーで攻撃`);
+            render();
+            await sleep(1200);
+          }
+        }
+      },
+      {
+        label: '後手T4：テストゴーレムを出す（2枚目）',
+        execute: async (G) => {
+          const card = G.players[1].hand[0];
+          if (card) {
+            playCardFromHand(1, 0);
+            log('【デモ】P1 T4：テストゴーレムを出す（2枚目）');
+            render();
+            await sleep(1200);
+          }
+        }
+      },
+      {
+        label: 'デモ完了',
+        execute: async (G) => {
+          log('【デモ】メインフェーズ検証完了：すべてのターンが正常に実行されました');
+          render();
+          await sleep(1000);
         }
       }
     ]
