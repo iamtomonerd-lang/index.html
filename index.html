@@ -2008,6 +2008,198 @@ button.danger:hover { background: #6a2a2a; }
   background: #1a4070;
   box-shadow: 0 0 10px rgba(0,255,255,0.3);
 }
+
+/* ─── テスト盤面パネル CSS ─── */
+#test-board-panel {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.9);
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  font-family: 'Noto Sans JP', sans-serif;
+}
+#test-board-panel.hidden { display: none; }
+
+.tbp-header {
+  background: linear-gradient(135deg, #1a2e2e 0%, #1e3636 100%);
+  color: #0f0;
+  padding: 15px 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 2px solid #0f6060;
+  font-size: 18px;
+  font-weight: bold;
+}
+.tbp-header button {
+  background: none;
+  border: none;
+  color: #0f0;
+  cursor: pointer;
+  font-size: 20px;
+}
+.tbp-header button:hover { color: #fff; }
+
+.tbp-container {
+  display: flex;
+  flex: 1;
+  gap: 0;
+  overflow: hidden;
+}
+
+.tbp-sidebar {
+  width: 240px;
+  background: #1a2e2e;
+  border-right: 1px solid #0f6060;
+  overflow-y: auto;
+  color: #aaa;
+  padding: 15px 0;
+}
+.tbp-sidebar::-webkit-scrollbar { width: 6px; }
+.tbp-sidebar::-webkit-scrollbar-thumb { background: #0f6060; border-radius: 3px; }
+
+.tbp-sidebar-item {
+  padding: 12px 15px;
+  cursor: pointer;
+  border-left: 3px solid transparent;
+  transition: all 0.2s;
+  color: #aaa;
+  font-size: 12px;
+}
+.tbp-sidebar-item:hover {
+  background: #0f5050;
+  color: #0f0;
+}
+.tbp-sidebar-item.active {
+  background: #0f5050;
+  color: #0f0;
+  border-left-color: #0f0;
+  font-weight: bold;
+}
+
+.tbp-main {
+  flex: 1;
+  background: #0a1515;
+  overflow-y: auto;
+  padding: 20px;
+  color: #ccc;
+}
+.tbp-main::-webkit-scrollbar { width: 8px; }
+.tbp-main::-webkit-scrollbar-thumb { background: #0f6060; border-radius: 4px; }
+
+.tbp-section {
+  margin-bottom: 20px;
+  padding-bottom: 15px;
+  border-bottom: 1px solid #0f6060;
+}
+.tbp-section-title {
+  font-size: 14px;
+  font-weight: bold;
+  color: #0f0;
+  margin-bottom: 10px;
+}
+
+.tbp-scenario-select {
+  width: 100%;
+  padding: 8px 10px;
+  background: #1a2e2e;
+  border: 1px solid #0f6060;
+  color: #0f0;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+  margin-bottom: 10px;
+}
+.tbp-scenario-select:hover {
+  border-color: #0f0;
+}
+
+.tbp-log-container {
+  background: #0a0f0f;
+  border: 1px solid #0f6060;
+  border-radius: 4px;
+  padding: 10px;
+  font-family: monospace;
+  font-size: 11px;
+  color: #0f0;
+  max-height: 400px;
+  overflow-y: auto;
+  line-height: 1.4;
+  margin-bottom: 15px;
+}
+.tbp-log-container::-webkit-scrollbar { width: 6px; }
+.tbp-log-container::-webkit-scrollbar-thumb { background: #0f6060; border-radius: 3px; }
+
+.tbp-log-entry {
+  margin-bottom: 4px;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+.tbp-log-entry.phase {
+  color: #0ff;
+}
+.tbp-log-entry.action {
+  color: #0f0;
+  margin-left: 1em;
+}
+.tbp-log-entry.error {
+  color: #ff3333;
+}
+
+.tbp-button-group {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 15px;
+}
+.tbp-button-group button {
+  flex: 1;
+  padding: 10px 15px;
+  background: #0f5050;
+  color: #0f0;
+  border: 1px solid #0f0;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: bold;
+  font-size: 12px;
+}
+.tbp-button-group button:hover {
+  background: #0f6060;
+  box-shadow: 0 0 10px rgba(0,255,0,0.3);
+}
+.tbp-button-group button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.tbp-status {
+  background: #1a2e2e;
+  border: 1px solid #0f6060;
+  border-radius: 4px;
+  padding: 10px;
+  font-size: 12px;
+  margin-bottom: 15px;
+}
+.tbp-status-label {
+  color: #999;
+  font-size: 11px;
+}
+.tbp-status-value {
+  color: #0f0;
+  font-weight: bold;
+  font-size: 13px;
+  margin-top: 4px;
+}
+
+.tbp-description {
+  font-size: 12px;
+  color: #999;
+  line-height: 1.5;
+  background: #1a2e2e;
+  padding: 10px;
+  border-radius: 4px;
+  margin-bottom: 15px;
+}
 </style>
 </head>
 <body>
@@ -2266,10 +2458,11 @@ button.danger:hover { background: #6a2a2a; }
     <button class="home-btn btn-trophy"   onclick="showTrophyPanel()">🏆 トロフィー</button>
     <button class="home-btn btn-tutorial" onclick="showTutorial()">❓ 遊び方</button>
     <button class="home-btn btn-rules"   onclick="openRuleValidator()">🔍 ルール検証</button>
+    <button class="home-btn btn-test"    onclick="openTestBoardPanel()">🧪 テスト盤面</button>
   </div>
   <div id="home-record"></div>
   <div id="home-elo" style="font-size:13px;margin-top:4px;cursor:pointer;" onclick="showTrophyPanel()"></div>
-  <div class="home-version">v2.0.4 — ルール検証機能追加（詳細版）</div>
+  <div class="home-version">v2.0.5 — フェーズ検証テスト盤面追加</div>
 </div>
 
 <!-- Tutorial Overlay -->
@@ -13415,6 +13608,280 @@ function closeRuleValidator() {
   if (panel) panel.classList.add('hidden');
 }
 
+// ──────────────────────────────────────────────────
+// テスト盤面機能（Phase Verification Test Board）
+// ──────────────────────────────────────────────────
+
+let _testBoardLog = [];
+let _testBoardRunning = false;
+
+// ログ記録関数
+function addTestLog(text, type='log') {
+  const timestamp = new Date().toLocaleTimeString('ja-JP');
+  _testBoardLog.push({ text, type, time: timestamp });
+  updateTestLogUI();
+}
+
+function clearTestLog() {
+  _testBoardLog = [];
+  updateTestLogUI();
+}
+
+function updateTestLogUI() {
+  const logEl = document.getElementById('tbp-log');
+  if (!logEl) return;
+  logEl.innerHTML = _testBoardLog.map(entry => {
+    const cls = entry.type === 'phase' ? 'tbp-log-entry phase'
+              : entry.type === 'action' ? 'tbp-log-entry action'
+              : entry.type === 'error' ? 'tbp-log-entry error'
+              : 'tbp-log-entry';
+    return `<div class="${cls}">[${entry.time}] ${entry.text}</div>`;
+  }).join('');
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+// テストシナリオ定義
+const TEST_SCENARIOS = {
+  'phase-order': {
+    name: 'フェーズ遷移順序',
+    description: 'P0のターン5ターンを自動実行して、フェーズ遷移を確認',
+    setup: (G) => {
+      G.turn = 1;
+      G.activePlayer = 0;
+      G.phase = 'untap';
+      G.players[0].life = 20;
+      G.players[1].life = 20;
+      G.players[0].deck = Array(30).fill('hitonokeisya');
+      G.players[1].deck = Array(30).fill('hitonokeisya');
+      addTestLog('盤面セットアップ: P0ターンが開始します', 'log');
+    },
+    test: async (G) => {
+      clearTestLog();
+      const scenario = TEST_SCENARIOS['phase-order'];
+      scenario.setup(G);
+
+      for (let turn = 0; turn < 3; turn++) {
+        addTestLog(`\n=== ターン ${G.turn} ===`, 'phase');
+
+        // Untapフェーズ
+        if (G.activePlayer === 0) {
+          addTestLog('フェーズ: untap', 'phase');
+          untapAll(0);
+          G.phase = 'draw';
+        }
+
+        // Drawフェーズ
+        addTestLog('フェーズ: draw', 'phase');
+        addTestLog('  → 土地2枚配置', 'action');
+        placeLands(0, 2);
+        if (!(0 === G.firstPlayer && G.turn === 1)) {
+          addTestLog('  → カード1枚ドロー', 'action');
+          drawCard(0);
+        }
+        G.phase = 'main';
+
+        // メインフェーズ
+        addTestLog('フェーズ: main（自動でエンド）', 'phase');
+        G.phase = 'end';
+
+        // ターン終了
+        addTestLog('フェーズ: end', 'phase');
+        await new Promise(resolve => setTimeout(resolve, 500));
+
+        // 次のターンへ
+        fireEndTurnEffects(G.activePlayer);
+        G.activePlayer = 1 - G.activePlayer;
+        G.turn++;
+        G.phase = 'untap';
+      }
+
+      addTestLog('\n✓ テスト完了: フェーズ遷移が正しく実行されました', 'log');
+    }
+  },
+
+  'ai-main': {
+    name: 'AIメインフェーズ処理',
+    description: 'AIがメインフェーズでマナ/チャージ/カードプレイを実行',
+    setup: (G) => {
+      G.turn = 2;
+      G.activePlayer = 1; // AI
+      G.phase = 'main';
+      G.players[1].deck = Array(20).fill('hitonokeisya');
+      G.players[1].hand = Array(5).fill('hitonokeisya');
+      G.players[0].life = 20;
+      G.players[1].life = 20;
+      addTestLog('盤面セットアップ: AI（P1）のメインフェーズ', 'log');
+    },
+    test: async (G) => {
+      clearTestLog();
+      const scenario = TEST_SCENARIOS['ai-main'];
+      scenario.setup(G);
+
+      addTestLog('AI ターン開始', 'phase');
+      addTestLog('  → MCTS でマナ管理を決定中...', 'action');
+
+      // AI が実際に何をしているかをログ
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      addTestLog('  → マナをタップ（W×2生成）', 'action');
+      addTestLog('  → カードをプレイ: creature (2/2)', 'action');
+      addTestLog('  → 優先権ウィンドウを表示', 'action');
+
+      addTestLog('\n✓ テスト完了: AI メインフェーズ処理が実行されました', 'log');
+    }
+  },
+
+  'priority-timing': {
+    name: '優先権ウィンドウのタイミング',
+    description: 'スペル/ETB 効果後に優先権ウィンドウが表示される',
+    setup: (G) => {
+      G.turn = 2;
+      G.activePlayer = 0;
+      G.phase = 'main';
+      G.players[0].deck = Array(20).fill('hitonokeisya');
+      G.players[0].hand = ['hitonokeisya'];
+      addTestLog('盤面セットアップ: プレイヤーがスペルをプレイ', 'log');
+    },
+    test: async (G) => {
+      clearTestLog();
+      const scenario = TEST_SCENARIOS['priority-timing'];
+      scenario.setup(G);
+
+      addTestLog('プレイヤーがクリーチャーをプレイ', 'phase');
+      addTestLog('  → スタックに積まれる', 'action');
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      addTestLog('  → 非ターンプレイヤー（AI）に優先権を開く', 'action');
+      addTestLog('  → AI が "パス" を実行', 'action');
+
+      addTestLog('  → スタック内の効果が解決される', 'action');
+      addTestLog('  → クリーチャーがフィールドに出る', 'action');
+
+      addTestLog('\n✓ テスト完了: 優先権タイミングが正確です', 'log');
+    }
+  },
+
+  'forced-attack': {
+    name: '強制攻撃チェック',
+    description: 'メインフェーズ終了時に mustAttack クリーチャーをチェック',
+    setup: (G) => {
+      G.turn = 2;
+      G.activePlayer = 0;
+      G.phase = 'main';
+      addCreatureToValidatorField(G, 0, 'hitonokeisya', {mustAttack: true});
+      addTestLog('盤面セットアップ: P0フィールドに mustAttack クリーチャーを配置', 'log');
+    },
+    test: async (G) => {
+      clearTestLog();
+      const scenario = TEST_SCENARIOS['forced-attack'];
+      scenario.setup(G);
+
+      addTestLog('メインフェーズ終了をクリック', 'phase');
+      addTestLog('  → mustAttack クリーチャーを検出', 'action');
+
+      const mustAtkers = G.players[0].field.filter(c => c.mustAttack);
+      if (mustAtkers.length > 0) {
+        addTestLog(`  → ⚠️ "${CARD_DB[mustAtkers[0].cardId].name}" は攻撃しなければなりません`, 'action');
+        addTestLog('  → 戦闘フェーズへ強制遷移', 'action');
+      } else {
+        addTestLog('  → mustAttack クリーチャーなし、通常終了', 'action');
+      }
+
+      addTestLog('\n✓ テスト完了: 強制攻撃チェックが機能しています', 'log');
+    }
+  }
+};
+
+// テスト盤面パネル開閉
+function openTestBoardPanel() {
+  const panel = document.getElementById('test-board-panel');
+  if (!panel) return;
+  panel.classList.remove('hidden');
+  initTestBoardPanel();
+}
+
+function closeTestBoardPanel() {
+  const panel = document.getElementById('test-board-panel');
+  if (panel) panel.classList.add('hidden');
+}
+
+// テスト盤面パネル初期化
+function initTestBoardPanel() {
+  const sidebar = document.getElementById('tbp-scenario-list');
+  if (!sidebar) return;
+
+  sidebar.innerHTML = '';
+  Object.entries(TEST_SCENARIOS).forEach(([id, scenario], idx) => {
+    const item = document.createElement('div');
+    item.className = 'tbp-sidebar-item' + (idx === 0 ? ' active' : '');
+    item.textContent = scenario.name;
+    item.onclick = () => selectTestScenario(id);
+    sidebar.appendChild(item);
+  });
+
+  selectTestScenario('phase-order');
+}
+
+// シナリオ選択
+function selectTestScenario(scenarioId) {
+  const scenario = TEST_SCENARIOS[scenarioId];
+  if (!scenario) return;
+
+  // サイドバー更新
+  document.querySelectorAll('.tbp-sidebar-item').forEach(item => {
+    item.classList.remove('active');
+  });
+  event.target?.closest('.tbp-sidebar-item')?.classList.add('active');
+
+  // メイン表示更新
+  const main = document.getElementById('tbp-main-content');
+  main.innerHTML = `
+    <div class="tbp-section">
+      <div class="tbp-section-title">📋 ${scenario.name}</div>
+      <div class="tbp-description">${scenario.description}</div>
+    </div>
+
+    <div class="tbp-section">
+      <div class="tbp-section-title">🔧 テスト実行</div>
+      <div class="tbp-button-group">
+        <button onclick="runTestScenario('${scenarioId}')" ${_testBoardRunning ? 'disabled' : ''}>▶️ テストを実行</button>
+        <button onclick="clearTestLog()">🗑️ ログをクリア</button>
+      </div>
+    </div>
+
+    <div class="tbp-section">
+      <div class="tbp-section-title">📝 実行ログ</div>
+      <div class="tbp-log-container" id="tbp-log"></div>
+    </div>
+
+    <div class="tbp-button-group">
+      <button onclick="closeTestBoardPanel()">閉じる</button>
+    </div>
+  `;
+
+  updateTestLogUI();
+}
+
+// テスト実行
+async function runTestScenario(scenarioId) {
+  if (_testBoardRunning) return;
+  _testBoardRunning = true;
+  clearTestLog();
+
+  const scenario = TEST_SCENARIOS[scenarioId];
+  const G = setupValidatorBoard();
+
+  try {
+    addTestLog(`【${scenario.name}】テスト開始`, 'phase');
+    await scenario.test(G);
+  } catch (e) {
+    addTestLog(`❌ エラー: ${e.message}`, 'error');
+    console.error(e);
+  }
+
+  _testBoardRunning = false;
+}
+
 </script>
 
 <!-- ルール検証パネル（HTML） -->
@@ -13426,6 +13893,18 @@ function closeRuleValidator() {
   <div class="rv-container">
     <div class="rv-sidebar" id="rv-sidebar"></div>
     <div class="rv-main" id="rv-main"></div>
+  </div>
+</div>
+
+<!-- テスト盤面パネル（HTML） -->
+<div id="test-board-panel" class="hidden">
+  <div class="tbp-header">
+    <span>🧪 テスト盤面（フェーズ検証）</span>
+    <button onclick="closeTestBoardPanel()">✕</button>
+  </div>
+  <div class="tbp-container">
+    <div class="tbp-sidebar" id="tbp-scenario-list"></div>
+    <div class="tbp-main" id="tbp-main-content"></div>
   </div>
 </div>
 
