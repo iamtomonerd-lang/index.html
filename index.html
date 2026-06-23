@@ -2609,7 +2609,7 @@ button.danger:hover { background: #6a2a2a; }
   </div>
   <div id="home-record"></div>
   <div id="home-elo" style="font-size:13px;margin-top:4px;cursor:pointer;" onclick="showTrophyPanel()"></div>
-  <div class="home-version">v2.1.1</div>
+  <div class="home-version">v2.1.2</div>
 </div>
 
 <!-- Tutorial Overlay -->
@@ -3237,6 +3237,12 @@ const CARD_DB = {
     produces:'C', icon:'🎪',
     text:'■起動(タップ):1マナ生成\n■起動(タップ):開拓1。チャージ時のみ',
     chargedAbility:'kaitaku1land'
+  },
+  'test_golem': {
+    id:'test_golem', name:'テストゴーレム', type:'creature', color:'C',
+    cost:{C:1}, power:1, toughness:1, subtype:'ゴーレム', icon:'🗿',
+    keywords:[], unlimited:true,
+    text:'■このカードはデッキに何枚でも入れられる'
   },
 };
 
@@ -13125,7 +13131,7 @@ function dbRenderCollection() {
     const c = dbCardInfo(id);
     if (!c) return '';
     const cnt = mainMap[id] || 0;
-    const maxed = cnt >= 4;
+    const maxed = !c?.unlimited && cnt >= 4;
     const stats = c.power !== undefined ? `${c.power}/${c.toughness}` : (c.type === 'spell' ? '呪文' : '');
     const costStr = c.cost ? costToString(c.cost) : '-';
     return `<div class="db-card-row${maxed?' db-maxed':''}" data-card-id="${id}" onclick="dbAddMain('${id}');dbShowDetail('${id}')">
@@ -13277,7 +13283,8 @@ function dbUpdateStats() {
 
 function dbAddMain(id) {
   const cnt = dbCountMap(dbCurrentMain)[id] || 0;
-  if (cnt >= 4) return;
+  const card = CARD_DB[id];
+  if (!card?.unlimited && cnt >= 4) return;
   if (dbCurrentMain.length >= 40) return;
   dbCurrentMain.push(id);
   dbRenderAll();

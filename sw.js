@@ -1,4 +1,4 @@
-const CACHE = 'dcg-v50';
+const CACHE = 'dcg-v51';
 const NETWORK_TIMEOUT = 3000;
 const ASSETS = [
   './manifest.json',
