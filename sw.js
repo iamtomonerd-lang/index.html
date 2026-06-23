@@ -1,4 +1,5 @@
-const CACHE = 'dcg-v49';
+const CACHE = 'dcg-v50';
+const NETWORK_TIMEOUT = 3000;
 const ASSETS = [
   './manifest.json',
   './icon-192.png',
@@ -21,13 +22,17 @@ self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
   if (url.pathname.endsWith('.html') || url.pathname.endsWith('/')) {
     e.respondWith(
-      fetch(e.request)
-        .then(res => {
-          const clone = res.clone();
-          caches.open(CACHE).then(c => c.put(e.request, clone));
-          return res;
-        })
-        .catch(() => caches.match(e.request))
+      Promise.race([
+        fetch(e.request).then(res => {
+          if (res.ok) {
+            const clone = res.clone();
+            caches.open(CACHE).then(c => c.put(e.request, clone));
+            return res;
+          }
+          return caches.match(e.request);
+        }),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), NETWORK_TIMEOUT))
+      ]).catch(() => caches.match(e.request))
     );
   } else {
     e.respondWith(
