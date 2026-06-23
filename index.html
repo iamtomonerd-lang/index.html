@@ -2609,7 +2609,7 @@ button.danger:hover { background: #6a2a2a; }
   </div>
   <div id="home-record"></div>
   <div id="home-elo" style="font-size:13px;margin-top:4px;cursor:pointer;" onclick="showTrophyPanel()"></div>
-  <div class="home-version">v2.0.8</div>
+  <div class="home-version">v2.0.9</div>
 </div>
 
 <!-- Tutorial Overlay -->
@@ -3372,7 +3372,6 @@ function initGame() {
     activePlayer: firstPlayer,
     firstPlayer: firstPlayer, // 先手プレイヤーを記録（先行1ターン目のみドローなし判定用）
     phase: 'untap', // untap, draw, main, combat, end
-    combatStep: null, // declare_attackers, declare_blockers, damage
     priority: 0,
     stack: [],
     players: [
@@ -5990,36 +5989,6 @@ function kakutouTargetsOnly(player) {
   return false; // resolved in combat - kakutou on entry can only hit tapped
 }
 
-function startCombat() {
-  G.phase = 'combat';
-  G.combatStep = 'declare_attackers';
-  G.players[0].attackers = [];
-  G.players[0].blockers = {};
-  G.attackMode = true;
-
-  // アレスティア passive: if AI has arestia and player declares attackers, player's creatures get +1/+1 temp
-  // Applied once per attack declaration (when first attacker is added, handled here preemptively)
-  const aiHasArestia = G.players[1].field.some(c=>CARD_DB[c.cardId].id==='arestia');
-  if (aiHasArestia) {
-    G.players[1].field.forEach(c => addPermanentBuff(1, c.instanceId, 1, 1));
-    log('アレスティア: 全クリーチャー+1/+1（永続）', 'important');
-  }
-
-  log('攻撃クリーチャーを選択してください');
-  render(); updateHints();
-}
-
-function endCombat() {
-  G.attackMode = false;
-  G.blockMode = false;
-  G.players[0].attackers = [];
-  G.players[0].blockers = {};
-  G.combatStep = null;
-  G.combatArrows = [];
-  G.phase = 'main';
-  endTurn();
-}
-
 // ============================================================
 // SINGLE CREATURE ATTACK (main phase, one at a time)
 // ============================================================
@@ -7165,7 +7134,6 @@ function resolveCombat() {
   checkDeath();
   G.players[0].attackers = [];
   G.players[0].blockers = {};
-  G.combatStep = null;
   G.attackMode = false;
   G.phase = 'main';
   render();
@@ -12374,7 +12342,7 @@ function _testMakeState() {
     mulliganUsed:false, attackers:[], blockers:{}
   });
   return {
-    turn:1, activePlayer:0, phase:'main', combatStep:null, priority:0,
+    turn:1, activePlayer:0, phase:'main', priority:0,
     stack:[], players:[mkP(), mkP()],
     nextInstanceId:100,
     firstTurn:false, awaitingPriority:false, priorityFor:null, priorityContinuation:null,
@@ -14057,7 +14025,7 @@ function initDemoGameState(opts = {}) {
     activePlayer: opts.activePlayer !== undefined ? opts.activePlayer : 0,
     firstPlayer: 0,
     phase: opts.phase || 'main',
-    combatStep: null, priority: 0,
+    priority: 0,
     stack: [], _pendingCont: null, _pendingReason: '',
     _awaitingModal: false, _pendingCrystalPay: false,
     players: [mkPlayer(opts.p0life || 20), mkPlayer(opts.p1life || 20)],
@@ -14105,13 +14073,12 @@ function addDemoCreature(player, cardId, opts = {}) {
 const DEMO_SEQUENCES = {
   'phase-order': {
     name: 'フェーズ遷移確認',
-    description: 'untap → draw → main → combat → end の遷移を実際に確認する',
+    description: 'untap → draw → main（カードプレイ＆攻撃）→ end の遷移を確認する',
     steps: [
-      { label: '初期盤面（ターン1 メイン）',       phase: 'main',   p0life: 20, p1life: 20, p0field: [] },
-      { label: 'クリーチャーを召喚',               phase: 'main',   p0hand: ['hitonokeisya'], addCard: true },
-      { label: 'フェーズ終了 → 戦闘フェーズ',      phase: 'combat', note: 'G.phase = combat' },
-      { label: '攻撃宣言',                         phase: 'combat', attack: true },
-      { label: '戦闘後 → メイン復帰 → ターン終了', phase: 'end',    note: 'G.phase = end' },
+      { label: '初期盤面（ターン1 メイン）',         phase: 'main', p0life: 20, p1life: 20, p0field: [] },
+      { label: 'クリーチャーを召喚',                 phase: 'main', p0hand: ['hitonokeisya'], addCard: true },
+      { label: 'メインフェーズ中に攻撃宣言',         phase: 'main', attack: true, note: '攻撃もメインで行う' },
+      { label: '戦闘解決 → ターン終了',             phase: 'end',  note: 'G.phase = end' },
     ]
   },
   'draw-phase': {
@@ -14141,8 +14108,8 @@ const DEMO_SEQUENCES = {
     steps: [
       { label: '強制攻撃クリーチャーを配置', phase: 'main', mustAttack: true },
       { label: 'メインフェーズ終了をクリック', phase: 'main', endPhaseCheck: true },
-      { label: '⚠️ 強制攻撃クリーチャーを検出', phase: 'combat', warning: true },
-      { label: '戦闘フェーズへ強制遷移',    phase: 'combat', forced: true },
+      { label: '⚠️ 強制攻撃クリーチャーを検出', phase: 'main', warning: true },
+      { label: 'メイン内で攻撃強制（同フェーズ）', phase: 'main', forced: true },
     ]
   },
 };
@@ -14339,7 +14306,7 @@ function applyDemoStep(step) {
 
   // 強制攻撃警告
   if (step.warning || step.forced) {
-    G.phase = 'combat';
+    G.phase = 'main';
     G.attackMode = true;
   }
 }
