@@ -2067,7 +2067,7 @@ button.danger:hover { background: #6a2a2a; }
   </div>
   <div id="home-record"></div>
   <div id="home-elo" style="font-size:13px;margin-top:4px;cursor:pointer;" onclick="showTrophyPanel()"></div>
-  <div class="home-version">v2.0.2 — AI格闘必ず実行に修正</div>
+  <div class="home-version">v2.0.3 — デバッグチェッカー追加・ETBデッドコード除去</div>
 </div>
 
 <!-- Tutorial Overlay -->
@@ -4250,7 +4250,7 @@ function resolveETBEffect(player, instanceId) {
       return;
     }
     continueStack();
-  } else if (card.etb === 'kaitaku1' || card.etb === 'kaitaku1spell') {
+  } else if (card.etb === 'kaitaku1') {
     // 開拓者・開拓祭りの巫女: 開拓1
     if (player === 0) {
       doKaitaku(player, 1); // sets _awaitingModal; _pickKaitaku will call continueStack
