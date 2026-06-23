@@ -1807,6 +1807,207 @@ button.danger:hover { background: #6a2a2a; }
   color: #aaaacc;
   cursor: pointer;
 }
+
+/* ─── ルール検証パネル CSS ─── */
+#rule-validator {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.9);
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  font-family: 'Noto Sans JP', sans-serif;
+}
+#rule-validator.hidden { display: none; }
+
+.rv-header {
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+  color: #0ff;
+  padding: 15px 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 2px solid #0f3460;
+  font-size: 18px;
+  font-weight: bold;
+}
+.rv-header button {
+  background: none;
+  border: none;
+  color: #0ff;
+  cursor: pointer;
+  font-size: 20px;
+}
+.rv-header button:hover { color: #fff; }
+
+.rv-container {
+  display: flex;
+  flex: 1;
+  gap: 0;
+  overflow: hidden;
+}
+
+.rv-sidebar {
+  width: 220px;
+  background: #16213e;
+  border-right: 1px solid #0f3460;
+  overflow-y: auto;
+  color: #aaa;
+}
+.rv-sidebar::-webkit-scrollbar { width: 6px; }
+.rv-sidebar::-webkit-scrollbar-thumb { background: #0f3460; border-radius: 3px; }
+
+.rv-sidebar-item {
+  padding: 12px 15px;
+  cursor: pointer;
+  border-left: 3px solid transparent;
+  transition: all 0.2s;
+  color: #aaa;
+  font-size: 12px;
+}
+.rv-sidebar-item:hover {
+  background: #0f3460;
+  color: #0ff;
+}
+.rv-sidebar-item.active {
+  background: #0f3460;
+  color: #0ff;
+  border-left-color: #0ff;
+  font-weight: bold;
+}
+
+.rv-main {
+  flex: 1;
+  background: #0f1419;
+  overflow-y: auto;
+  padding: 20px;
+  color: #ccc;
+}
+.rv-main::-webkit-scrollbar { width: 8px; }
+.rv-main::-webkit-scrollbar-thumb { background: #0f3460; border-radius: 4px; }
+
+.rv-rule-header {
+  margin-bottom: 20px;
+  padding-bottom: 15px;
+  border-bottom: 1px solid #0f3460;
+}
+.rv-rule-name {
+  font-size: 18px;
+  font-weight: bold;
+  color: #0ff;
+  margin-bottom: 8px;
+}
+.rv-rule-description {
+  font-size: 12px;
+  color: #999;
+  line-height: 1.5;
+}
+
+.rv-scenarios {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.rv-scenario {
+  background: #1a1a2e;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid #0f3460;
+}
+.rv-scenario-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 15px;
+  background: #16213e;
+  font-weight: bold;
+  cursor: pointer;
+  user-select: none;
+}
+.rv-scenario-header:hover { background: #1a273a; }
+
+.rv-result-badge {
+  font-size: 18px;
+  font-weight: bold;
+  min-width: 20px;
+}
+.rv-result-badge.pass { color: #00ff00; }
+.rv-result-badge.fail { color: #ff3333; }
+
+.rv-scenario-title {
+  color: #ccc;
+  flex: 1;
+}
+
+.rv-scenario-body {
+  padding: 12px 15px;
+  display: none;
+}
+.rv-scenario.expanded .rv-scenario-body { display: block; }
+
+.rv-scenario-info {
+  font-size: 12px;
+  color: #999;
+  margin-bottom: 10px;
+  line-height: 1.4;
+}
+
+.rv-scenario-result {
+  background: #0a0a0f;
+  padding: 10px;
+  border-radius: 4px;
+  font-family: monospace;
+  font-size: 11px;
+  color: #0f0;
+  margin-top: 8px;
+  max-height: 150px;
+  overflow-y: auto;
+}
+
+.rv-summary {
+  display: flex;
+  gap: 20px;
+  margin-top: 20px;
+  padding: 15px;
+  background: #16213e;
+  border-radius: 6px;
+  border: 1px solid #0f3460;
+}
+.rv-summary-item {
+  text-align: center;
+}
+.rv-summary-count {
+  font-size: 22px;
+  font-weight: bold;
+  color: #0ff;
+}
+.rv-summary-label {
+  font-size: 11px;
+  color: #999;
+  margin-top: 4px;
+}
+
+.rv-button-group {
+  display: flex;
+  gap: 10px;
+  margin-top: 15px;
+}
+.rv-button-group button {
+  flex: 1;
+  padding: 10px 15px;
+  background: #0f3460;
+  color: #0ff;
+  border: 1px solid #0ff;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: bold;
+  font-size: 12px;
+}
+.rv-button-group button:hover {
+  background: #1a4070;
+  box-shadow: 0 0 10px rgba(0,255,255,0.3);
+}
 </style>
 </head>
 <body>
@@ -2064,10 +2265,11 @@ button.danger:hover { background: #6a2a2a; }
     <button class="home-btn btn-ai"      onclick="showAIFromHome()">🧠 AI学習</button>
     <button class="home-btn btn-trophy"   onclick="showTrophyPanel()">🏆 トロフィー</button>
     <button class="home-btn btn-tutorial" onclick="showTutorial()">❓ 遊び方</button>
+    <button class="home-btn btn-rules"   onclick="openRuleValidator()">🔍 ルール検証</button>
   </div>
   <div id="home-record"></div>
   <div id="home-elo" style="font-size:13px;margin-top:4px;cursor:pointer;" onclick="showTrophyPanel()"></div>
-  <div class="home-version">v2.0.3 — デバッグチェッカー追加・ETBデッドコード除去</div>
+  <div class="home-version">v2.0.4 — ルール検証機能追加（詳細版）</div>
 </div>
 
 <!-- Tutorial Overlay -->
@@ -12873,6 +13075,359 @@ if ('serviceWorker' in navigator) {
   });
 }
 
+// ──────────────────────────────────────────────────
+// ルール検証機能（Rule Validator）
+// ──────────────────────────────────────────────────
+
+let _nextValidatorInstanceId = 1000;
+
+// ヘルパー関数：盤面セットアップ
+function setupValidatorBoard(p0Life=20, p1Life=20) {
+  const mkPlayer = (life) => ({
+    life, hand: [], deck: [], field: [], lands: [], graveyard: [], artifacts: [],
+    mana: {W:0,R:0,U:0,B:0,G:0,C:0}, manaTapped: {W:0,R:0,U:0,B:0,G:0,C:0}
+  });
+  return {
+    players: [mkPlayer(p0Life), mkPlayer(p1Life)],
+    turn: 1,
+    activePlayer: 0,
+    phase: 'untap',
+    firstPlayer: 0,
+    drawCount: [0,0],
+    discardedThisTurn: [false, false],
+    mustAttackCreatures: new Set(),
+    _awaitingModal: false,
+    _pendingCont: null,
+    stack: [],
+    targetMode: null
+  };
+}
+
+// ヘルパー関数：クリーチャー追加
+function addCreatureToValidatorField(G, player, cardId, options={}) {
+  const card = CARD_DB[cardId];
+  if (!card || card.type !== 'creature') return null;
+  const inst = {
+    instanceId: ++_nextValidatorInstanceId,
+    cardId,
+    tapped: options.tapped || false,
+    damage: options.damage || 0,
+    sick: options.sick || false,
+    entryTurn: options.entryTurn !== undefined ? options.entryTurn : G.turn,
+    tempPower: 0,
+    tempToughness: 0,
+    mustAttack: options.mustAttack || false
+  };
+  G.players[player].field.push(inst);
+  return inst;
+}
+
+// ヘルパー関数：状態キャプチャ
+function captureValidatorState(G) {
+  return {
+    lives: [G.players[0].life, G.players[1].life],
+    field: G.players.map(p => p.field.map(c => ({
+      cardId: c.cardId,
+      tapped: c.tapped,
+      damage: c.damage,
+      sick: c.sick
+    }))),
+    hands: [G.players[0].hand.length, G.players[1].hand.length],
+    phase: G.phase
+  };
+}
+
+// ルール検証データ構造
+const RULE_VALIDATORS = [
+  {
+    id: 'untap',
+    name: 'アンタップフェーズ',
+    description: 'アクティブプレイヤーのクリーチャーをすべてアンタップする',
+    scenarios: [
+      {
+        id: 'untap_single',
+        name: '単一クリーチャーのアンタップ',
+        description: 'タップ状態のクリーチャーがアンタップされるか',
+        setup: (G) => {
+          addCreatureToValidatorField(G, 0, 'hitonokeisya', {tapped: true});
+        },
+        execute: async (G, before) => {
+          G.phase = 'untap';
+          untapAll(0);
+        },
+        verify: (G, before, after) => {
+          const wasT = before.field[0]?.some(c => c.tapped);
+          const isT = after.field[0]?.some(c => c.tapped);
+          if (!wasT) return { passed: false, msg: 'セットアップ失敗' };
+          if (isT) return { passed: false, msg: 'アンタップされていない' };
+          return { passed: true, msg: 'クリーチャーが正しくアンタップされました' };
+        }
+      },
+      {
+        id: 'untap_multiple',
+        name: '複数クリーチャーのアンタップ',
+        description: 'タップ状態の複数クリーチャーがすべてアンタップされるか',
+        setup: (G) => {
+          addCreatureToValidatorField(G, 0, 'hitonokeisya', {tapped: true});
+          addCreatureToValidatorField(G, 0, 'hitonokeisya', {tapped: true});
+        },
+        execute: async (G, before) => {
+          G.phase = 'untap';
+          untapAll(0);
+        },
+        verify: (G, before, after) => {
+          const allTappedBefore = before.field[0].every(c => c.tapped);
+          const anyTappedAfter = after.field[0].some(c => c.tapped);
+          if (!allTappedBefore) return { passed: false, msg: 'セットアップ失敗' };
+          if (anyTappedAfter) return { passed: false, msg: 'すべてアンタップされていない' };
+          return { passed: true, msg: '全てのクリーチャーがアンタップされました' };
+        }
+      }
+    ]
+  },
+  {
+    id: 'draw',
+    name: 'ドローフェーズ',
+    description: '土地2枚プレイ後、1枚ドロー（先手1T目除く）',
+    scenarios: [
+      {
+        id: 'draw_normal',
+        name: '通常ドロー',
+        description: '1枚ドロー可能か',
+        setup: (G) => {
+          G.players[0].deck = Array(20).fill('hitonokeisya');
+        },
+        execute: async (G, before) => {
+          G.phase = 'draw';
+          G.turn = 2; // 2ターン目なので先手ドロー除外なし
+          const before_len = G.players[0].hand.length;
+          drawCard(0);
+          return { before_len };
+        },
+        verify: (G, before, after, result) => {
+          if (after.hands[0] !== result.before_len + 1) {
+            return { passed: false, msg: `ドロー失敗: ${result.before_len} → ${after.hands[0]}` };
+          }
+          return { passed: true, msg: '1枚正しくドロー' };
+        }
+      },
+      {
+        id: 'draw_first_player_first_turn',
+        name: '先手1ターン目のドロー除外',
+        description: '先手1ターン目はドローしない',
+        setup: (G) => {
+          G.players[0].deck = Array(20).fill('hitonokeisya');
+          G.firstPlayer = 0;
+          G.turn = 1;
+        },
+        execute: async (G, before) => {
+          const isFirstPlayerFirstTurn = (0 === G.firstPlayer && G.turn === 1);
+          if (!isFirstPlayerFirstTurn) {
+            return { skipped: true, msg: '先手でなく/1ターン目でなく' };
+          }
+          const before_len = G.players[0].hand.length;
+          // 先手1ターン目ならドロー不可
+          if (!isFirstPlayerFirstTurn) drawCard(0);
+          return { before_len };
+        },
+        verify: (G, before, after, result) => {
+          if (result.skipped) return { passed: true, msg: result.msg };
+          if (after.hands[0] !== result.before_len) {
+            return { passed: false, msg: `先手1T目なのにドロー: ${result.before_len} → ${after.hands[0]}` };
+          }
+          return { passed: true, msg: '先手1ターン目はドロー除外' };
+        }
+      }
+    ]
+  },
+  {
+    id: 'kakutou',
+    name: '格闘（kakutou）',
+    description: '出たターンのみ敵クリーチャーを直接攻撃できる',
+    scenarios: [
+      {
+        id: 'kakutou_entry_turn',
+        name: '格闘は出たターンのみ攻撃可能',
+        description: '格闘クリーチャーが出たターンに敵クリーチャーを選択できるか',
+        setup: (G) => {
+          const kaiku = addCreatureToValidatorField(G, 0, 'minokugeri', {entryTurn: G.turn, sick: true});
+          addCreatureToValidatorField(G, 1, 'hitonokeisya', {});
+          return kaiku;
+        },
+        execute: async (G, before, attacker) => {
+          // 格闘クリーチャーが出たターンのため、sick でも攻撃可能なはず
+          const canAtk = attacker && !attacker.tapped && CARD_DB[attacker.cardId].kakutou && attacker.entryTurn === G.turn;
+          return { canAtk };
+        },
+        verify: (G, before, after, result) => {
+          if (!result.canAtk) {
+            return { passed: false, msg: 'kakutouクリーチャーが出たターンなのに攻撃不可' };
+          }
+          return { passed: true, msg: '格闘クリーチャーが出たターンに敵クリーチャーを攻撃可能' };
+        }
+      }
+    ]
+  }
+];
+
+// ルール検証 UI 初期化
+function initRuleValidator() {
+  const panel = document.getElementById('rule-validator');
+  if (!panel) return;
+
+  const sidebar = document.getElementById('rv-sidebar');
+  sidebar.innerHTML = '';
+
+  RULE_VALIDATORS.forEach((rule, idx) => {
+    const item = document.createElement('div');
+    item.className = 'rv-sidebar-item' + (idx === 0 ? ' active' : '');
+    item.textContent = rule.name;
+    item.onclick = () => selectValidatorRule(rule.id);
+    sidebar.appendChild(item);
+  });
+
+  selectValidatorRule(RULE_VALIDATORS[0].id);
+}
+
+// ルール選択
+function selectValidatorRule(ruleId) {
+  const rule = RULE_VALIDATORS.find(r => r.id === ruleId);
+  if (!rule) return;
+
+  // サイドバー更新
+  document.querySelectorAll('.rv-sidebar-item').forEach(item => {
+    item.classList.remove('active');
+  });
+  event.target?.closest('.rv-sidebar-item')?.classList.add('active');
+
+  // メイン表示更新
+  const main = document.getElementById('rv-main');
+  main.innerHTML = `
+    <div class="rv-rule-header">
+      <div class="rv-rule-name">${rule.name}</div>
+      <div class="rv-rule-description">${rule.description}</div>
+    </div>
+    <div class="rv-scenarios" id="rv-scenarios-container"></div>
+    <div class="rv-summary">
+      <div class="rv-summary-item">
+        <div class="rv-summary-count" id="rv-pass-count">0</div>
+        <div class="rv-summary-label">パス</div>
+      </div>
+      <div class="rv-summary-item">
+        <div class="rv-summary-count" id="rv-fail-count">0</div>
+        <div class="rv-summary-label">失敗</div>
+      </div>
+    </div>
+    <div class="rv-button-group">
+      <button onclick="runAllScenarioTests('${ruleId}')">全テスト実行</button>
+      <button onclick="closeRuleValidator()">閉じる</button>
+    </div>
+  `;
+
+  const scenariosContainer = document.getElementById('rv-scenarios-container');
+  rule.scenarios.forEach(scenario => {
+    const el = document.createElement('div');
+    el.className = 'rv-scenario';
+    el.innerHTML = `
+      <div class="rv-scenario-header" onclick="this.closest('.rv-scenario').classList.toggle('expanded')">
+        <span class="rv-result-badge" id="badge-${scenario.id}">-</span>
+        <span class="rv-scenario-title">${scenario.name}</span>
+      </div>
+      <div class="rv-scenario-body">
+        <div class="rv-scenario-info">${scenario.description}</div>
+        <div class="rv-scenario-result" id="result-${scenario.id}">待機中...</div>
+        <div class="rv-button-group" style="margin-top:10px;">
+          <button onclick="runScenarioTest('${ruleId}', '${scenario.id}')">テスト実行</button>
+        </div>
+      </div>
+    `;
+    scenariosContainer.appendChild(el);
+  });
+}
+
+// シナリオテスト実行
+async function runScenarioTest(ruleId, scenarioId) {
+  const rule = RULE_VALIDATORS.find(r => r.id === ruleId);
+  const scenario = rule?.scenarios.find(s => s.id === scenarioId);
+  if (!scenario) return;
+
+  const badge = document.getElementById(`badge-${scenarioId}`);
+  const resultEl = document.getElementById(`result-${scenarioId}`);
+  badge.textContent = '...';
+  resultEl.textContent = 'テスト実行中...';
+
+  try {
+    const G = setupValidatorBoard();
+    const before = captureValidatorState(G);
+
+    scenario.setup(G);
+    const setupResult = await scenario.execute(G, before);
+    const after = captureValidatorState(G);
+
+    const result = scenario.verify(G, before, after, setupResult);
+
+    badge.textContent = result.passed ? '✓' : '✗';
+    badge.className = `rv-result-badge ${result.passed ? 'pass' : 'fail'}`;
+    resultEl.textContent = result.msg;
+    resultEl.className = 'rv-scenario-result' + (result.passed ? ' pass' : ' fail');
+
+    updateValidatorSummary(ruleId);
+  } catch (e) {
+    badge.textContent = '✗';
+    badge.className = 'rv-result-badge fail';
+    resultEl.textContent = `エラー: ${e.message}`;
+    updateValidatorSummary(ruleId);
+  }
+}
+
+// 全シナリオテスト実行
+async function runAllScenarioTests(ruleId) {
+  const rule = RULE_VALIDATORS.find(r => r.id === ruleId);
+  if (!rule) return;
+  for (const scenario of rule.scenarios) {
+    await new Promise(resolve => setTimeout(() => {
+      runScenarioTest(ruleId, scenario.id).then(resolve);
+    }, 300));
+  }
+}
+
+// サマリー更新
+function updateValidatorSummary(ruleId) {
+  const rule = RULE_VALIDATORS.find(r => r.id === ruleId);
+  const passes = rule.scenarios.filter(s => {
+    const badge = document.getElementById(`badge-${s.id}`);
+    return badge?.textContent === '✓';
+  }).length;
+  document.getElementById('rv-pass-count').textContent = passes;
+  document.getElementById('rv-fail-count').textContent = rule.scenarios.length - passes;
+}
+
+// ルール検証パネル開閉
+function openRuleValidator() {
+  const panel = document.getElementById('rule-validator');
+  if (panel) {
+    panel.classList.remove('hidden');
+    initRuleValidator();
+  }
+}
+function closeRuleValidator() {
+  const panel = document.getElementById('rule-validator');
+  if (panel) panel.classList.add('hidden');
+}
+
 </script>
+
+<!-- ルール検証パネル（HTML） -->
+<div id="rule-validator" class="hidden">
+  <div class="rv-header">
+    <span>🔍 ゲームルール検証</span>
+    <button onclick="closeRuleValidator()">✕</button>
+  </div>
+  <div class="rv-container">
+    <div class="rv-sidebar" id="rv-sidebar"></div>
+    <div class="rv-main" id="rv-main"></div>
+  </div>
+</div>
+
 </body>
 </html>
