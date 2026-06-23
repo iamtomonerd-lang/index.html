@@ -13,6 +13,7 @@
 <title>DCG - デジタルカードゲーム</title>
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Noto+Sans+JP:wght@300;400;700&display=swap" rel="stylesheet">
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script src="https://unpkg.com/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
@@ -2200,6 +2201,151 @@ button.danger:hover { background: #6a2a2a; }
   border-radius: 4px;
   margin-bottom: 15px;
 }
+
+/* ─── デモ動画パネル CSS ─── */
+#demo-video-panel {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.92);
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  font-family: 'Noto Sans JP', sans-serif;
+}
+#demo-video-panel.hidden { display: none; }
+
+.dv-header {
+  background: linear-gradient(135deg, #2e1a2e 0%, #3e1e3e 100%);
+  color: #f0f;
+  padding: 15px 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 2px solid #8000a0;
+  font-size: 18px;
+  font-weight: bold;
+}
+.dv-header button {
+  background: none;
+  border: none;
+  color: #f0f;
+  cursor: pointer;
+  font-size: 20px;
+}
+.dv-header button:hover { color: #fff; }
+
+.dv-container {
+  display: flex;
+  flex: 1;
+  gap: 0;
+  overflow: hidden;
+}
+
+.dv-sidebar {
+  width: 240px;
+  background: #1e0e1e;
+  border-right: 1px solid #6000a0;
+  overflow-y: auto;
+  color: #aaa;
+  padding: 15px 0;
+}
+.dv-sidebar-item {
+  padding: 12px 15px;
+  cursor: pointer;
+  border-left: 3px solid transparent;
+  transition: all 0.2s;
+  color: #aaa;
+  font-size: 12px;
+}
+.dv-sidebar-item:hover { background: #3e0e3e; color: #f0f; }
+.dv-sidebar-item.active { background: #3e0e3e; color: #f0f; border-left-color: #f0f; font-weight: bold; }
+
+.dv-main {
+  flex: 1;
+  background: #120a14;
+  overflow-y: auto;
+  padding: 20px;
+  color: #ccc;
+}
+.dv-main::-webkit-scrollbar { width: 8px; }
+.dv-main::-webkit-scrollbar-thumb { background: #6000a0; border-radius: 4px; }
+
+.dv-section { margin-bottom: 20px; padding-bottom: 15px; border-bottom: 1px solid #6000a0; }
+.dv-section-title { font-size: 14px; font-weight: bold; color: #f0f; margin-bottom: 10px; }
+
+.dv-description {
+  font-size: 12px; color: #999; line-height: 1.5;
+  background: #1e0e1e; padding: 10px; border-radius: 4px; margin-bottom: 15px;
+}
+
+.dv-button-group { display: flex; gap: 10px; margin-bottom: 15px; }
+.dv-button-group button {
+  flex: 1; padding: 10px 15px;
+  background: #4e0e6e; color: #f0f;
+  border: 1px solid #f0f; border-radius: 4px;
+  cursor: pointer; font-weight: bold; font-size: 12px;
+}
+.dv-button-group button:hover { background: #6e1e9e; box-shadow: 0 0 10px rgba(255,0,255,0.3); }
+.dv-button-group button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.dv-status {
+  background: #1e0e1e; border: 1px solid #6000a0;
+  border-radius: 4px; padding: 10px; font-size: 12px; margin-bottom: 15px;
+}
+.dv-status-label { color: #999; font-size: 11px; }
+.dv-status-value { color: #f0f; font-weight: bold; font-size: 13px; margin-top: 4px; }
+
+.dv-progress {
+  height: 6px; background: #1e0e1e; border-radius: 3px;
+  margin-bottom: 15px; overflow: hidden;
+  border: 1px solid #6000a0;
+}
+.dv-progress-bar {
+  height: 100%; background: linear-gradient(90deg, #8000c0, #f0f);
+  border-radius: 3px; transition: width 0.3s;
+  width: 0%;
+}
+
+.dv-preview {
+  background: #000; border: 1px solid #6000a0;
+  border-radius: 4px; margin-bottom: 15px;
+  min-height: 200px; display: flex;
+  align-items: center; justify-content: center;
+  overflow: hidden;
+}
+.dv-preview video, .dv-preview img {
+  max-width: 100%; max-height: 360px;
+  border-radius: 4px;
+}
+.dv-preview-empty {
+  color: #444; font-size: 12px; text-align: center;
+  padding: 40px;
+}
+
+.dv-step-list { list-style: none; margin-bottom: 15px; }
+.dv-step-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 10px; font-size: 12px;
+  border-left: 2px solid #3e0e3e;
+  margin-bottom: 4px; color: #999;
+}
+.dv-step-item.active { border-left-color: #f0f; color: #f0f; background: #1e0e1e; }
+.dv-step-item.done { border-left-color: #0f0; color: #0f0; }
+.dv-step-bullet { font-size: 14px; min-width: 16px; }
+
+.dv-rec-indicator {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: #ff000022; color: #ff4444;
+  border: 1px solid #ff4444; border-radius: 4px;
+  padding: 4px 10px; font-size: 12px; font-weight: bold;
+  margin-bottom: 10px;
+}
+.dv-rec-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: #ff4444;
+  animation: dv-blink 1s infinite;
+}
+@keyframes dv-blink { 0%,100%{opacity:1} 50%{opacity:0} }
 </style>
 </head>
 <body>
@@ -2459,10 +2605,11 @@ button.danger:hover { background: #6a2a2a; }
     <button class="home-btn btn-tutorial" onclick="showTutorial()">❓ 遊び方</button>
     <button class="home-btn btn-rules"   onclick="openRuleValidator()">🔍 ルール検証</button>
     <button class="home-btn btn-test"    onclick="openTestBoardPanel()">🧪 テスト盤面</button>
+    <button class="home-btn btn-demo"    onclick="openDemoVideoPanel()">🎥 デモ動画</button>
   </div>
   <div id="home-record"></div>
   <div id="home-elo" style="font-size:13px;margin-top:4px;cursor:pointer;" onclick="showTrophyPanel()"></div>
-  <div class="home-version">v2.0.5 — フェーズ検証テスト盤面追加</div>
+  <div class="home-version">v2.0.6 — デモ動画生成機能追加（フェーズ検証）</div>
 </div>
 
 <!-- Tutorial Overlay -->
@@ -13882,6 +14029,445 @@ async function runTestScenario(scenarioId) {
   _testBoardRunning = false;
 }
 
+// ──────────────────────────────────────────────────
+// デモ動画生成機能（Demo Video Generator）
+// ──────────────────────────────────────────────────
+
+let _demoRecorder = null;
+let _demoChunks = [];
+let _demoVideoBlob = null;
+let _demoRecordCanvas = null;
+let _demoRecordCtx = null;
+let _demoRunning = false;
+let _demoCurrentStep = -1;
+let _demoSequenceId = null;
+let _demoFrameInterval = null;
+
+// デモ用のゲーム状態を初期化（実際の G に書き込む）
+function initDemoGameState(opts = {}) {
+  // G をデモ用に初期化（render() と動く最小構成）
+  const mkPlayer = (life = 20) => ({
+    life, deck: [], landDeck: [], hand: [], field: [],
+    lands: [], artifacts: [], graveyard: [], exile: [],
+    mana: {R:0,U:0,G:0,W:0,B:0,C:0},
+    mulliganUsed: false, attackers: [], blockers: {},
+  });
+  G = {
+    turn: opts.turn || 1,
+    activePlayer: opts.activePlayer !== undefined ? opts.activePlayer : 0,
+    firstPlayer: 0,
+    phase: opts.phase || 'main',
+    combatStep: null, priority: 0,
+    stack: [], _pendingCont: null, _pendingReason: '',
+    _awaitingModal: false, _pendingCrystalPay: false,
+    players: [mkPlayer(opts.p0life || 20), mkPlayer(opts.p1life || 20)],
+    nextInstanceId: 100,
+    firstTurn: false,
+    awaitingPriority: false, priorityFor: null, priorityContinuation: null, priorityReason: '',
+    chargingMode: false, chargeUsedThisTurn: false, targetMode: null,
+    attackMode: false, blockMode: false, selectedAttacker: null, selectedCard: null,
+    tempBuffs: [], permanentBuffs: [],
+    landPlacedThisTurn: 0, mustAttackCreatures: new Set(),
+    blockDrawActive: [false, false], arestiaBuffActive: false,
+    combatBlockersAlive: {}, cantAttackPermanent: new Set(),
+    kaizen_used_names: new Set(), kaizenBlockDraw: -1,
+    playerBlockMode: false, aiCurrentAttackers: [], playerBlockAssignments: {},
+    selectedBlockerToAssign: null, directlyAttackedCreatures: new Set(),
+    kakutouTargets: {}, _aiAttackQueue: [], drawCount: [0, 0],
+    discardedThisTurn: [false, false], chargedThisTurn: [],
+    combatArrows: [], _skipPriorityWindow: false, kaizenOCUsedThisTurn: false,
+  };
+
+  // 土地を数枚配置してマナを確保
+  const landIds = ['hito_heichi','wasure_heichi','shigen_heichi','kemono_heichi','serashia_miyako'];
+  for (let i = 0; i < (opts.lands || 3); i++) {
+    const lid = landIds[i % landIds.length];
+    G.players[0].lands.push({ instanceId: G.nextInstanceId++, cardId: lid, tapped: false, chargeCard: null });
+  }
+  G.players[0].mana.W = opts.lands || 3;
+}
+
+// デモ用クリーチャー追加
+function addDemoCreature(player, cardId, opts = {}) {
+  if (!G || !G.players) return null;
+  const inst = {
+    instanceId: G.nextInstanceId++, cardId,
+    tapped: opts.tapped || false, damage: 0,
+    sick: opts.sick !== undefined ? opts.sick : false,
+    entryTurn: opts.entryTurn !== undefined ? opts.entryTurn : G.turn,
+    tempPower: 0, tempToughness: 0, mustAttack: opts.mustAttack || false,
+  };
+  G.players[player].field.push(inst);
+  return inst;
+}
+
+// デモシーケンス定義
+const DEMO_SEQUENCES = {
+  'phase-order': {
+    name: 'フェーズ遷移確認',
+    description: 'untap → draw → main → combat → end の遷移を実際に確認する',
+    steps: [
+      { label: '初期盤面（ターン1 メイン）',       phase: 'main',   p0life: 20, p1life: 20, p0field: [] },
+      { label: 'クリーチャーを召喚',               phase: 'main',   p0hand: ['hitonokeisya'], addCard: true },
+      { label: 'フェーズ終了 → 戦闘フェーズ',      phase: 'combat', note: 'G.phase = combat' },
+      { label: '攻撃宣言',                         phase: 'combat', attack: true },
+      { label: '戦闘後 → メイン復帰 → ターン終了', phase: 'end',    note: 'G.phase = end' },
+    ]
+  },
+  'draw-phase': {
+    name: 'ドローフェーズ',
+    description: '先手1ターン目はドローなし。2ターン目以降はドロー1枚。土地2枚プレイ。',
+    steps: [
+      { label: 'ターン1 先手 - ドロー確認',  phase: 'draw', turn: 1,  note: '先手1T目はドローなし' },
+      { label: '土地1枚目を配置',            phase: 'main', land: 1 },
+      { label: '土地2枚目を配置',            phase: 'main', land: 2 },
+      { label: 'ターン2 - ドロー1枚',        phase: 'draw', turn: 2,  note: 'ドロー実行' },
+    ]
+  },
+  'priority-window': {
+    name: '優先権ウィンドウ',
+    description: 'AI がスペルを唱えた後、プレイヤーに Quick スペル対応の機会を提供',
+    steps: [
+      { label: 'AIのターン開始',             phase: 'main',   activePlayer: 1 },
+      { label: 'AI: クリーチャーをプレイ',   phase: 'main',   aiPlay: true },
+      { label: 'スタックに ETB 効果が積まれる', phase: 'main', stack: true },
+      { label: 'プレイヤーに優先権ウィンドウ表示', phase: 'main', priority: true },
+      { label: 'プレイヤー: パス → 解決',    phase: 'main',   resolve: true },
+    ]
+  },
+  'must-attack': {
+    name: '強制攻撃チェック',
+    description: 'mustAttack クリーチャーがいる場合、メイン終了時に攻撃強制',
+    steps: [
+      { label: '強制攻撃クリーチャーを配置', phase: 'main', mustAttack: true },
+      { label: 'メインフェーズ終了をクリック', phase: 'main', endPhaseCheck: true },
+      { label: '⚠️ 強制攻撃クリーチャーを検出', phase: 'combat', warning: true },
+      { label: '戦闘フェーズへ強制遷移',    phase: 'combat', forced: true },
+    ]
+  },
+};
+
+// デモパネル開閉
+function openDemoVideoPanel() {
+  const panel = document.getElementById('demo-video-panel');
+  if (!panel) return;
+  panel.classList.remove('hidden');
+  initDemoVideoPanel();
+}
+function closeDemoVideoPanel() {
+  if (_demoRunning) stopDemoRecording();
+  const panel = document.getElementById('demo-video-panel');
+  if (panel) panel.classList.add('hidden');
+}
+
+// デモパネル初期化
+function initDemoVideoPanel() {
+  const sidebar = document.getElementById('dv-sidebar');
+  if (!sidebar) return;
+  sidebar.innerHTML = '';
+  Object.entries(DEMO_SEQUENCES).forEach(([id, seq], idx) => {
+    const item = document.createElement('div');
+    item.className = 'dv-sidebar-item' + (idx === 0 ? ' active' : '');
+    item.textContent = seq.name;
+    item.dataset.seqId = id;
+    item.onclick = () => selectDemoSequence(id, item);
+    sidebar.appendChild(item);
+  });
+  selectDemoSequence('phase-order', sidebar.firstChild);
+}
+
+// シーケンス選択
+function selectDemoSequence(seqId, clickedEl) {
+  _demoSequenceId = seqId;
+  document.querySelectorAll('.dv-sidebar-item').forEach(el => el.classList.remove('active'));
+  if (clickedEl) clickedEl.classList.add('active');
+
+  const seq = DEMO_SEQUENCES[seqId];
+  const main = document.getElementById('dv-main');
+  main.innerHTML = `
+    <div class="dv-section">
+      <div class="dv-section-title">🎬 ${seq.name}</div>
+      <div class="dv-description">${seq.description}</div>
+    </div>
+
+    <div class="dv-section">
+      <div class="dv-section-title">📋 ステップ一覧</div>
+      <ul class="dv-step-list" id="dv-step-list">
+        ${seq.steps.map((s, i) => `
+          <li class="dv-step-item" id="dv-step-${i}">
+            <span class="dv-step-bullet">○</span>
+            <span>${s.label}</span>
+            ${s.note ? `<span style="color:#555;font-size:10px;margin-left:auto">(${s.note})</span>` : ''}
+          </li>`).join('')}
+      </ul>
+    </div>
+
+    <div class="dv-section">
+      <div class="dv-section-title">🔴 録画 &amp; 生成</div>
+      <div id="dv-rec-status"></div>
+      <div class="dv-progress"><div class="dv-progress-bar" id="dv-progress-bar"></div></div>
+      <div class="dv-status">
+        <div class="dv-status-label">状態</div>
+        <div class="dv-status-value" id="dv-status-text">待機中</div>
+      </div>
+      <div class="dv-button-group">
+        <button id="dv-btn-start" onclick="startDemoGeneration('${seqId}')">▶ デモ動画を生成</button>
+        <button id="dv-btn-stop" onclick="stopDemoRecording()" disabled>⏹ 停止</button>
+      </div>
+    </div>
+
+    <div class="dv-section">
+      <div class="dv-section-title">🎞 プレビュー</div>
+      <div class="dv-preview" id="dv-preview">
+        <div class="dv-preview-empty">動画生成後にここにプレビューが表示されます</div>
+      </div>
+      <div class="dv-button-group" id="dv-download-group" style="display:none;">
+        <button onclick="downloadDemoVideo()">⬇️ 動画をダウンロード (.webm)</button>
+      </div>
+    </div>
+  `;
+}
+
+// デモ動画生成メイン関数
+async function startDemoGeneration(seqId) {
+  if (_demoRunning) return;
+  _demoRunning = true;
+  _demoChunks = [];
+  _demoVideoBlob = null;
+  _demoCurrentStep = -1;
+  const seq = DEMO_SEQUENCES[seqId];
+  if (!seq) return;
+
+  document.getElementById('dv-btn-start').disabled = true;
+  document.getElementById('dv-btn-stop').disabled = false;
+  document.getElementById('dv-download-group').style.display = 'none';
+  document.getElementById('dv-preview').innerHTML = '<div class="dv-preview-empty">録画中...</div>';
+  setDemoStatus('録画中...');
+
+  // 録画用 canvas を作成（非表示）
+  _demoRecordCanvas = document.createElement('canvas');
+  _demoRecordCanvas.width = 960;
+  _demoRecordCanvas.height = 540;
+  _demoRecordCtx = _demoRecordCanvas.getContext('2d');
+
+  // MediaRecorder でキャンバスを録画
+  let mimeType = 'video/webm;codecs=vp8';
+  if (!MediaRecorder.isTypeSupported(mimeType)) mimeType = 'video/webm';
+  const stream = _demoRecordCanvas.captureStream(10); // 10fps
+  _demoRecorder = new MediaRecorder(stream, { mimeType, videoBitsPerSecond: 2500000 });
+  _demoRecorder.ondataavailable = e => { if (e.data && e.data.size > 0) _demoChunks.push(e.data); };
+  _demoRecorder.onstop = () => {
+    _demoVideoBlob = new Blob(_demoChunks, { type: mimeType });
+    showDemoPreview(_demoVideoBlob);
+  };
+  _demoRecorder.start(200);
+
+  // ホーム画面を隠してゲームボードを表示
+  const homeEl = document.getElementById('home-screen');
+  if (homeEl) homeEl.style.display = 'none';
+
+  // ゲーム状態を初期化
+  initDemoGameState({ turn: 1, activePlayer: 0, phase: 'main' });
+  render();
+
+  // ステップを順番に実行
+  for (let i = 0; i < seq.steps.length; i++) {
+    if (!_demoRunning) break;
+    _demoCurrentStep = i;
+    const step = seq.steps[i];
+
+    // UI ステップを更新
+    updateDemoStepUI(i, seq.steps.length);
+    setDemoStatus(`ステップ ${i + 1}/${seq.steps.length}: ${step.label}`);
+    setDemoProgress((i / seq.steps.length) * 100);
+
+    // 「録画中」インジケーター表示
+    document.getElementById('dv-rec-status').innerHTML =
+      `<div class="dv-rec-indicator"><span class="dv-rec-dot"></span> 録画中 (${i+1}/${seq.steps.length})</div>`;
+
+    // ゲーム状態を変更
+    applyDemoStep(step);
+    render();
+
+    // ステップ用のキャプチャを描画
+    await drawDemoFrame(step.label, i, seq.steps.length);
+    await sleep(2200); // 各ステップを2.2秒間録画
+  }
+
+  stopDemoRecording();
+}
+
+// ゲーム状態をステップに合わせて変更
+function applyDemoStep(step) {
+  if (!G) return;
+  if (step.phase) G.phase = step.phase;
+  if (step.turn !== undefined) G.turn = step.turn;
+  if (step.activePlayer !== undefined) G.activePlayer = step.activePlayer;
+  if (step.p0life !== undefined) G.players[0].life = step.p0life;
+  if (step.p1life !== undefined) G.players[1].life = step.p1life;
+
+  // カードを手札に追加
+  if (step.addCard && step.p0hand) {
+    step.p0hand.forEach(cid => G.players[0].hand.push(cid));
+  }
+
+  // クリーチャーを配置
+  if (step.mustAttack) {
+    addDemoCreature(0, 'hitonokeisya', { mustAttack: true, sick: false });
+    G.mustAttackCreatures.add(G.nextInstanceId - 1);
+  }
+
+  // AIのクリーチャープレイをシミュレート
+  if (step.aiPlay) {
+    addDemoCreature(1, 'hitonokeisya', { sick: true });
+  }
+
+  // スタックに効果を追加
+  if (step.stack) {
+    G.stack.push({ type: 'etb', desc: 'クリーチャーETB効果' });
+  }
+
+  // 優先権ウィンドウ
+  if (step.priority) {
+    G.awaitingPriority = true;
+    G.priorityFor = 0;
+    G.priorityReason = 'AIのプレイに対応';
+  } else if (!step.priority && G.awaitingPriority) {
+    G.awaitingPriority = false;
+    G.stack = [];
+  }
+
+  // 強制攻撃警告
+  if (step.warning || step.forced) {
+    G.phase = 'combat';
+    G.attackMode = true;
+  }
+}
+
+// キャンバスにフレームを描画（html2canvas + テキストオーバーレイ）
+async function drawDemoFrame(stepLabel, stepIdx, totalSteps) {
+  const ctx = _demoRecordCtx;
+  const W = _demoRecordCanvas.width;
+  const H = _demoRecordCanvas.height;
+
+  try {
+    // ゲームボード要素をキャプチャ
+    const boardEl = document.getElementById('board');
+    if (boardEl && typeof html2canvas !== 'undefined') {
+      const captured = await html2canvas(boardEl, {
+        useCORS: true, allowTaint: true, scale: 0.75,
+        width: boardEl.offsetWidth, height: boardEl.offsetHeight,
+        logging: false
+      });
+      ctx.drawImage(captured, 0, 0, W, H);
+    } else {
+      // フォールバック: 黒背景
+      ctx.fillStyle = '#0a0a14';
+      ctx.fillRect(0, 0, W, H);
+    }
+  } catch (e) {
+    ctx.fillStyle = '#0a0a14';
+    ctx.fillRect(0, 0, W, H);
+  }
+
+  // テキストオーバーレイ（ステップラベル）
+  ctx.fillStyle = 'rgba(0,0,0,0.55)';
+  ctx.fillRect(0, H - 80, W, 80);
+
+  ctx.fillStyle = '#ffffff';
+  ctx.font = 'bold 16px "Noto Sans JP", sans-serif';
+  ctx.textAlign = 'left';
+  ctx.fillText(stepLabel, 16, H - 50);
+
+  ctx.fillStyle = '#aaaacc';
+  ctx.font = '12px "Noto Sans JP", sans-serif';
+  ctx.fillText(`STEP ${stepIdx + 1} / ${totalSteps}`, 16, H - 28);
+
+  // プログレスバー
+  ctx.fillStyle = '#222244';
+  ctx.fillRect(0, H - 6, W, 6);
+  ctx.fillStyle = '#6060ff';
+  ctx.fillRect(0, H - 6, W * ((stepIdx + 1) / totalSteps), 6);
+
+  ctx.textAlign = 'start';
+}
+
+// 録画停止
+function stopDemoRecording() {
+  _demoRunning = false;
+  if (_demoFrameInterval) { clearInterval(_demoFrameInterval); _demoFrameInterval = null; }
+  if (_demoRecorder && _demoRecorder.state === 'recording') _demoRecorder.stop();
+
+  // ホーム画面を戻す
+  const homeEl = document.getElementById('home-screen');
+  if (homeEl) homeEl.style.display = '';
+
+  setDemoStatus('生成完了');
+  setDemoProgress(100);
+  document.getElementById('dv-rec-status').innerHTML = '';
+  document.getElementById('dv-btn-start').disabled = false;
+  document.getElementById('dv-btn-stop').disabled = true;
+  updateDemoStepUI(-1, 0); // 全ステップを done に
+}
+
+// プレビュー表示
+function showDemoPreview(blob) {
+  const previewEl = document.getElementById('dv-preview');
+  const url = URL.createObjectURL(blob);
+  previewEl.innerHTML = `
+    <video controls autoplay loop style="max-width:100%;max-height:360px;border-radius:4px;">
+      <source src="${url}" type="${blob.type}">
+    </video>`;
+  const dlGroup = document.getElementById('dv-download-group');
+  if (dlGroup) dlGroup.style.display = 'flex';
+}
+
+// ダウンロード
+function downloadDemoVideo() {
+  if (!_demoVideoBlob) return;
+  const url = URL.createObjectURL(_demoVideoBlob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `dcg_demo_${_demoSequenceId || 'video'}_${Date.now()}.webm`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
+}
+
+// ヘルパー: UI 更新
+function setDemoStatus(text) {
+  const el = document.getElementById('dv-status-text');
+  if (el) el.textContent = text;
+}
+function setDemoProgress(pct) {
+  const el = document.getElementById('dv-progress-bar');
+  if (el) el.style.width = `${Math.min(100, pct)}%`;
+}
+function updateDemoStepUI(activeIdx, total) {
+  const seq = DEMO_SEQUENCES[_demoSequenceId];
+  if (!seq) return;
+  seq.steps.forEach((_, i) => {
+    const el = document.getElementById(`dv-step-${i}`);
+    if (!el) return;
+    const bullet = el.querySelector('.dv-step-bullet');
+    if (activeIdx < 0) {
+      el.className = 'dv-step-item done';
+      if (bullet) bullet.textContent = '✓';
+    } else if (i < activeIdx) {
+      el.className = 'dv-step-item done';
+      if (bullet) bullet.textContent = '✓';
+    } else if (i === activeIdx) {
+      el.className = 'dv-step-item active';
+      if (bullet) bullet.textContent = '▶';
+    } else {
+      el.className = 'dv-step-item';
+      if (bullet) bullet.textContent = '○';
+    }
+  });
+}
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
 </script>
 
 <!-- ルール検証パネル（HTML） -->
@@ -13893,6 +14479,18 @@ async function runTestScenario(scenarioId) {
   <div class="rv-container">
     <div class="rv-sidebar" id="rv-sidebar"></div>
     <div class="rv-main" id="rv-main"></div>
+  </div>
+</div>
+
+<!-- デモ動画パネル（HTML） -->
+<div id="demo-video-panel" class="hidden">
+  <div class="dv-header">
+    <span>🎥 デモ動画生成（仕様検証）</span>
+    <button onclick="closeDemoVideoPanel()">✕</button>
+  </div>
+  <div class="dv-container">
+    <div class="dv-sidebar" id="dv-sidebar"></div>
+    <div class="dv-main" id="dv-main"></div>
   </div>
 </div>
 
