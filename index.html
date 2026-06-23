@@ -2609,7 +2609,7 @@ button.danger:hover { background: #6a2a2a; }
   </div>
   <div id="home-record"></div>
   <div id="home-elo" style="font-size:13px;margin-top:4px;cursor:pointer;" onclick="showTrophyPanel()"></div>
-  <div class="home-version">v2.0.9</div>
+  <div class="home-version">v2.1.0</div>
 </div>
 
 <!-- Tutorial Overlay -->
@@ -14073,45 +14073,253 @@ function addDemoCreature(player, cardId, opts = {}) {
 const DEMO_SEQUENCES = {
   'phase-order': {
     name: 'フェーズ遷移確認',
-    description: 'untap → draw → main（カードプレイ＆攻撃）→ end の遷移を確認する',
+    description: 'untap → draw → main（カードプレイ＆攻撃）→ end の遷移を実際に実行',
     steps: [
-      { label: '初期盤面（ターン1 メイン）',         phase: 'main', p0life: 20, p1life: 20, p0field: [] },
-      { label: 'クリーチャーを召喚',                 phase: 'main', p0hand: ['hitonokeisya'], addCard: true },
-      { label: 'メインフェーズ中に攻撃宣言',         phase: 'main', attack: true, note: '攻撃もメインで行う' },
-      { label: '戦闘解決 → ターン終了',             phase: 'end',  note: 'G.phase = end' },
+      {
+        label: '初期盤面セットアップ',
+        execute: async (G) => {
+          setupValidatorBoard();
+          render();
+          log('【デモ】初期盤面セットアップ完了');
+          await sleep(800);
+        }
+      },
+      {
+        label: 'ターン1 メインフェーズ開始',
+        execute: async (G) => {
+          log('【デモ】ターン1 メインフェーズ開始');
+          render();
+          await sleep(600);
+        }
+      },
+      {
+        label: 'クリーチャーを手札に追加',
+        execute: async (G) => {
+          G.players[0].hand.push({ cardId: 'hitonokeisya', instanceId: G.nextInstanceId++ });
+          log('【デモ】「ひとのけいしゃ」を手札に追加');
+          render();
+          await sleep(600);
+        }
+      },
+      {
+        label: 'カードをプレイ（メインフェーズ）',
+        execute: async (G) => {
+          const card = G.players[0].hand[0];
+          if (card) {
+            playCardFromHand(0, 0);
+            log('【デモ】カード「ひとのけいしゃ」をプレイ');
+            render();
+            await sleep(1200);
+          }
+        }
+      },
+      {
+        label: 'クリーチャーで攻撃宣言',
+        execute: async (G) => {
+          const creature = G.players[0].field.find(c => CARD_DB[c.cardId].type === 'creature');
+          if (creature) {
+            startSingleAttack(0, creature.instanceId);
+            log('【デモ】クリーチャーで攻撃宣言');
+            render();
+            await sleep(1500);
+          }
+        }
+      },
+      {
+        label: 'ターン終了（メインフェーズ完了）',
+        execute: async (G) => {
+          log('【デモ】ターン終了処理');
+          endTurn();
+          render();
+          await sleep(1000);
+        }
+      }
     ]
   },
   'draw-phase': {
-    name: 'ドローフェーズ',
-    description: '先手1ターン目はドローなし。2ターン目以降はドロー1枚。土地2枚プレイ。',
+    name: 'ドローフェーズ動作',
+    description: '先手1ターン目はドローなし。2ターン目以降はドロー実行',
     steps: [
-      { label: 'ターン1 先手 - ドロー確認',  phase: 'draw', turn: 1,  note: '先手1T目はドローなし' },
-      { label: '土地1枚目を配置',            phase: 'main', land: 1 },
-      { label: '土地2枚目を配置',            phase: 'main', land: 2 },
-      { label: 'ターン2 - ドロー1枚',        phase: 'draw', turn: 2,  note: 'ドロー実行' },
+      {
+        label: 'ターン1 先手 - ドローなし確認',
+        execute: async (G) => {
+          setupValidatorBoard();
+          G.turn = 1;
+          G.activePlayer = 0;
+          G.firstTurn = true;
+          G.phase = 'draw';
+          log('【デモ】ターン1開始（先手ドローなし）');
+          render();
+          await sleep(800);
+        }
+      },
+      {
+        label: 'メインフェーズへ遷移',
+        execute: async (G) => {
+          G.phase = 'main';
+          log('【デモ】メインフェーズ開始');
+          render();
+          await sleep(600);
+        }
+      },
+      {
+        label: 'ターン終了',
+        execute: async (G) => {
+          log('【デモ】ターン1終了');
+          endTurn();
+          render();
+          await sleep(1000);
+        }
+      },
+      {
+        label: 'ターン2 開始 - ドロー実行',
+        execute: async (G) => {
+          if (G.players[0].landDeck.length > 0) {
+            const drawnCard = G.players[0].landDeck.pop();
+            G.players[0].hand.push(drawnCard);
+            log('【デモ】ドロー1枚実行');
+            render();
+            await sleep(800);
+          }
+        }
+      },
+      {
+        label: 'メインフェーズで土地をプレイ',
+        execute: async (G) => {
+          G.phase = 'main';
+          const landInHand = G.players[0].hand.find(c => CARD_DB[c.cardId].type === 'land');
+          if (landInHand) {
+            playCardFromHand(0, G.players[0].hand.indexOf(landInHand));
+            log('【デモ】土地をプレイ');
+            render();
+            await sleep(1000);
+          }
+        }
+      }
+    ]
+  },
+  'attack-block': {
+    name: '攻撃とダメージ計算',
+    description: '攻撃宣言からダメージ計算まで実行',
+    steps: [
+      {
+        label: '盤面セットアップ',
+        execute: async (G) => {
+          setupValidatorBoard();
+          // P0に攻撃可能なクリーチャー配置
+          G.players[0].field.push({
+            cardId: 'hitonokeisya',
+            instanceId: G.nextInstanceId++,
+            damage: 0,
+            tapped: false,
+            counters: {},
+            buffs: []
+          });
+          G.phase = 'main';
+          G.activePlayer = 0;
+          log('【デモ】攻撃・ダメージ盤面セットアップ完了');
+          render();
+          await sleep(1000);
+        }
+      },
+      {
+        label: 'P0: クリーチャーで攻撃宣言',
+        execute: async (G) => {
+          const attacker = G.players[0].field[0];
+          if (attacker) {
+            startSingleAttack(0, attacker.instanceId);
+            log('【デモ】攻撃宣言: 1体の攻撃クリーチャー');
+            render();
+            await sleep(1500);
+          }
+        }
+      },
+      {
+        label: 'P1: ブロック宣言なし',
+        execute: async (G) => {
+          log('【デモ】P1がブロック宣言をスキップ');
+          G.blockMode = false;
+          render();
+          await sleep(800);
+        }
+      },
+      {
+        label: 'ダメージ計算・生命点減少',
+        execute: async (G) => {
+          if (G.players[0].attackers.length > 0) {
+            const atkId = G.players[0].attackers[0];
+            resolveSingleCombat(0, atkId);
+            log('【デモ】戦闘ダメージ計算: P1が被ダメージ');
+            render();
+            await sleep(1200);
+          }
+        }
+      }
     ]
   },
   'priority-window': {
     name: '優先権ウィンドウ',
-    description: 'AI がスペルを唱えた後、プレイヤーに Quick スペル対応の機会を提供',
+    description: 'AI がスペル唱えた後、プレイヤーに Quick 対応の機会',
     steps: [
-      { label: 'AIのターン開始',             phase: 'main',   activePlayer: 1 },
-      { label: 'AI: クリーチャーをプレイ',   phase: 'main',   aiPlay: true },
-      { label: 'スタックに ETB 効果が積まれる', phase: 'main', stack: true },
-      { label: 'プレイヤーに優先権ウィンドウ表示', phase: 'main', priority: true },
-      { label: 'プレイヤー: パス → 解決',    phase: 'main',   resolve: true },
+      {
+        label: 'AI ターン セットアップ',
+        execute: async (G) => {
+          setupValidatorBoard();
+          G.activePlayer = 1;
+          G.phase = 'main';
+          log('【デモ】AI ターン開始');
+          render();
+          await sleep(800);
+        }
+      },
+      {
+        label: 'AI: スペルをプレイ',
+        execute: async (G) => {
+          // AI手札にスペル追加
+          G.players[1].hand.push({ cardId: 'soulsiphon', instanceId: G.nextInstanceId++ });
+          const cardIdx = G.players[1].hand.length - 1;
+          playCardFromHand(1, cardIdx);
+          log('【デモ】AI がスペル「ソウルサイフォン」をプレイ');
+          render();
+          await sleep(1200);
+        }
+      },
+      {
+        label: '優先権ウィンドウ: プレイヤーターン',
+        execute: async (G) => {
+          if (G.stack.length > 0) {
+            log('【デモ】プレイヤーに優先権ウィンドウ表示（Quick対応可能）');
+            render();
+            await sleep(2000);
+          }
+        }
+      },
+      {
+        label: 'プレイヤー: Quick対応スペル唱える',
+        execute: async (G) => {
+          if (G.awaitingPriority) {
+            G.players[0].hand.push({ cardId: 'junigeki', instanceId: G.nextInstanceId++ });
+            playCardFromHand(0, 0);
+            log('【デモ】プレイヤーが Quick スペルで対応');
+            render();
+            await sleep(1200);
+          }
+        }
+      },
+      {
+        label: 'スタック解決',
+        execute: async (G) => {
+          while (G.stack.length > 0) {
+            const effect = G.stack.pop();
+            if (effect.resolve) await effect.resolve(G);
+            log(`【デモ】${effect.name} を解決`);
+            render();
+            await sleep(600);
+          }
+        }
+      }
     ]
-  },
-  'must-attack': {
-    name: '強制攻撃チェック',
-    description: 'mustAttack クリーチャーがいる場合、メイン終了時に攻撃強制',
-    steps: [
-      { label: '強制攻撃クリーチャーを配置', phase: 'main', mustAttack: true },
-      { label: 'メインフェーズ終了をクリック', phase: 'main', endPhaseCheck: true },
-      { label: '⚠️ 強制攻撃クリーチャーを検出', phase: 'main', warning: true },
-      { label: 'メイン内で攻撃強制（同フェーズ）', phase: 'main', forced: true },
-    ]
-  },
+  }
 };
 
 // デモパネル開閉
@@ -14252,13 +14460,18 @@ async function startDemoGeneration(seqId) {
     document.getElementById('dv-rec-status').innerHTML =
       `<div class="dv-rec-indicator"><span class="dv-rec-dot"></span> 録画中 (${i+1}/${seq.steps.length})</div>`;
 
-    // ゲーム状態を変更
-    applyDemoStep(step);
-    render();
+    // step.execute 関数が存在する場合は実行（新形式）
+    if (step.execute && typeof step.execute === 'function') {
+      await step.execute(G);
+    } else {
+      // 旧形式: applyDemoStep で状態変更
+      applyDemoStep(step);
+      render();
+    }
 
     // ステップ用のキャプチャを描画
     await drawDemoFrame(step.label, i, seq.steps.length);
-    await sleep(2200); // 各ステップを2.2秒間録画
+    await sleep(1500); // 各ステップを1.5秒間録画
   }
 
   stopDemoRecording();
