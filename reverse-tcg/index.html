@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>オープン／リバース TCG</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+:root{
+  --bg:#0a0a14; --panel:#12121e; --border:#2a2a4a; --text:#c8c8e8;
+  --accent:#6a6aff; --red:#cc3344; --green:#33aa66; --gold:#ccaa33;
+  --danger:#ff4455; --dim:#666;
+}
+html,body{height:100%;}
+body{
+  background:
+    radial-gradient(ellipse 100% 40% at 50% 0%, rgba(90,15,25,0.45) 0%, transparent 65%),
+    radial-gradient(ellipse 100% 40% at 50% 100%, rgba(15,55,30,0.45) 0%, transparent 65%),
+    linear-gradient(180deg,#080612 0%,#070a08 100%);
+  color:var(--text); font-family:'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif;
+  font-size:13px; display:flex; flex-direction:column; height:100vh; overflow:hidden;
+}
+header{
+  padding:6px 12px; border-bottom:1px solid var(--border); display:flex;
+  align-items:center; gap:12px; background:rgba(0,0,0,0.3);
+}
+header h1{font-size:15px; font-weight:700; letter-spacing:1px; color:#e8e8ff;}
+header .sub{font-size:11px; color:var(--dim);}
+#main{flex:1; display:flex; min-height:0;}
+#table{flex:1; display:flex; flex-direction:column; min-width:0; padding:6px;}
+#side{width:280px; border-left:1px solid var(--border); display:flex; flex-direction:column; background:rgba(0,0,0,0.25);}
+
+/* プレイヤー領域 */
+.player-area{flex:1; display:flex; flex-direction:column; min-height:0; padding:4px;}
+.player-area.opp{ }
+.pa-info{display:flex; align-items:center; gap:10px; padding:3px 6px; flex-wrap:wrap;}
+.pa-name{font-weight:700; font-size:13px;}
+.opp .pa-name{color:#ff9aa8;} .me .pa-name{color:#9affc2;}
+.stat{display:flex; align-items:center; gap:3px; font-size:11px; color:#aab;}
+.stat b{color:#fff; font-size:13px;}
+.count-badge{color:var(--gold);} .count-badge b{color:var(--gold);}
+
+/* ダメージゾーン */
+.dmg-zone{display:flex; gap:3px;}
+.dmg-slot{width:16px; height:22px; border:1px solid var(--border); border-radius:2px; background:#0c0c16;}
+.dmg-slot.filled{background:linear-gradient(180deg,#aa2233,#661122); border-color:#cc4455;}
+
+/* フィールド */
+.field{flex:1; display:flex; align-items:center; gap:6px; padding:6px; min-height:64px;
+  border:1px dashed rgba(120,120,170,0.18); border-radius:6px; margin:2px 0; flex-wrap:wrap; overflow:auto;}
+.field.me-field{background:rgba(40,90,55,0.10);}
+.field.opp-field{background:rgba(90,40,50,0.10);}
+
+/* ユニット/カード */
+.unit,.card{
+  width:54px; height:74px; border-radius:5px; border:1px solid var(--border);
+  background:linear-gradient(160deg,#20203a,#161628); display:flex; flex-direction:column;
+  justify-content:space-between; padding:3px; position:relative; flex:0 0 auto;
+}
+.unit .nm,.card .nm{font-size:9.5px; line-height:1.1; color:#dde; word-break:break-all;}
+.unit .pw,.card .pw{align-self:flex-end; font-size:15px; font-weight:800; color:#fff;
+  text-shadow:0 1px 2px #000;}
+.unit .tg,.card .tg{position:absolute; top:2px; right:3px; font-size:11px;}
+.unit.tapped{transform:rotate(8deg); opacity:0.6; border-color:#553;}
+.unit.sick{filter:grayscale(0.5) brightness(0.8);}
+.unit.sick::after{content:'💤'; position:absolute; bottom:1px; left:2px; font-size:9px;}
+.card.rev-face{border-color:var(--accent); box-shadow:0 0 6px rgba(106,106,255,0.3);}
+.card .rcost{position:absolute; bottom:2px; left:3px; font-size:9px; color:var(--accent);}
+
+/* 手札 */
+.hand{display:flex; gap:5px; padding:6px 4px; overflow-x:auto; min-height:84px; align-items:center;}
+.hand .card{width:58px; height:80px;}
+.hand-label{font-size:10px; color:var(--dim); padding:0 4px;}
+
+/* 中央バー */
+#center{padding:4px 8px;}
+#bar{min-height:40px; display:flex; flex-wrap:wrap; gap:6px; align-items:center; padding:4px;}
+.ask-text{width:100%; font-size:12px; color:#ffe; padding:2px 0; font-weight:600;}
+.ask-btn{
+  background:linear-gradient(180deg,#2a2a52,#1a1a36); color:#dde; border:1px solid var(--accent);
+  border-radius:5px; padding:5px 10px; font-size:12px; cursor:pointer; font-family:inherit;
+}
+.ask-btn:hover{background:linear-gradient(180deg,#3a3a72,#22224a);}
+.ask-btn.pass{border-color:var(--dim); color:#99a;}
+#turn-flag{font-size:11px; color:var(--gold); padding:2px 6px;}
+
+/* ログ */
+#side h2{font-size:11px; color:#99a; padding:6px 8px; border-bottom:1px solid var(--border); letter-spacing:1px;}
+#log{flex:1; overflow-y:auto; padding:4px 8px; font-size:11px; line-height:1.5;}
+.log-line{padding:1px 0; border-bottom:1px solid rgba(255,255,255,0.03); color:#bbc;}
+.log-line.hl{color:#ffd; font-weight:600;}
+.log-line.dmg{color:#ff8090;}
+.log-line.sys{color:#88ffaa;}
+
+/* 勝敗オーバーレイ */
+#overlay{
+  position:fixed; inset:0; background:rgba(0,0,0,0.8); display:none;
+  align-items:center; justify-content:center; flex-direction:column; gap:16px; z-index:50;
+}
+#overlay h2{font-size:34px; letter-spacing:3px;}
+#overlay button{
+  background:linear-gradient(180deg,#3a3a72,#22224a); color:#fff; border:1px solid var(--accent);
+  border-radius:6px; padding:10px 22px; font-size:15px; cursor:pointer; font-family:inherit;
+}
+.help{font-size:10.5px; color:var(--dim); padding:0 8px 6px;}
+@media (max-width:760px){ #side{display:none;} .unit,.card{width:46px;height:64px;} }
+</style>
+</head>
+<body>
+<header>
+  <h1>オープン／リバース TCG</h1>
+  <span class="sub">vs AI ・ 仕様 v1.0</span>
+  <span id="turn-flag"></span>
+</header>
+<div id="main">
+  <div id="table">
+    <!-- 相手 -->
+    <div class="player-area opp">
+      <div class="pa-info">
+        <span class="pa-name" id="opp-name">AI</span>
+        <span class="stat">山<b id="opp-deck">0</b></span>
+        <span class="stat">手<b id="opp-hand">0</b></span>
+        <span class="stat">ボチ<b id="opp-gy">0</b></span>
+        <span class="stat count-badge">カウント<b id="opp-count">0</b></span>
+        <span class="stat">ダメージ</span>
+        <span class="dmg-zone" id="opp-dmg"></span>
+      </div>
+      <div class="field opp-field" id="opp-field"></div>
+    </div>
+    <!-- 中央 -->
+    <div id="center">
+      <div id="bar"></div>
+    </div>
+    <!-- 自分 -->
+    <div class="player-area me">
+      <div class="field me-field" id="me-field"></div>
+      <div class="pa-info">
+        <span class="pa-name" id="me-name">あなた</span>
+        <span class="stat">山<b id="me-deck">0</b></span>
+        <span class="stat">ボチ<b id="me-gy">0</b></span>
+        <span class="stat count-badge">カウント<b id="me-count">0</b></span>
+        <span class="stat">ダメージ</span>
+        <span class="dmg-zone" id="me-dmg"></span>
+      </div>
+      <div class="hand-label">手札（オープン面表示・上限5）</div>
+      <div class="hand" id="me-hand"></div>
+    </div>
+  </div>
+  <div id="side">
+    <h2>ゲームログ</h2>
+    <div id="log"></div>
+    <div class="help">⚔強化 ➕ドロー 🛡キャンセル ➰カウント 💥クリティカル<br>
+      オープンコール=コスト0で召喚(カウント+1)／リバースコール=相手の行動にカウントを払って割り込み。</div>
+  </div>
+</div>
+<div id="overlay"><h2 id="ov-text"></h2><button onclick="newGame()">もう一度</button></div>
+
+<script>
+"use strict";
+/* ============================================================
+   オープン／リバース TCG — コア実装 (vs AI)
+   仕様 v1.0 準拠: 両面カード / オープンカウント / トリガーチェック /
+   ダメージゾーン / リバースコール割り込み / 5ダメージ or デッキアウト敗北
+   ============================================================ */
+
+// --- トリガー定義 ---
+const TRIGGERS = {
+  sword:{icon:'⚔',name:'強化'}, draw:{icon:'➕',name:'ドロー'},
+  guard:{icon:'🛡',name:'キャンセル'}, count:{icon:'➰',name:'カウント'},
+  crit:{icon:'💥',name:'クリティカル'}
+};
+
+// --- カードテンプレート ---
+// open.power: パワー / open.effect: 召喚時効果 / reverse: {cost(カウント), effect}
+// trigger: トリガーアイコン種別(またはnull)
+const CARDS = {
+  // トリガー付き(各トリガー1種=4枚で構築 → 同種4枚制限を満たす)
+  t_sword: {name:'剣闘士',  trigger:'sword', open:{power:4},              reverse:{cost:2,effect:'minus2'}},
+  t_draw:  {name:'伝令',    trigger:'draw',  open:{power:2,effect:'draw1'},reverse:{cost:2,effect:'bounceAtk'}},
+  t_guard: {name:'盾衛兵',  trigger:'guard', open:{power:3},              reverse:{cost:2,effect:'minus2'}},
+  t_count: {name:'魔導士',  trigger:'count', open:{power:2,effect:'count1'},reverse:{cost:1,effect:'bounceOpen'}},
+  t_crit:  {name:'襲撃兵',  trigger:'crit',  open:{power:3},              reverse:{cost:2,effect:'minus2'}},
+  // 無印(各4枚)
+  p_heavy:   {name:'重装兵',trigger:null, open:{power:5},              reverse:{cost:3,effect:'minus2'}},
+  p_scout:   {name:'斥候',  trigger:null, open:{power:1,effect:'draw1'},reverse:{cost:2,effect:'cancelOpen'}},
+  p_merc:    {name:'傭兵',  trigger:null, open:{power:3},              reverse:{cost:2,effect:'minus2'}},
+  p_guardian:{name:'守護者',trigger:null, open:{power:4},              reverse:{cost:3,effect:'bounceAtk'}},
+  p_rush:    {name:'突撃兵',trigger:null, open:{power:2},              reverse:{cost:1,effect:'bounceOpen'}}
+};
+const DECK_LIST = ['t_sword','t_draw','t_guard','t_count','t_crit',
+                   'p_heavy','p_scout','p_merc','p_guardian','p_rush']; // ×4 = 40枚
+
+let G, uid, _resolver;
+
+// --- ユーティリティ ---
+function shuffle(a){ for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
+function buildDeck(){ const d=[]; DECK_LIST.forEach(id=>{ for(let k=0;k<4;k++) d.push(id); }); return shuffle(d); }
+function other(p){ return G.players[ G.players[0]===p ? 1 : 0 ]; }
+function power(u){ return CARDS[u.cardId].open.power + (u._buff||0); }
+function onField(p,inst){ return p.field.includes(inst); }
+function isFirst(p){ return G.players[G.first]===p; }
+function newPlayer(name,isAI){
+  return {name,isAI, deck:buildDeck(), hand:[], field:[], gy:[], damage:[], count:0, turnNum:0, placed:0};
+}
+
+// --- ログ ---
+function log(msg,cls){
+  const el=document.getElementById('log');
+  const d=document.createElement('div'); d.className='log-line'+(cls?' '+cls:''); d.textContent=msg;
+  el.appendChild(d); el.scrollTop=el.scrollHeight;
+  while(el.children.length>120) el.removeChild(el.firstChild);
+}
+
+// --- 行動選択(プロミス) ---
+function ask(text, options){
+  return new Promise(res=>{
+    _resolver=res;
+    const bar=document.getElementById('bar'); bar.innerHTML='';
+    const t=document.createElement('div'); t.className='ask-text'; t.textContent=text; bar.appendChild(t);
+    options.forEach(o=>{
+      const b=document.createElement('button');
+      b.className='ask-btn'+(o.pass?' pass':''); b.textContent=o.label;
+      b.onclick=()=>{ _resolver=null; bar.innerHTML=''; res(o.value); };
+      bar.appendChild(b);
+    });
+  });
+}
+function barMsg(text){ const bar=document.getElementById('bar'); bar.innerHTML='<div class="ask-text">'+text+'</div>'; }
+
+// ============================================================
+//  ゲーム進行
+// ============================================================
+function init(){
+  uid=0;
+  G={ players:[ newPlayer('あなた',false), newPlayer('AI',true) ], active:0, first:0, turn:0, phase:'', over:false, winner:null };
+  G.first = Math.random()<0.5 ? 0 : 1;
+  G.active = G.first;
+  document.getElementById('opp-name').textContent='AI';
+  document.getElementById('me-name').textContent='あなた';
+  // 初期手札4枚
+  G.players.forEach(p=>{ for(let i=0;i<4;i++) p.hand.push(p.deck.shift()); });
+  log('=== ゲーム開始 ===','sys');
+  log((G.first===0?'あなた':'AI')+' の先攻（先攻1ターン目は攻撃なし）','sys');
+  render();
+}
+
+async function gameLoop(){
+  while(!G.over){
+    const p=G.players[G.active];
+    await startPhase(p);
+    if(G.over) break;
+    await mainAndAttack(p);
+    if(G.over) break;
+    endTurn(p);
+  }
+  showWinner();
+}
+
+async function startPhase(p){
+  p.turnNum++; p.placed=0;
+  p.field.forEach(u=>{ u.tapped=false; u.sick=false; u._buff=0; });
+  G.phase='draw';
+  log(`── ${p.name} のターン${p.turnNum} ──`,'hl');
+  document.getElementById('turn-flag').textContent=`${p.name} ターン${p.turnNum}`;
+  render();
+  await drawCard(p);          // 先攻1ターン目もドローする(仕様)
+  render();
+}
+
+function endTurn(p){
+  G.active = 1 - G.active;
+  G.turn++;
+}
+
+async function mainAndAttack(p){
+  if(p.isAI){ await aiPlay(p); return; }
+  // 人間の手番: 行動メニュー
+  while(!G.over){
+    const opts=[];
+    if(p.placed<p.turnNum && p.hand.length>0) opts.push({label:`オープンコール (${p.placed}/${p.turnNum})`,value:'open'});
+    if(canAttack(p) && p.field.some(u=>!u.tapped&&!u.sick)) opts.push({label:'攻撃する',value:'attack'});
+    opts.push({label:'ターン終了',value:'end',pass:true});
+    const a=await ask('あなたの手番：行動を選択', opts);
+    if(a==='end') break;
+    if(a==='open') await doHumanOpen(p);
+    else if(a==='attack') await doHumanAttack(p);
+  }
+}
+function canAttack(p){ return !(isFirst(p) && p.turnNum===1); }
+
+// --- ドロー & 手札上限(常時処理) ---
+async function drawCard(p){
+  if(p.deck.length===0){ lose(p,'デッキアウト'); return; }
+  const c=p.deck.shift(); p.hand.push(c);
+  log(`${p.name} ドロー`);
+  await enforceHandLimit(p);
+}
+async function enforceHandLimit(p){
+  while(p.hand.length>5){
+    let idx;
+    if(p.isAI){ idx=lowestHandIdx(p); }
+    else {
+      const opts=p.hand.map((c,i)=>({label:`${CARDS[c].name}(P${CARDS[c].open.power})`,value:i}));
+      idx=await ask('手札が上限(5)を超過。ボチへ送るカードを選択', opts);
+    }
+    const c=p.hand.splice(idx,1)[0]; p.gy.push(c);
+    log(`${p.name} 手札超過 → ${CARDS[c].name} をボチへ`);
+    render();
+  }
+}
+function lowestHandIdx(p){
+  let bi=0,bv=Infinity;
+  p.hand.forEach((c,i)=>{ const v=CARDS[c].open.power; if(v<bv){bv=v;bi=i;} });
+  return bi;
+}
+
+// --- オープンコール ---
+async function openCall(p, handIdx){
+  const cardId=p.hand.splice(handIdx,1)[0];
+  const inst={instId:++uid, cardId, tapped:false, sick:true, _buff:0};
+  p.field.push(inst); p.count++; p.placed++;
+  const def=CARDS[cardId];
+  log(`${p.name} オープンコール: ${def.name}（カウント+1 → ${p.count}）`,'hl');
+  if(def.open.effect==='draw1'){ log(`　召喚効果: ドロー`); await drawCard(p); }
+  if(def.open.effect==='count1'){ p.count++; log(`　召喚効果: カウント+1 → ${p.count}`); }
+  render();
+  // 相手のリバースコール(オープン時)
+  const ctx={type:'open', calledInst:inst, owner:p, cancelled:false};
+  await reverseChain(other(p), ctx, 'open');
+  render();
+}
+async function doHumanOpen(p){
+  const opts=p.hand.map((c,i)=>({label:`${CARDS[c].name}(P${CARDS[c].open.power}${CARDS[c].trigger?' '+TRIGGERS[CARDS[c].trigger].icon:''})`,value:i}));
+  opts.push({label:'戻る',value:-1,pass:true});
+  const i=await ask('オープンコールするカードを選択', opts);
+  if(i<0) return;
+  await openCall(p,i);
+}
+
+// --- 攻撃 & 戦闘 ---
+async function doHumanAttack(p){
+  const atks=p.field.filter(u=>!u.tapped&&!u.sick);
+  const opts=atks.map(u=>({label:`${CARDS[u.cardId].name}(P${power(u)})`,value:u.instId}));
+  opts.push({label:'戻る',value:-1,pass:true});
+  const v=await ask('攻撃するユニットを選択', opts);
+  if(v<0) return;
+  await resolveAttack(p, atks.find(u=>u.instId===v));
+}
+
+async function resolveAttack(p, atk){
+  if(!atk || !onField(p,atk)) return;
+  const opp=other(p);
+  atk.tapped=true; atk._buff=0;
+  log(`${p.name} 攻撃: ${CARDS[atk.cardId].name}(P${power(atk)})`,'hl');
+  const ctx={type:'attack', attackerInst:atk, owner:p, buff:0, crit:false, cancelled:false};
+  // 攻撃時トリガーチェック
+  const r=await revealTrigger(p,'attack',ctx);
+  if(r) p.gy.push(r.cardId);
+  render();
+  if(G.over) return;
+  // 相手リバース(攻撃時)
+  await reverseChain(opp, ctx, 'attack');
+  if(G.over) return;
+  if(ctx.cancelled || !onField(p,atk)){ log('　攻撃は阻止された'); render(); return; }
+  atk._buff=ctx.buff;
+  // 迎撃選択
+  const blk=await chooseIntercept(opp, p, atk);
+  if(G.over) return;
+  if(blk){
+    blk.tapped=true; blk._buff=0;
+    const dctx={buff:0};
+    const dr=await revealTrigger(opp,'defend',dctx);
+    if(dr) opp.gy.push(dr.cardId);
+    blk._buff=dctx.buff;
+    const ap=power(atk), dp=power(blk);
+    log(`　迎撃: ${CARDS[blk.cardId].name}(P${dp}) ↔ P${ap}`);
+    if(ap>dp){ destroy(opp,blk); log(`　${CARDS[blk.cardId].name} 破壊`); }
+    else if(dp>ap){ destroy(p,atk); log(`　${CARDS[atk.cardId].name} 破壊`); }
+    else { destroy(opp,blk); destroy(p,atk); log('　相打ち'); }
+  } else {
+    const dmg=1+(ctx.crit?1:0);
+    if(ctx.crit) log('　💥クリティカル: ダメージ2');
+    for(let i=0;i<dmg && !G.over;i++) await dealDamage(opp);
+  }
+  if(atk) atk._buff=0;
+  render();
+}
+
+async function chooseIntercept(opp, atkOwner, atk){
+  const blockers=opp.field.filter(u=>!u.tapped);
+  if(blockers.length===0) return null;
+  if(opp.isAI) return aiIntercept(opp, atk, blockers);
+  const opts=blockers.map(u=>({label:`迎撃: ${CARDS[u.cardId].name}(P${power(u)})`,value:u.instId}));
+  opts.push({label:'迎撃せず1ダメージを受ける',value:0,pass:true});
+  const v=await ask(`${atkOwner.name} の ${CARDS[atk.cardId].name}(P${power(atk)}) が攻撃`, opts);
+  return v ? blockers.find(u=>u.instId===v) : null;
+}
+
+// --- ダメージ処理(被ダメージ時トリガーチェック) ---
+async function dealDamage(p){
+  const r=await revealTrigger(p,'damage',{});
+  if(!r){ lose(p,'山札切れ（ダメージ処理不能）'); return; }
+  if(r.def.trigger==='guard'){
+    p.gy.push(r.cardId); log(`　🛡 ${p.name} がダメージを無効化`,'sys');
+  } else {
+    p.damage.push(r.cardId);
+    log(`　${p.name} ダメージ ${p.damage.length}/5`,'dmg');
+    if(p.damage.length>=5) lose(p,'ダメージ5');
+  }
+  render();
+}
+
+// --- トリガーチェック ---
+async function revealTrigger(p, timing, ctx){
+  if(p.deck.length===0){ log(`　${p.name} 山札なし: トリガーチェック不可`); return null; }
+  const cid=p.deck.shift(); const def=CARDS[cid]; const t=def.trigger;
+  log(`　${p.name} トリガーチェック → ${def.name} ${t?TRIGGERS[t].icon:'（無）'}`);
+  if(t==='draw'){ log('　　➕ドロー'); await drawCard(p); }
+  else if(t==='count'){ p.count++; log(`　　➰カウント+1 → ${p.count}`); }
+  else if(t==='sword' && ctx){ ctx.buff=(ctx.buff||0)+2; log('　　⚔強化 +2'); }
+  else if(t==='crit' && timing==='attack' && ctx){ ctx.crit=true; log('　　💥クリティカル'); }
+  // guardはdealDamage側で配置判定
+  return {cardId:cid, def};
+}
+
+// --- リバースコール(割り込み・複数段) ---
+function validReverse(p, ctx, timing){
+  const res=[];
+  p.hand.forEach((cid,i)=>{
+    const def=CARDS[cid]; if(!def.reverse) return;
+    if(def.reverse.cost>p.count) return;
+    const e=def.reverse.effect;
+    if(timing==='attack' && (e==='minus2'||e==='bounceAtk')) res.push(i);
+    if(timing==='open' && (e==='cancelOpen'||e==='bounceOpen')) res.push(i);
+  });
+  return res;
+}
+async function reverseChain(responder, ctx, timing){
+  let cur=responder, depth=0;
+  while(!G.over && depth<6){
+    const valid=validReverse(cur, ctx, timing);
+    if(valid.length===0) break;
+    let pick;
+    if(cur.isAI) pick=aiReverse(cur, ctx, timing, valid);
+    else pick=await humanReverse(cur, valid);
+    if(pick==null || pick<0) break;
+    await playReverse(cur, pick, ctx);
+    depth++;
+    if(ctx.cancelled){ render(); break; }
+    cur=other(cur);  // 相手が更にリバースで返せる(応酬)
+  }
+}
+async function humanReverse(p, valid){
+  const opts=valid.map(i=>{
+    const d=CARDS[p.hand[i]];
+    return {label:`リバース: ${d.name}（コスト${d.reverse.cost}/${revLabel(d.reverse.effect)}）`, value:i};
+  });
+  opts.push({label:'パス',value:-1,pass:true});
+  return await ask(`リバースコール可能（カウント${p.count}）`, opts);
+}
+function revLabel(e){ return {minus2:'攻撃-2',bounceAtk:'攻撃を手札へ',cancelOpen:'召喚を破壊',bounceOpen:'召喚を手札へ'}[e]||e; }
+async function playReverse(p, idx, ctx){
+  const cid=p.hand.splice(idx,1)[0]; const def=CARDS[cid];
+  p.count-=def.reverse.cost; p.gy.push(cid);
+  log(`${p.name} リバースコール: ${def.name}（${revLabel(def.reverse.effect)}・カウント-${def.reverse.cost} → ${p.count}）`,'hl');
+  const e=def.reverse.effect, owner=ctx.owner;
+  if(e==='minus2'){
+    ctx.buff=(ctx.buff||0)-2;
+    if(power(ctx.attackerInst)+(ctx.buff||0)<=0){ destroy(owner,ctx.attackerInst); ctx.cancelled=true; log('　攻撃ユニットを破壊'); }
+  } else if(e==='bounceAtk'){
+    returnToHand(owner,ctx.attackerInst); ctx.cancelled=true; log('　攻撃ユニットを手札へ');
+    await enforceHandLimit(owner);
+  } else if(e==='cancelOpen'){
+    destroy(owner,ctx.calledInst); ctx.cancelled=true; log('　召喚ユニットを破壊');
+  } else if(e==='bounceOpen'){
+    returnToHand(owner,ctx.calledInst); ctx.cancelled=true; log('　召喚ユニットを手札へ');
+    await enforceHandLimit(owner);
+  }
+  render();
+}
+
+// --- 盤面操作 ---
+function destroy(p, inst){ const i=p.field.indexOf(inst); if(i>=0){ p.field.splice(i,1); p.gy.push(inst.cardId); } }
+function returnToHand(p, inst){ const i=p.field.indexOf(inst); if(i>=0){ p.field.splice(i,1); p.hand.push(inst.cardId); } }
+
+// --- 敗北 ---
+function lose(p, reason){
+  if(G.over) return;
+  G.over=true; G.winner=other(p);
+  log(`${p.name} 敗北（${reason}）→ ${G.winner.name} の勝ち`,'sys');
+}
+
+// ============================================================
+//  簡易AI (⑧)
+// ============================================================
+async function aiPlay(p){
+  barMsg('AI が思考中…');
+  // オープンコール: 配置上限まで、パワーの高い順
+  while(p.placed<p.turnNum && p.hand.length>0 && !G.over){
+    let bi=0,bv=-1; p.hand.forEach((c,i)=>{ const v=CARDS[c].open.power; if(v>bv){bv=v;bi=i;} });
+    await openCall(p, bi);
+    await pause(450);
+  }
+  if(G.over) return;
+  // 攻撃: 攻撃可能ユニットで順に
+  if(canAttack(p)){
+    const attackers=p.field.filter(u=>!u.tapped&&!u.sick).slice();
+    for(const atk of attackers){
+      if(G.over) break;
+      if(!onField(p,atk)) continue;
+      barMsg('AI が攻撃…');
+      await resolveAttack(p, atk);
+      await pause(550);
+    }
+  }
+}
+function aiIntercept(opp, atk, blockers){
+  const ap=power(atk);
+  const survive=blockers.filter(b=>power(b)>ap).sort((a,b)=>power(a)-power(b));
+  if(survive.length) return survive[0];                 // 一方的に倒せる
+  if(opp.damage.length>=4){ return blockers.slice().sort((a,b)=>power(b)-power(a))[0]; } // 致死を阻止
+  const eq=blockers.filter(b=>power(b)===ap);
+  if(eq.length && ap>=4) return eq[0];                   // 強敵と相打ち
+  return null;
+}
+function aiReverse(p, ctx, timing, valid){
+  // 守備的: 致死ダメージを受けそうな時だけ攻撃を阻止
+  if(timing==='attack' && p.damage.length>=4){
+    const b=valid.find(i=>CARDS[p.hand[i]].reverse.effect==='bounceAtk');
+    return b!=null ? b : valid[0];
+  }
+  return null;
+}
+function pause(ms){ return new Promise(r=>setTimeout(r,ms)); }
+
+// ============================================================
+//  描画
+// ============================================================
+function unitEl(u, faceUp){
+  const def=CARDS[u.cardId];
+  const d=document.createElement('div');
+  d.className='unit'+(u.tapped?' tapped':'')+(u.sick?' sick':'');
+  d.innerHTML=`<div class="nm">${def.name}</div>`+
+    (def.trigger?`<div class="tg">${TRIGGERS[def.trigger].icon}</div>`:'')+
+    `<div class="pw">${power(u)}</div>`;
+  return d;
+}
+function cardEl(cardId){
+  const def=CARDS[cardId];
+  const d=document.createElement('div'); d.className='card';
+  d.innerHTML=`<div class="nm">${def.name}</div>`+
+    (def.trigger?`<div class="tg">${TRIGGERS[def.trigger].icon}</div>`:'')+
+    `<div class="pw">${def.open.power}</div>`+
+    (def.reverse?`<div class="rcost">R${def.reverse.cost}</div>`:'');
+  return d;
+}
+function dmgZone(el, arr){
+  el.innerHTML='';
+  for(let i=0;i<5;i++){ const s=document.createElement('div'); s.className='dmg-slot'+(i<arr.length?' filled':''); el.appendChild(s); }
+}
+function render(){
+  if(!G) return;
+  const me=G.players[0], opp=G.players[1];
+  document.getElementById('opp-deck').textContent=opp.deck.length;
+  document.getElementById('opp-hand').textContent=opp.hand.length;
+  document.getElementById('opp-gy').textContent=opp.gy.length;
+  document.getElementById('opp-count').textContent=opp.count;
+  document.getElementById('me-deck').textContent=me.deck.length;
+  document.getElementById('me-gy').textContent=me.gy.length;
+  document.getElementById('me-count').textContent=me.count;
+  dmgZone(document.getElementById('opp-dmg'), opp.damage);
+  dmgZone(document.getElementById('me-dmg'), me.damage);
+  const of=document.getElementById('opp-field'); of.innerHTML=''; opp.field.forEach(u=>of.appendChild(unitEl(u)));
+  const mf=document.getElementById('me-field'); mf.innerHTML=''; me.field.forEach(u=>mf.appendChild(unitEl(u)));
+  const h=document.getElementById('me-hand'); h.innerHTML=''; me.hand.forEach(c=>h.appendChild(cardEl(c)));
+}
+function showWinner(){
+  const ov=document.getElementById('overlay');
+  const win=G.winner===G.players[0];
+  document.getElementById('ov-text').textContent= win?'あなたの勝ち！':'あなたの負け…';
+  document.getElementById('ov-text').style.color= win?'#9affc2':'#ff8090';
+  ov.style.display='flex';
+}
+function newGame(){
+  document.getElementById('overlay').style.display='none';
+  document.getElementById('log').innerHTML='';
+  init(); gameLoop();
+}
+
+// 起動
+init(); gameLoop();
+</script>
+</body>
+</html>
