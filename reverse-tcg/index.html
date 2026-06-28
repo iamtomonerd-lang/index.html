@@ -68,7 +68,7 @@ header .sub{font-size:11px; color:var(--dim);}
 .card .rcost{position:absolute; bottom:2px; left:3px; font-size:9px; color:var(--accent);}
 
 /* 手札 */
-.hand{display:flex; gap:5px; padding:6px 4px; overflow-x:auto; min-height:84px; align-items:center;}
+.hand{display:flex; gap:5px; padding:6px 4px; overflow-x:auto; min-height:128px; align-items:center;}
 .hand .card{width:58px; height:80px;}
 .hand-label{font-size:10px; color:var(--dim); padding:0 4px;}
 
@@ -103,7 +103,22 @@ header .sub{font-size:11px; color:var(--dim);}
   border-radius:6px; padding:10px 22px; font-size:15px; cursor:pointer; font-family:inherit;
 }
 .help{font-size:10.5px; color:var(--dim); padding:0 8px 6px;}
-@media (max-width:760px){ #side{display:none;} .unit,.card{width:46px;height:64px;} }
+
+/* 効果テキスト(手札カード) */
+.hand .card{ width:96px; height:118px; cursor:pointer; }
+.card .eff{ display:flex; flex-direction:column; gap:1px; margin-top:1px; }
+.card .eff span{ font-size:8.5px; line-height:1.15; color:#aeb6e0; background:rgba(255,255,255,0.05);
+  border-radius:2px; padding:0 2px; white-space:normal; }
+.unit{ cursor:pointer; }
+
+/* 詳細パネル */
+#detail{ padding:7px 9px; border-bottom:1px solid var(--border); min-height:74px; font-size:11.5px; }
+.d-name{ font-weight:700; color:#e8e8ff; font-size:13px; margin-bottom:4px; }
+.d-pw{ color:#fff; } .d-tg{ color:var(--gold); font-size:11px; }
+.d-row{ color:#c2c8ea; line-height:1.45; padding:1px 0; }
+.d-dim{ color:var(--dim); }
+
+@media (max-width:760px){ #side{display:none;} .unit{width:46px;height:64px;} .hand .card{width:84px;height:112px;} }
 </style>
 </head>
 <body>
@@ -147,6 +162,8 @@ header .sub{font-size:11px; color:var(--dim);}
     </div>
   </div>
   <div id="side">
+    <h2>カード詳細</h2>
+    <div id="detail"><div class="d-dim">カードにマウスを乗せる／タップすると効果を表示します。</div></div>
     <h2>ゲームログ</h2>
     <div id="log"></div>
     <div class="help">⚔強化 ➕ドロー 🛡キャンセル ➰カウント 💥クリティカル<br>
@@ -330,9 +347,13 @@ async function openCall(p, handIdx){
   render();
 }
 async function doHumanOpen(p){
-  const opts=p.hand.map((c,i)=>({label:`${CARDS[c].name}(P${CARDS[c].open.power}${CARDS[c].trigger?' '+TRIGGERS[CARDS[c].trigger].icon:''})`,value:i}));
+  const opts=p.hand.map((c,i)=>{
+    const d=CARDS[c];
+    const extra=[ d.open.effect?openEffDesc(d.open.effect):'', d.trigger?TRIGGERS[d.trigger].icon:'' ].filter(Boolean).join(' ');
+    return {label:`${d.name} P${d.open.power}${extra?'｜'+extra:''}`, value:i};
+  });
   opts.push({label:'戻る',value:-1,pass:true});
-  const i=await ask('オープンコールするカードを選択', opts);
+  const i=await ask('オープンコールするカードを選択（パワー／召喚効果／トリガー）', opts);
   if(i<0) return;
   await openCall(p,i);
 }
@@ -534,8 +555,45 @@ function aiReverse(p, ctx, timing, valid){
 function pause(ms){ return new Promise(r=>setTimeout(r,ms)); }
 
 // ============================================================
+//  効果テキスト
+// ============================================================
+const TRIG_DESC={ sword:'戦闘中の味方ユニット +2', draw:'カードを1枚引く',
+  guard:'被ダメージを1つ無効化', count:'オープンカウント +1', crit:'攻撃が通れば与ダメージ +1' };
+function openEffDesc(e){ return {draw1:'召喚時：1ドロー', count1:'召喚時：カウント+1'}[e]||''; }
+function cardLines(cardId){
+  const d=CARDS[cardId]; const L=[];
+  if(d.open.effect) L.push('▶ '+openEffDesc(d.open.effect));
+  if(d.reverse) L.push('↺ R'+d.reverse.cost+'：'+revLabel(d.reverse.effect));
+  if(d.trigger) L.push(TRIGGERS[d.trigger].icon+' '+TRIG_DESC[d.trigger]);
+  return L;
+}
+function cardTitle(cardId){
+  const d=CARDS[cardId];
+  let t=`${d.name}  パワー${d.open.power}`;
+  cardLines(cardId).forEach(l=>{ t+='\n'+l; });
+  return t;
+}
+function showDetail(cardId){
+  const d=CARDS[cardId]; const el=document.getElementById('detail');
+  el.innerHTML=`<div class="d-name">${d.name} <span class="d-pw">P${d.open.power}</span>`+
+    (d.trigger?` <span class="d-tg">${TRIGGERS[d.trigger].icon}${TRIGGERS[d.trigger].name}</span>`:'')+`</div>`+
+    `<div class="d-row">オープン面：パワー${d.open.power}${d.open.effect?'／'+openEffDesc(d.open.effect):''}</div>`+
+    (d.reverse?`<div class="d-row">リバース面：コスト${d.reverse.cost}／${revLabel(d.reverse.effect)}</div>`:'')+
+    (d.trigger?`<div class="d-row">トリガー：${TRIGGERS[d.trigger].icon}${TRIGGERS[d.trigger].name}（${TRIG_DESC[d.trigger]}）</div>`:'<div class="d-row d-dim">トリガー：なし</div>');
+}
+
+// ============================================================
 //  描画
 // ============================================================
+function effHtml(cardId){
+  const lines=cardLines(cardId);
+  return lines.length?`<div class="eff">${lines.map(l=>`<span>${l}</span>`).join('')}</div>`:'';
+}
+function attachDetail(el, cardId){
+  el.title=cardTitle(cardId);
+  el.onmouseenter=()=>showDetail(cardId);
+  el.onclick=()=>showDetail(cardId);
+}
 function unitEl(u, faceUp){
   const def=CARDS[u.cardId];
   const d=document.createElement('div');
@@ -543,6 +601,7 @@ function unitEl(u, faceUp){
   d.innerHTML=`<div class="nm">${def.name}</div>`+
     (def.trigger?`<div class="tg">${TRIGGERS[def.trigger].icon}</div>`:'')+
     `<div class="pw">${power(u)}</div>`;
+  attachDetail(d, u.cardId);
   return d;
 }
 function cardEl(cardId){
@@ -551,7 +610,9 @@ function cardEl(cardId){
   d.innerHTML=`<div class="nm">${def.name}</div>`+
     (def.trigger?`<div class="tg">${TRIGGERS[def.trigger].icon}</div>`:'')+
     `<div class="pw">${def.open.power}</div>`+
+    effHtml(cardId)+
     (def.reverse?`<div class="rcost">R${def.reverse.cost}</div>`:'');
+  attachDetail(d, cardId);
   return d;
 }
 function dmgZone(el, arr){
