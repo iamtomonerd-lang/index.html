@@ -133,7 +133,7 @@ let G; // global game state
 let SPECTATOR_MODE = false;          // 観戦モードON/OFF
 let SPECTATOR_VIEWPOINT = 0;         // 視点: 0=P1(上)/ 1=P2(下)
 let SPECTATOR_AUTO_DRIVE = false;    // 自動駆動ON/OFF
-let SPECTATOR_TICK_INTERVAL = 500;   // 自動駆動の間隔(ms) デフォルト500
+let SPECTATOR_TICK_INTERVAL = 2000;  // 自動駆動の間隔(ms) デフォルト2000（超遅）
 
 function initGame() {
   if (typeof REPLAY_HISTORY !== 'undefined') REPLAY_HISTORY = []; // 新ゲームでリプレイ履歴をクリア
@@ -4708,8 +4708,9 @@ function startSpectatorMode() {
 function switchSpectatorViewpoint() {
   if (!SPECTATOR_MODE) return;
   SPECTATOR_VIEWPOINT = 1 - SPECTATOR_VIEWPOINT;
-  log(`📍 視点切り替え: ${SPECTATOR_VIEWPOINT === 0 ? 'P1（上）' : 'P2（下）'}`);
+  log(`📍 視点切り替え: ${SPECTATOR_VIEWPOINT === 0 ? 'P1（下）' : 'P2（上）'}`);
   render();
+  updateSpectatorDisplay();
 }
 
 function toggleSpectatorAutoDrive() {
