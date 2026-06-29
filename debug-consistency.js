@@ -17,8 +17,9 @@ const fs = require('fs');
 const path = require('path');
 
 const VERBOSE = process.argv.includes('--verbose');
-const HTML_PATH = path.join(__dirname, 'index.html');
-const html = fs.readFileSync(HTML_PATH, 'utf8');
+// ゲーム本体は複数ファイル（cards.js, game.js, …）へ分割済み。
+// 共有ローダで読み込み順どおり連結したソースを取得する（CARD_DB等を含む）。
+const html = require('./test/loadGame').gameSource();
 
 // ─── HTMLからコードブロックを抽出 ───────────────────────────
 function extractBetween(src, startMarker, endMarker) {
@@ -190,9 +191,10 @@ function checkCostConsistency(CARD_DB) {
 function checkSimGameConsistency(html, CARD_DB) {
   const issues = [];
 
-  // SimGame クラスの抽出 (script タグ内)
-  const scriptStart = html.indexOf('<script>') + 8;
-  const scriptEnd = html.lastIndexOf('</script>');
+  // ゲーム本体JSの取得。game.js は <script> タグを持たないため全体を対象にする
+  // （index.html 互換のため、タグがあればその内側を切り出す）。
+  const scriptStart = html.indexOf('<script>') >= 0 ? html.indexOf('<script>') + 8 : 0;
+  const scriptEnd = html.lastIndexOf('</script>') >= 0 ? html.lastIndexOf('</script>') : html.length;
   const script = html.slice(scriptStart, scriptEnd);
 
   // SimGame が依存するグローバルを模倣

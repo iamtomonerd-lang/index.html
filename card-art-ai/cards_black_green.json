@@ -1,0 +1,282 @@
+[
+  {
+    "id": "serashia_miyako",
+    "name": "セラシアの都",
+    "type": "land",
+    "color": "C",
+    "icon": "🏛️",
+    "text": "■起動(タップ)：1マナ生成 / ■起動(タップ)：自分の白のクリーチャー1体+0/+2。これはこの土地がチャージされている時のみ起動できる"
+  },
+  {
+    "id": "daikazoku_ie",
+    "name": "大家族の家",
+    "type": "land",
+    "color": "C",
+    "icon": "🏠",
+    "text": "■起動(タップ)：1マナ生成 / ■起動(タップ)：自分の赤のクリーチャー1体に「格闘」を与え、+1/+0する。これはこの土地がチャージされている時のみ起動できる"
+  },
+  {
+    "id": "gakuin",
+    "name": "学院",
+    "type": "land",
+    "color": "C",
+    "icon": "🏫",
+    "text": "■起動(タップ)：1マナ生成 / ■起動(タップ)：青クリーチャー1体に「攻撃時1枚引く」を付与。チャージ時のみ"
+  },
+  {
+    "id": "shiki",
+    "name": "死を食らうもの シキ",
+    "type": "creature",
+    "color": "B",
+    "icon": "?",
+    "text": ""
+  },
+  {
+    "id": "ren",
+    "name": "死を運ぶもの レン",
+    "type": "creature",
+    "color": "B",
+    "icon": "?",
+    "text": ""
+  },
+  {
+    "id": "yami_jouhouya",
+    "name": "闇の情報屋",
+    "type": "creature",
+    "color": "B",
+    "icon": "?",
+    "text": ""
+  },
+  {
+    "id": "skeleton_senshi",
+    "name": "スケルトンの戦士",
+    "type": "creature",
+    "color": "B",
+    "icon": "?",
+    "text": ""
+  },
+  {
+    "id": "itazura_obake",
+    "name": "いたずらお化け",
+    "type": "creature",
+    "color": "B",
+    "icon": "?",
+    "text": ""
+  },
+  {
+    "id": "haka_zombie",
+    "name": "墓守ゾンビ",
+    "type": "creature",
+    "color": "B",
+    "icon": "?",
+    "text": ""
+  },
+  {
+    "id": "taisei_zombie",
+    "name": "不屈の屍",
+    "type": "creature",
+    "color": "B",
+    "icon": "?",
+    "text": ""
+  },
+  {
+    "id": "hakaatsume_yatoware",
+    "name": "墓荒らしの雇われ",
+    "type": "creature",
+    "color": "B",
+    "icon": "?",
+    "text": ""
+  },
+  {
+    "id": "shigoeki",
+    "name": "死越撃",
+    "type": "spell",
+    "color": "B",
+    "icon": "?",
+    "text": ""
+  },
+  {
+    "id": "kurogeki",
+    "name": "黒撃",
+    "type": "spell",
+    "color": "B",
+    "icon": "?",
+    "text": ""
+  },
+  {
+    "id": "hito_numa",
+    "name": "人住まう沼",
+    "type": "land",
+    "color": "B",
+    "icon": "?",
+    "text": ""
+  },
+  {
+    "id": "wasure_numa",
+    "name": "忘れ去られし沼",
+    "type": "land",
+    "color": "B",
+    "icon": "?",
+    "text": ""
+  },
+  {
+    "id": "shigen_numa",
+    "name": "資源豊富な沼",
+    "type": "land",
+    "color": "B",
+    "icon": "?",
+    "text": ""
+  },
+  {
+    "id": "kemono_numa",
+    "name": "獣住む沼",
+    "type": "land",
+    "color": "B",
+    "icon": "?",
+    "text": ""
+  },
+  {
+    "id": "areta_haka",
+    "name": "荒れた墓",
+    "type": "land",
+    "color": "C",
+    "icon": "?",
+    "text": ""
+  },
+  {
+    "id": "foklya",
+    "name": "村長樹妃 フォクリア",
+    "type": "creature",
+    "color": "G",
+    "icon": "?",
+    "text": ""
+  },
+  {
+    "id": "tami_kaitaku",
+    "name": "民による開拓",
+    "type": "spell",
+    "color": "G",
+    "icon": "?",
+    "text": ""
+  },
+  {
+    "id": "folkusu",
+    "name": "古樹従 フォルクス",
+    "type": "creature",
+    "color": "G",
+    "icon": "?",
+    "text": ""
+  },
+  {
+    "id": "kaitakusha",
+    "name": "新米開拓者",
+    "type": "creature",
+    "color": "G",
+    "icon": "?",
+    "text": ""
+  },
+  {
+    "id": "mori_kansha",
+    "name": "森への感謝",
+    "type": "spell",
+    "color": "G",
+    "icon": "?",
+    "text": ""
+  },
+  {
+    "id": "gen_jurei",
+    "name": "源の樹霊",
+    "type": "creature",
+    "color": "G",
+    "icon": "?",
+    "text": ""
+  },
+  {
+    "id": "mori_tami",
+    "name": "樹守の民",
+    "type": "creature",
+    "color": "G",
+    "icon": "?",
+    "text": ""
+  },
+  {
+    "id": "iwai_tami",
+    "name": "祝いの民",
+    "type": "creature",
+    "color": "G",
+    "icon": "?",
+    "text": ""
+  },
+  {
+    "id": "matsuri_otoko",
+    "name": "祭り男",
+    "type": "creature",
+    "color": "G",
+    "icon": "?",
+    "text": ""
+  },
+  {
+    "id": "kaitaku_miko",
+    "name": "開拓祭りの巫女",
+    "type": "creature",
+    "color": "G",
+    "icon": "?",
+    "text": ""
+  },
+  {
+    "id": "hito_mori",
+    "name": "人住まう森",
+    "type": "land",
+    "color": "G",
+    "icon": "?",
+    "text": ""
+  },
+  {
+    "id": "wasure_mori",
+    "name": "忘れ去られし森",
+    "type": "land",
+    "color": "G",
+    "icon": "?",
+    "text": ""
+  },
+  {
+    "id": "shigen_mori",
+    "name": "資源豊富な森",
+    "type": "land",
+    "color": "G",
+    "icon": "?",
+    "text": ""
+  },
+  {
+    "id": "kemono_mori",
+    "name": "獣住む森",
+    "type": "land",
+    "color": "G",
+    "icon": "?",
+    "text": ""
+  },
+  {
+    "id": "matsuri_kaijo",
+    "name": "祭りの会場",
+    "type": "land",
+    "color": "C",
+    "icon": "?",
+    "text": ""
+  },
+  {
+    "id": "test_golem",
+    "name": "テストゴーレム",
+    "type": "creature",
+    "color": "C",
+    "icon": "?",
+    "text": ""
+  },
+  {
+    "id": "jikkenjou",
+    "name": "実験場",
+    "type": "land",
+    "color": "C",
+    "icon": "?",
+    "text": ""
+  }
+]

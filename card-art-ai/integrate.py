@@ -21,7 +21,7 @@ import config
 
 HERE = os.path.dirname(__file__)
 GAME_ROOT = os.path.abspath(os.path.join(HERE, ".."))
-INDEX_HTML = os.path.join(GAME_ROOT, "index.html")
+INDEX_HTML = os.path.join(GAME_ROOT, "render.js")  # render.js に変更
 DEST_DIR = os.path.join(GAME_ROOT, "images", "cards")
 
 

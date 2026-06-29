@@ -12,9 +12,8 @@ const fs   = require('fs');
 const path = require('path');
 const { JSDOM } = require('jsdom');
 
-// ─── スクリプト読み込み ────────────────────────────────────────────
-const rawJs = fs.readFileSync(path.join(__dirname, '../index.html'), 'utf8')
-  .match(/<script>([\s\S]*?)<\/script>/)[1];
+// ─── スクリプト読み込み（複数ファイル分割を共有ローダの連結ソースで吸収）──
+const rawJs = require('./loadGame').gameSource();
 
 // vm の let/const 宣言はサンドボックス外のプロパティにならないため、
 // globalThis プロキシ経由でコンテキスト外から読み書きできるようにする

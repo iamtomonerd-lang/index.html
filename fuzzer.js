@@ -164,13 +164,8 @@ function runOneGame(gameIndex) {
     _mulliganHand: undefined,
   });
 
-  // <script>タグ内のJSをすべて抽出
-  const scriptRe = /<script(?![^>]*src)[^>]*>([\s\S]*?)<\/script>/gi;
-  let scriptContent = '';
-  let m;
-  while ((m = scriptRe.exec(html)) !== null) {
-    scriptContent += m[1] + '\n';
-  }
+  // ゲーム本体JSを読み込む（複数ファイル分割を共有ローダの連結ソースで吸収）
+  let scriptContent = require('./test/loadGame').gameSource() + '\n';
   // vm contextでは let/const のトップレベル宣言がグローバルオブジェクトに付かないため
   // 重要なグローバル変数を var に変換して sandbox から参照できるようにする
   scriptContent = scriptContent
