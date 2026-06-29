@@ -2557,7 +2557,17 @@ body.demo-recording #stack-empty-msg { font-size: 17px !important; padding: 16px
           <button id="btn-ren-gy" onclick="renGraveyardCast()" style="display:none;background:#2a0a2a;border-color:#884488;color:#ffbbff;">💀 墓地実行</button>
           <button onclick="showTrainingPanel()" style="font-size:9px;padding:4px 5px;">🧠</button>
           <button onclick="showTestPanel()" style="font-size:9px;padding:4px 5px;">🧪</button>
+          <button onclick="startSpectatorMode()" style="font-size:9px;padding:4px 5px;" title="AI vs AI観戦">🎬</button>
+          <button id="btn-spectator-switch" onclick="switchSpectatorViewpoint()" style="display:none;font-size:9px;padding:4px 5px;background:#4a4a8a;border:1px solid #8080ff;" title="視点切り替え">👁️</button>
+          <button id="btn-spectator-auto" onclick="toggleSpectatorAutoDrive()" style="display:none;font-size:9px;padding:4px 5px;background:#4a8a4a;border:1px solid #80ff80;" title="自動駆動ON/OFF">▶️</button>
           <button onclick="showDebugPanel()" style="font-size:9px;padding:4px 5px;" title="debug">🐛</button>
+        </div>
+        <!-- 観戦モード速度コントロール -->
+        <div id="spectator-speed-menu" style="display:none;gap:3px;flex-wrap:wrap;padding-top:4px;border-top:1px solid #444;">
+          <button onclick="setSpectatorSpeed(200)" style="font-size:8px;padding:3px 4px;background:#2a3a6a;border:1px solid #5060cc;color:#aaccff;">🚀 200ms</button>
+          <button onclick="setSpectatorSpeed(500)" style="font-size:8px;padding:3px 4px;background:#3a4a7a;border:1px solid #6070dd;color:#fff;">▶️ 500ms</button>
+          <button onclick="setSpectatorSpeed(1000)" style="font-size:8px;padding:3px 4px;background:#3a4a7a;border:1px solid #6070dd;color:#fff;">🐢 1000ms</button>
+          <button onclick="setSpectatorSpeed(2000)" style="font-size:8px;padding:3px 4px;background:#3a4a7a;border:1px solid #6070dd;color:#fff;">🐌 2000ms</button>
         </div>
         <div id="mulligan-controls" style="display:none; gap:5px; flex-direction:column;">
           <button onclick="confirmStartMulligan()" style="padding:8px 10px;background:#2a2a8a;border:1px solid #6060ff;color:#fff;border-radius:6px;font-size:13px;cursor:pointer;">確認（<span id="mulligan-count">0</span>枚入替）</button>

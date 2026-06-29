@@ -129,6 +129,11 @@ function getCreatureName(player, instId) {
 // GAME STATE
 // ============================================================
 let G; // global game state
+// 観戦モード用グローバル
+let SPECTATOR_MODE = false;          // 観戦モードON/OFF
+let SPECTATOR_VIEWPOINT = 0;         // 視点: 0=P1(上)/ 1=P2(下)
+let SPECTATOR_AUTO_DRIVE = false;    // 自動駆動ON/OFF
+let SPECTATOR_TICK_INTERVAL = 500;   // 自動駆動の間隔(ms) デフォルト500
 
 function initGame() {
   if (typeof REPLAY_HISTORY !== 'undefined') REPLAY_HISTORY = []; // 新ゲームでリプレイ履歴をクリア
@@ -4655,4 +4660,102 @@ function confirmMulligan() {
   closeModal();
   log(`マリガン: ${count}枚入れ替え`);
   render();
+}
+
+// ============================================================
+// 観戦モード (AI vs AI Spectator Mode)
+// ============================================================
+function startSpectatorMode() {
+  SPECTATOR_MODE = true;
+  SPECTATOR_VIEWPOINT = 0;
+  SPECTATOR_AUTO_DRIVE = true;
+  NET_MODE = 'local';
+  initGame();
+  closeModal();
+  log('🎬 観戦モード開始。両AI が対戦します。');
+  render();
+
+  // 自動駆動開始（SPECTATOR_TICK_INTERVAL で設定された間隔）
+  if (window._spectatorTimer) clearInterval(window._spectatorTimer);
+  window._spectatorTimer = setInterval(() => {
+    if (!G || G.phase === 'ended') {
+      SPECTATOR_AUTO_DRIVE = false;
+      clearInterval(window._spectatorTimer);
+      log('🎬 観戦モード終了。対戦が終わりました。');
+      updateSpectatorControls();
+      return;
+    }
+    // 自動駆動ティック
+    try {
+      if (G.awaitingPriority) { passPriority(); return; }
+      if (G.playerBlockMode) { endPhase(); return; }
+      if (G.activePlayer === 0 && G.phase === 'main') { endTurn(); return; }
+      if (G.activePlayer === 1 && G.phase === 'main') { aiTurn(); return; }
+    } catch(e) { console.error(e); }
+  }, SPECTATOR_TICK_INTERVAL);
+
+  updateSpectatorControls();
+}
+
+function switchSpectatorViewpoint() {
+  if (!SPECTATOR_MODE) return;
+  SPECTATOR_VIEWPOINT = 1 - SPECTATOR_VIEWPOINT;
+  log(`📍 視点切り替え: ${SPECTATOR_VIEWPOINT === 0 ? 'P1（上）' : 'P2（下）'}`);
+  render();
+}
+
+function toggleSpectatorAutoDrive() {
+  if (!SPECTATOR_MODE) return;
+  SPECTATOR_AUTO_DRIVE = !SPECTATOR_AUTO_DRIVE;
+  log(`⏸️ 自動駆動: ${SPECTATOR_AUTO_DRIVE ? 'ON' : 'OFF'} (${SPECTATOR_TICK_INTERVAL}ms間隔)`);
+  if (SPECTATOR_AUTO_DRIVE && !window._spectatorTimer) {
+    // 再開
+    window._spectatorTimer = setInterval(() => {
+      if (!SPECTATOR_AUTO_DRIVE || !G || G.phase === 'ended') {
+        clearInterval(window._spectatorTimer);
+        return;
+      }
+      try {
+        if (G.awaitingPriority) { passPriority(); }
+        else if (G.playerBlockMode) { endPhase(); }
+        else if (G.activePlayer === 0 && G.phase === 'main') { endTurn(); }
+        else if (G.activePlayer === 1 && G.phase === 'main') { aiTurn(); }
+      } catch(e) {}
+    }, SPECTATOR_TICK_INTERVAL);
+  } else if (!SPECTATOR_AUTO_DRIVE && window._spectatorTimer) {
+    clearInterval(window._spectatorTimer);
+  }
+  updateSpectatorControls();
+}
+
+function setSpectatorSpeed(msInterval) {
+  SPECTATOR_TICK_INTERVAL = msInterval;
+  const speedNames = { 200: '🚀 高速', 500: '▶️ 通常', 1000: '🐢 遅速', 2000: '🐌 超遅' };
+  log(`⏱️ ゲーム速度: ${speedNames[msInterval] || msInterval + 'ms'}`);
+
+  // 自動駆動中ならタイマーを再開
+  if (SPECTATOR_AUTO_DRIVE && window._spectatorTimer) {
+    clearInterval(window._spectatorTimer);
+    window._spectatorTimer = setInterval(() => {
+      if (!SPECTATOR_AUTO_DRIVE || !G || G.phase === 'ended') {
+        clearInterval(window._spectatorTimer);
+        return;
+      }
+      try {
+        if (G.awaitingPriority) { passPriority(); }
+        else if (G.playerBlockMode) { endPhase(); }
+        else if (G.activePlayer === 0 && G.phase === 'main') { endTurn(); }
+        else if (G.activePlayer === 1 && G.phase === 'main') { aiTurn(); }
+      } catch(e) {}
+    }, SPECTATOR_TICK_INTERVAL);
+  }
+}
+
+function updateSpectatorControls() {
+  const btn = document.getElementById('btn-spectator-switch');
+  const btnAuto = document.getElementById('btn-spectator-auto');
+  const speedMenu = document.getElementById('spectator-speed-menu');
+  if (btn) btn.style.display = SPECTATOR_MODE ? 'block' : 'none';
+  if (btnAuto) btnAuto.style.display = SPECTATOR_MODE ? 'block' : 'none';
+  if (speedMenu) speedMenu.style.display = SPECTATOR_MODE ? 'flex' : 'none';
 }

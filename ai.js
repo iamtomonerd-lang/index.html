@@ -765,3 +765,24 @@ function resolveAICombat() {
   }
 }
 
+// ============================================================
+// 観戦モード表示サポート
+// ============================================================
+function updateSpectatorDisplay() {
+  if (!SPECTATOR_MODE || !G) return;
+
+  const vp = SPECTATOR_VIEWPOINT;
+  const playerLabel = document.querySelector('#player-avatar .avatar-label');
+  const aiLabel = document.querySelector('#opp-avatar .avatar-label');
+
+  if (vp === 0) {
+    // P1視点: 下がP1(自分), 上がP2(相手)
+    if (playerLabel) playerLabel.textContent = '📍 P1（自分の視点）';
+    if (aiLabel) aiLabel.textContent = '👁️ P2';
+  } else {
+    // P2視点: 上がP2(自分), 下がP1(相手)
+    if (playerLabel) playerLabel.textContent = '👁️ P1';
+    if (aiLabel) aiLabel.textContent = '📍 P2（自分の視点）';
+  }
+}
+
