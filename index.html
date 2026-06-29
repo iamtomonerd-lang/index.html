@@ -2560,6 +2560,9 @@ body.demo-recording #stack-empty-msg { font-size: 17px !important; padding: 16px
           <button onclick="startSpectatorMode()" style="font-size:9px;padding:4px 5px;" title="AI vs AI観戦">🎬</button>
           <button id="btn-spectator-switch" onclick="switchSpectatorViewpoint()" style="display:none;font-size:9px;padding:4px 5px;background:#4a4a8a;border:1px solid #8080ff;" title="視点切り替え">👁️</button>
           <button id="btn-spectator-auto" onclick="toggleSpectatorAutoDrive()" style="display:none;font-size:9px;padding:4px 5px;background:#4a8a4a;border:1px solid #80ff80;" title="自動駆動ON/OFF">▶️</button>
+          <button id="btn-spectator-pause" onclick="pauseSpectatorGame()" style="display:none;font-size:9px;padding:4px 5px;background:#6a4a2a;border:1px solid #cc8844;" title="試合を一時停止">⏸️</button>
+          <button id="btn-spectator-resume" onclick="resumeSpectatorGame()" style="display:none;font-size:9px;padding:4px 5px;background:#2a6a4a;border:1px solid #44cc88;" title="試合を再開">▶️▶️</button>
+          <button id="btn-spectator-next" onclick="nextSpectatorPhase()" style="display:none;font-size:9px;padding:4px 5px;background:#4a6a8a;border:1px solid #8899ff;margin-left:2px;" title="次のフェイズへ">→</button>
           <button onclick="showDebugPanel()" style="font-size:9px;padding:4px 5px;" title="debug">🐛</button>
         </div>
         <!-- 観戦モード速度コントロール -->

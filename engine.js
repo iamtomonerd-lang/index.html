@@ -4751,11 +4751,66 @@ function setSpectatorSpeed(msInterval) {
   }
 }
 
+function pauseSpectatorGame() {
+  if (!SPECTATOR_MODE) return;
+  SPECTATOR_AUTO_DRIVE = false;
+  if (window._spectatorTimer) {
+    clearInterval(window._spectatorTimer);
+    window._spectatorTimer = null;
+  }
+  log('⏸️ 試合を一時停止しました。「次フェイズ」ボタンで進めてください。');
+  render();
+  updateSpectatorControls();
+}
+
+function resumeSpectatorGame() {
+  if (!SPECTATOR_MODE) return;
+  SPECTATOR_AUTO_DRIVE = true;
+  log(`▶️ 試合を再開します（${SPECTATOR_TICK_INTERVAL}ms間隔）`);
+
+  if (!window._spectatorTimer) {
+    window._spectatorTimer = setInterval(() => {
+      if (!SPECTATOR_AUTO_DRIVE || !G || G.phase === 'ended') {
+        clearInterval(window._spectatorTimer);
+        window._spectatorTimer = null;
+        return;
+      }
+      try {
+        if (G.awaitingPriority) { passPriority(); }
+        else if (G.playerBlockMode) { endPhase(); }
+        else if (G.activePlayer === 0 && G.phase === 'main') { endTurn(); }
+        else if (G.activePlayer === 1 && G.phase === 'main') { aiTurn(); }
+      } catch(e) {}
+    }, SPECTATOR_TICK_INTERVAL);
+  }
+  render();
+  updateSpectatorControls();
+}
+
+function nextSpectatorPhase() {
+  if (!SPECTATOR_MODE || !G || G.phase === 'ended') return;
+  try {
+    if (G.awaitingPriority) { passPriority(); }
+    else if (G.playerBlockMode) { endPhase(); }
+    else if (G.activePlayer === 0 && G.phase === 'main') { endTurn(); }
+    else if (G.activePlayer === 1 && G.phase === 'main') { aiTurn(); }
+  } catch(e) { console.error(e); }
+  render();
+  updateHints();
+}
+
 function updateSpectatorControls() {
   const btn = document.getElementById('btn-spectator-switch');
   const btnAuto = document.getElementById('btn-spectator-auto');
   const speedMenu = document.getElementById('spectator-speed-menu');
+  const pauseBtn = document.getElementById('btn-spectator-pause');
+  const resumeBtn = document.getElementById('btn-spectator-resume');
+  const nextBtn = document.getElementById('btn-spectator-next');
+
   if (btn) btn.style.display = SPECTATOR_MODE ? 'block' : 'none';
-  if (btnAuto) btnAuto.style.display = SPECTATOR_MODE ? 'block' : 'none';
+  if (btnAuto) btnAuto.style.display = SPECTATOR_MODE && SPECTATOR_AUTO_DRIVE ? 'block' : 'none';
+  if (pauseBtn) pauseBtn.style.display = SPECTATOR_MODE && SPECTATOR_AUTO_DRIVE ? 'block' : 'none';
+  if (resumeBtn) resumeBtn.style.display = SPECTATOR_MODE && !SPECTATOR_AUTO_DRIVE ? 'block' : 'none';
+  if (nextBtn) nextBtn.style.display = SPECTATOR_MODE && !SPECTATOR_AUTO_DRIVE ? 'block' : 'none';
   if (speedMenu) speedMenu.style.display = SPECTATOR_MODE ? 'flex' : 'none';
 }
