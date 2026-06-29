@@ -3607,15 +3607,6 @@ function endTurn() {
   });
 
   G.phase = 'main';
-
-  // プレイヤーのターン開始時：土地を自動タップしてマナを生成（local mode でプレイヤーが人間の場合）
-  if (ap === 0 && NET_MODE === 'local') {
-    const player = G.players[0];
-    player.lands.forEach(land => {
-      if (!land.tapped) tapLandForMana(0, land.instanceId);
-    });
-  }
-
   render();
 
   // メインフェイズ開始前に非ターンプレイヤーへ優先権
@@ -3637,10 +3628,6 @@ function endTurn() {
         log('あなたのメインフェイズ');
         document.getElementById('btn-mulligan').disabled = true;
         updateHints();
-        // local mode: プレイヤーもAI同様にカードを自動唱え（テストプレイ用）
-        if (NET_MODE === 'local') {
-          setTimeout(() => playerAutoPlay(), 800);
-        }
       }
     }
   }, 'ターン開始時');

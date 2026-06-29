@@ -33,6 +33,17 @@ const AI_WEIGHTS_BY_COLOR = {
 };
 
 let AI_WEIGHTS = JSON.parse(JSON.stringify(AI_WEIGHTS_DEFAULT));
+// ── 思考バージョン切替（AI強化のA/B検証用）─────────────────────────
+// 'v2' = 改良版（評価関数バグ修正＋特徴量拡張）。実ゲーム・学習の既定。
+// SIM_BRAIN_FORCE: 測定時に [P0, P1] の脳を個別指定（例 ['v2','v1']）。null で既定。
+let SIM_DEFAULT_BRAIN = 'v2';
+let SIM_BRAIN_FORCE = null;
+// v2の各改良を個別にON/OFF（A/B切り分け用）。既定は全ON。
+let V2_FLAGS = {
+  evalClamp: true,   // タフネス等の符号是正
+  evalExtra: true,   // 回避/リーサル距離/被リーサル/空盤面 などの追加特徴
+  spellFace: true,   // バーンのリーサル本体撃ち
+};
 let AI_TRAIN_STATS = { games: 0, wins: 0, epoch: 0 };
 let CARD_STATS = {};       // バランス統計 {cardId: {played, wins}} シミュレーション対戦から収集
 let AI_DECK_COUNTS = null; // AI自動構築デッキ {cardId: 枚数} null=デフォルト(全カード4枚)
@@ -184,7 +195,32 @@ class SimGame {
     this.maxTurns = 50;
     this.tdScores = [[], []]; // #10: intermediate eval scores per player
     this.playedCards = [new Map(), new Map()]; // {cardId → {count, turns[]}} バランス統計用
+    // 思考バージョン（プレイヤー別）。'v2'=改良版（既定） / 'v1'=旧版（A/B検証・安全フォールバック用）。
+    // SIM_BRAIN_FORCE が設定されていれば測定用にそれを優先する。
+    const _db = (typeof SIM_DEFAULT_BRAIN !== 'undefined') ? SIM_DEFAULT_BRAIN : 'v2';
+    this.brain = (typeof SIM_BRAIN_FORCE !== 'undefined' && SIM_BRAIN_FORCE)
+      ? [SIM_BRAIN_FORCE[0], SIM_BRAIN_FORCE[1]]
+      : [_db, _db];
     this.state = this.initState();
+  }
+
+  // MCTS等で直後に state を差し替える用途の軽量生成。重い初期デッキ生成(40枚×2シャッフル)を省く。
+  // state は null のまま返すので、呼び出し側で必ず sim.state を設定すること。
+  static lite() {
+    const g = Object.create(SimGame.prototype);
+    g.w = [AI_WEIGHTS, AI_WEIGHTS];
+    g.decks = [null, null];
+    g.landDecks = [null, null];
+    g.nid = 1;
+    g.maxTurns = 50;
+    g.tdScores = [[], []];
+    g.playedCards = [new Map(), new Map()];
+    const _db = (typeof SIM_DEFAULT_BRAIN !== 'undefined') ? SIM_DEFAULT_BRAIN : 'v2';
+    g.brain = (typeof SIM_BRAIN_FORCE !== 'undefined' && SIM_BRAIN_FORCE)
+      ? [SIM_BRAIN_FORCE[0], SIM_BRAIN_FORCE[1]]
+      : [_db, _db];
+    g.state = null;
+    return g;
   }
 
   mkDeck(idx) {
@@ -336,7 +372,12 @@ class SimGame {
     return 1;
   }
 
+  // 評価関数ディスパッチャ: 脳バージョンに応じてv1(旧)/v2(改良)へ振り分け。
   simEval(player) {
+    return this.brain[player] === 'v1' ? this.simEvalV1(player) : this.simEvalV2(player);
+  }
+
+  simEvalV1(player) {
     const s = this.state;
     const me=s.players[player], opp=s.players[1-player];
     if (me.life<=0) return -99999;
@@ -367,6 +408,79 @@ class SimGame {
     if (myCX >= 10) score += w.threshold * 5;
     if (oppCX === 9) score -= w.threshold * 3;
     if (oppCX >= 10) score -= w.threshold * 5;
+    return score;
+  }
+
+  // v2: 改良評価関数。
+  //  - タフネスの符号を正に固定（GA過学習でマイナスになっていた致命的バグの是正）。
+  //  - 回避(飛行)・リーサル距離・テンポ・除去済み盤面差など、勝敗に直結する特徴を追加。
+  //  - 係数は重みに比例させ、原理的に妥当な向き（多い/近いほど＋）に統一。
+  simEvalV2(player) {
+    const s = this.state;
+    const me=s.players[player], opp=s.players[1-player];
+    if (me.life<=0) return -99999;
+    if (opp.life<=0) return 99999;
+    const w = this.w[player];
+    const F = (typeof V2_FLAGS!=='undefined') ? V2_FLAGS : {evalClamp:true,evalExtra:true,spellFace:true};
+    // 符号を健全化したローカル重み（負のタフネス等の過学習を無効化）。
+    const wTou = F.evalClamp ? Math.max(0.05, w.fieldToughness) : w.fieldToughness;
+    const wPow = F.evalClamp ? Math.max(0.05, w.fieldPower) : w.fieldPower;
+
+    let myPow=0, oppPow=0, myTou=0, oppTou=0, myFly=0, oppFly=0, myReady=0;
+    for (const c of me.field) {
+      const cd=CARD_DB[c.cardId];
+      const p=(cd.power||0)+(c.tempPower||0), t=(cd.toughness||0)+(c.tempToughness||0);
+      myPow+=p; myTou+=t;
+      if (cd.flying) myFly+=p;                       // 回避: 飛行の打点はブロックされにくい
+      if (!c.sick && !c.tapped) myReady+=p;          // テンポ: 即攻撃できる打点
+    }
+    for (const c of opp.field) {
+      const cd=CARD_DB[c.cardId];
+      const p=(cd.power||0)+(c.tempPower||0), t=(cd.toughness||0)+(c.tempToughness||0);
+      oppPow+=p; oppTou+=t;
+      if (cd.flying) oppFly+=p;
+    }
+
+    let score = w.life*(me.life-opp.life)
+              + wPow*(myPow-oppPow)
+              + wTou*(myTou-oppTou)
+              + w.fieldCount*(me.field.length-opp.field.length)
+              + w.handAdv*(me.hand.length-opp.hand.length);
+
+    // ライフが低いほどライフ価値を高く（終盤の守り/詰め）
+    if (me.life<10) score += w.lateLifeBonus*(me.life-opp.life);
+    if (s.turn<=6) score += w.earlyFieldBonus*me.field.length;
+
+    // マナ効率・プレイ可能枚数（V1同様）
+    const unplayable = me.hand.filter(cid=>{const c=CARD_DB[cid];return c.cost&&!this.canAfford(me,c.cost);}).length;
+    score -= w.manaEff*unplayable;
+    const myPlayable = me.hand.filter(cid=>{const c=CARD_DB[cid];return c.cost&&this.canAfford(me,c.cost);}).length;
+    const oppPlayable = opp.hand.filter(cid=>{const c=CARD_DB[cid];return c.cost&&this.canAfford(opp,c.cost);}).length;
+    score += (w.handAdv * 0.5) * (myPlayable - oppPlayable);
+
+    // CX/OC評価（V1同様）
+    const myCX = me.lands.length + me.lands.filter(l=>l.chargeCard).length;
+    const oppCX = opp.lands.length + opp.lands.filter(l=>l.chargeCard).length;
+    score += w.threshold * (myCX - oppCX);
+    if (myCX === 9) score += w.threshold * 3;
+    if (myCX >= 10) score += w.threshold * 5;
+    if (oppCX === 9) score -= w.threshold * 3;
+    if (oppCX >= 10) score -= w.threshold * 5;
+
+    // ── 改良特徴（v2新規）──────────────────────────────────────
+    if (F.evalExtra) {
+      // (1) 回避打点: 飛行の打点差は確実に通りやすい→価値を上乗せ。
+      score += wPow*0.5*(myFly-oppFly);
+      // (2) リーサル距離: 即攻撃可能打点が相手ライフに迫る/到達するほど大きく加点。
+      if (opp.life>0) {
+        if (myReady>=opp.life) score += w.life*8;                 // 実質リーサル圏
+        else score += w.life*1.2*(myReady/opp.life);              // 近いほど加点
+      }
+      // (3) 被リーサル: 相手の総打点が自分のライフ以上＝負け筋を強く減点。
+      if (me.life>0 && oppPow>=me.life) score -= w.life*6;
+      // (4) 空盤面ペナルティ: 相手だけ盤面がある状況は危険。
+      if (me.field.length===0 && opp.field.length>0) score -= wPow*2;
+    }
     return score;
   }
 
@@ -500,6 +614,63 @@ class SimGame {
   }
 
   evalSpellGain(ap,card) {
+    return this.brain[ap] === 'v1' ? this.evalSpellGainV1(ap,card) : this.evalSpellGainV2(ap,card);
+  }
+
+  // v2: バーン呪文の「本体（顔）」評価を修正。
+  //  旧コードは存在しない w.lifeAdv を参照し NaN → 比較不成立で「相手が空盤面のとき本体に撃たない」
+  //  ＝とどめを逃す致命的バグだった。w.life を用い、リーサルなら強烈に加点して詰めを優先する。
+  evalSpellGainV2(ap,card) {
+    const s=this.state, opp=s.players[1-ap], me=s.players[ap];
+    const w=this.w[ap];
+    if (!this.canAfford(me,card.cost)) return -Infinity;
+    // 本体ダメージの価値: 通常は w.life*dmg、リーサル(相手ライフ以下)なら巨大ボーナス。
+    const faceVal=(dmg)=> (dmg>=opp.life ? w.life*dmg + 10000 : w.life*dmg*1.1);
+    if (card.effect==='junigeki' && opp.field.length) {
+      const tgt=this.simPickDamageTarget(opp.field, 2);
+      const kills=this.hp(tgt) <= 2;
+      return kills ? w.fieldPower*(CARD_DB[tgt.cardId].power||1)+w.fieldCount : w.fieldPower*0.5;
+    }
+    if (card.effect==='kaizen' && opp.field.length) {
+      const tgt=opp.field.reduce((a,b)=>this.hp(b)<this.hp(a)?b:a);
+      const kills=(tgt.damage+2)>=(CARD_DB[tgt.cardId].toughness+(tgt.tempToughness||0));
+      return (kills?w.fieldPower*(CARD_DB[tgt.cardId].power||1)+w.fieldCount:w.fieldPower*0.3)+w.handAdv*0.3;
+    }
+    const _spellFace = (typeof V2_FLAGS!=='undefined') ? V2_FLAGS.spellFace : true;
+    const faceWhenField = _spellFace ? 0.6 : 0; // 盤面ありでも顔を選好する係数（OFFなら除去のみ）
+    if (card.effect==='akageki') {
+      if (opp.field.length) { const t=this.simPickDamageTarget(opp.field, 2); const k=this.hp(t) <= 2; const removeVal=k?w.fieldPower*(CARD_DB[t.cardId].power||1)+w.fieldCount:w.fieldPower*0.5; return Math.max(removeVal, faceVal(2)*faceWhenField); }
+      return faceVal(2);
+    }
+    if (card.effect==='iegeki') {
+      if (opp.field.length) { const t=opp.field.reduce((a,b)=>this.hp(b)<this.hp(a)?b:a); const k=this.hp(t) <= 5; const removeVal=k?w.fieldPower*(CARD_DB[t.cardId].power||1)+w.fieldCount*0.5:w.fieldPower*1.5; return Math.max(removeVal, faceVal(5)*faceWhenField) + (this.simIsOC(me)?w.fieldCount*1:0); }
+      return faceVal(5) + (this.simIsOC(me)?w.fieldCount*2:0);
+    }
+    if (card.effect==='ao_geki') {
+      if (opp.field.length) { const t=this.simPickDamageTarget(opp.field, 3); const k=this.hp(t) <= 3; const removeVal=k?w.fieldPower*(CARD_DB[t.cardId].power||1)+w.fieldCount:w.fieldPower*0.5; return Math.max(removeVal, faceVal(3)*faceWhenField); }
+      return faceVal(3);
+    }
+    if (card.effect==='mizu_geki') return opp.field.length ? w.fieldCount*0.8+w.fieldPower*0.3 : 0;
+    if (card.effect==='hitei') return (this.state.stack||[]).length>=1 ? w.fieldPower*1.5 : -Infinity;
+    if (card.effect==='chishiki_no_seiri') return w.handAdv*1.2;
+    if (card.effect==='kurogeki') return opp.field.length ? w.fieldPower*1.2+w.fieldCount*0.8 : 0;
+    if (card.effect==='shigoeki') {
+      const destroyGain = opp.field.length ? w.fieldPower*1.2+w.fieldCount*0.8 : 0;
+      const millGain = w.handAdv*0.5;
+      return destroyGain + millGain;
+    }
+    if (card.effect==='kaitaku1spell' || card.id==='tami_kaitaku') return w.threshold*2;
+    if (card.effect==='mori_kansha' || card.id==='mori_kansha') {
+      // 森への感謝: 土地数ダメージ。相手が空盤面なら本体リーサルも考慮。
+      const dmg=me.lands.length;
+      const damageGain = dmg>0 ? (opp.field.length ? w.fieldPower*0.8 : faceVal(dmg)*0.6) : 0;
+      const kaitakuGain = w.threshold*1.5;
+      return damageGain + kaitakuGain;
+    }
+    return 0;
+  }
+
+  evalSpellGainV1(ap,card) {
     const s=this.state, opp=s.players[1-ap], me=s.players[ap];
     const w=this.w[ap];
     if (!this.canAfford(me,card.cost)) return -Infinity;
@@ -545,6 +716,12 @@ class SimGame {
 
   simSpellEffect(ap,card) {
     const s=this.state, opp=s.players[1-ap], me=s.players[ap];
+    // v2: バーンが本体リーサルなら、相手クリーチャーではなく顔に撃って勝つ（詰めの取りこぼし防止）。
+    if (this.brain[ap]==='v2' && ((typeof V2_FLAGS!=='undefined') ? V2_FLAGS.spellFace : true)) {
+      const faceDmg = ({akageki:2, ao_geki:3, iegeki:5})[card.effect]
+        || ((card.effect==='mori_kansha'||card.id==='mori_kansha') ? me.lands.length : 0);
+      if (faceDmg>0 && faceDmg>=opp.life) { opp.life-=faceDmg; return; }
+    }
     if (card.effect==='junigeki') {
       if (opp.field.length) {
         const tgt=this.simPickDamageTarget(opp.field, 2); // 倒せる最大の脅威を優先（実AIと整合）
@@ -852,10 +1029,13 @@ class SimGame {
 // ── MCTS (Monte Carlo Tree Search) ──────────────────────────────────
 const MCTS_EXPLORATION = 1.414; // UCB1 exploration constant
 const MCTS_ROLLOUT_DEPTH = 22;  // max turns per rollout
-// 改善8: 局面に応じた時間予算（通常/終盤/クリティカル）
-const MCTS_TIME_NORMAL    = 380; // ms - 通常
-const MCTS_TIME_LATE      = 600; // ms - 終盤（どちらかのライフ<=10）
-const MCTS_TIME_CRITICAL  = 800; // ms - 超終盤（ライフ<=5 or OC条件付近）
+// 反復上限。生成高速化により同一時間で多数探索できるため、実質「時間予算」を律速にする。
+const MCTS_MAX_ITERS = 6000;
+let MCTS_LAST_ITERS = 0; // 診断用: 直近 mctsSearch の反復数
+// 改善8: 局面に応じた時間予算（通常/終盤/クリティカル）。探索の質を上げるため引き上げ。
+const MCTS_TIME_NORMAL    = 500; // ms - 通常
+const MCTS_TIME_LATE      = 800; // ms - 終盤（どちらかのライフ<=10）
+const MCTS_TIME_CRITICAL  = 1100; // ms - 超終盤（ライフ<=5 or OC条件付近）
 const MCTS_TIME_BUDGET_MS = MCTS_TIME_NORMAL; // backward compat
 
 function mctsTimeBudget() {
@@ -949,7 +1129,7 @@ function deterministicState(baseState) {
 
 // Enumerate possible actions from an AI-turn SimGame state (player=1, main phase)
 function mctsEnumerateActions(simState, nid) {
-  const sim = new SimGame();
+  const sim = SimGame.lite();
   sim.state = JSON.parse(JSON.stringify(simState));
   sim.nid = nid;
   const p1 = sim.state.players[1];
@@ -971,7 +1151,7 @@ function mctsEnumerateActions(simState, nid) {
 
 // Apply an action to a SimGame state, return new state snapshot + new nid
 function mctsApplyAction(simState, action, nid) {
-  const sim = new SimGame();
+  const sim = SimGame.lite();
   sim.state = JSON.parse(JSON.stringify(simState));
   sim.nid = nid;
   const ap = 1; // AI is always player 1
@@ -1005,7 +1185,7 @@ function mctsApplyAction(simState, action, nid) {
 // Rollout: play game to completion from simState, return 1 if P1 wins, 0 otherwise
 // 改善7: P0もheuristic（SimGame.simPlayCards＋simAttack）でプレイ → ランダムより精度高
 function mctsRollout(simState, nid) {
-  const sim = new SimGame();
+  const sim = SimGame.lite();
   sim.state = JSON.parse(JSON.stringify(simState));
   sim.nid = nid;
   sim.maxTurns = MCTS_ROLLOUT_DEPTH;
@@ -1036,7 +1216,9 @@ function mctsSearch(timeMs) {
     root.untriedActions = mctsEnumerateActions(rootState, 1);
 
     let iterations = 0;
-    while (Date.now() < deadline && iterations < 500) {
+    // 反復上限を引き上げ、実質的に「時間予算」を律速にする。
+    // 無引数SimGame生成の高速化(約56倍)で同じ時間でも遥かに多く探索できるようになった。
+    while (Date.now() < deadline && iterations < MCTS_MAX_ITERS) {
       iterations++;
       try {
         // 1. Selection: walk tree using UCB1
@@ -1077,6 +1259,7 @@ function mctsSearch(timeMs) {
         // 1イテレーションのシミュレーション失敗（未対応カード効果など）は無視して継続
       }
     }
+    MCTS_LAST_ITERS = iterations; // 診断用: 直近の探索反復数
 
     // Extract best action sequence: follow most-visited path
     const plays = [];
@@ -1128,7 +1311,7 @@ function mctsPickAttackers(candidates) {
     const idx = ci % atkCombos.length;
     ci++;
     const atkIds = atkCombos[idx];
-    const sim = new SimGame();
+    const sim = SimGame.lite();
     sim.state = deterministicState(baseState);
     // 選択した攻撃者をシム内でシミュレート
     const s = sim.state, p1 = s.players[1], p0 = s.players[0];
@@ -1223,7 +1406,7 @@ function mctsPickBlockers(attackerInsts) {
     const idx = ci % assignments.length;
     ci++;
     const assign = assignments[idx];
-    const sim = new SimGame();
+    const sim = SimGame.lite();
     sim.state = deterministicState(baseState);
     const s = sim.state, p0 = s.players[0], p1 = s.players[1];
     // 割り当て通りに戦闘解決
@@ -1284,7 +1467,7 @@ function mctsOrderAttackers(insts) {
     const idx = ci % orders.length;
     ci++;
     const order = orders[idx];
-    const sim = new SimGame();
+    const sim = SimGame.lite();
     sim.state = deterministicState(baseState);
     const s = sim.state, p1 = s.players[1], p0 = s.players[0];
     for (const inst of order) {
@@ -1345,7 +1528,7 @@ function mctsPickOption(options, applyToSim) {
   while (Date.now() < deadline) {
     const idx = ci % options.length;
     ci++;
-    const sim = new SimGame();
+    const sim = SimGame.lite();
     sim.state = deterministicState(baseState);
     applyToSim(sim, options[idx]);
     sim.simCheckDeath(0); sim.simCheckDeath(1);

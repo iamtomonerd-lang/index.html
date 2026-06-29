@@ -595,7 +595,13 @@ function aiAttack() {
 
   // リーサルなら全員攻撃、そうでなければMCTSで攻撃者を選択
   let attackerInsts;
-  if (isLethal) {
+  // 相手の盤面が空＝ブロッカーも反撃も無い → 攻撃可能な全クリーチャーで殴る（タダ働きの打点を逃さない）。
+  // これが無いと、AIは大型(例:6/5)を温存して飛行1点だけで削る“遅すぎる”試合運びになり、
+  // 能動的な相手にレースで負ける主要因になっていた。
+  const oppOpenBoard = player.field.length === 0;
+  if (oppOpenBoard) {
+    attackerInsts = candidates;
+  } else if (isLethal) {
     attackerInsts = candidates;
   } else {
     // 出たターンのカクトウクリーチャーはMCTS評価が不正確なため必ず格闘を試みる
@@ -759,67 +765,3 @@ function resolveAICombat() {
   }
 }
 
-// ============================================================
-// PLAYER AUTO PLAY (for local mode testing)
-// ============================================================
-function playerAutoPlay() {
-  if (G.phase === 'ended' || G.activePlayer !== 0) return;
-  const player = G.players[0];
-  log('プレイヤー: カードを自動唱え中...', 'important');
-
-  // グリーディ戦略：唱えられるカードを順に唱える
-  let playedCard = true;
-  while (playedCard && player.hand.length > 0) {
-    playedCard = false;
-    const playable = player.hand.map((cid, i) => ({cid, i, card: CARD_DB[cid]}))
-      .filter(({card}) => card.type !== 'land' && canAfford(0, card.cost))
-      .sort((a,b) => totalCost(b.card.cost) - totalCost(a.card.cost)); // 高コストから
-
-    if (playable.length > 0) {
-      const {cid, i, card} = playable[0];
-      if (card.type === 'creature' && player.field.length < 5) {
-        payMana(0, card.cost);
-        player.hand.splice(i, 1);
-        const inst = newInstance(cid);
-        inst.sick = true;
-        inst.entryTurn = G.turn;
-        log(`プレイヤー: ${card.name} をスタックに積んだ`);
-        G.stack.push({
-          name: card.name,
-          icon: card.icon||'⚔️',
-          owner: 0,
-          resolve: () => {
-            if (player.field.length >= 5) { player.graveyard.push(cid); return; }
-            _enteringInstIds.add(inst.instanceId);
-            player.field.push(inst);
-            log(`プレイヤー: ${card.name} が場に出た`, 'important');
-            fireETB(0, inst.instanceId);
-            render();
-          }
-        });
-        renderStack();
-        render();
-        playedCard = true;
-      } else if (card.type === 'spell') {
-        payMana(0, card.cost);
-        player.hand.splice(i, 1);
-        log(`プレイヤー: ${card.name} をスタックに積んだ`);
-        G.stack.push({
-          name: card.name,
-          icon: card.icon||'✨',
-          owner: 0,
-          resolve: () => {
-            player.graveyard.push(cid);
-            // Note: spell effects not fully implemented for player - just discard
-          }
-        });
-        renderStack();
-        render();
-        playedCard = true;
-      }
-    }
-  }
-
-  log('プレイヤー: メインフェイズ終了', 'important');
-  setTimeout(() => endPhase(), 600);
-}
