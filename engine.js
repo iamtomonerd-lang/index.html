@@ -4665,6 +4665,14 @@ function confirmMulligan() {
 // ============================================================
 // 観戦モード (AI vs AI Spectator Mode)
 // ============================================================
+function startSpectatorFromHome() {
+  // ホーム画面から観戦モードを起動
+  const homeScreen = document.querySelector('.home-screen, [id*=home]');
+  if (homeScreen) homeScreen.style.display = 'none';
+
+  startSpectatorMode();
+}
+
 function startSpectatorMode() {
   SPECTATOR_MODE = true;
   SPECTATOR_VIEWPOINT = 0;
