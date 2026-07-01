@@ -798,7 +798,8 @@ function arestiaKaizouStart(instId) {
           const tc = p.field.find(x => x.instanceId === tgt.instId);
           if (tc && tc.instanceId !== instId) {
             tc.tapped = false;
-            log('アレスティア 還元: クリーチャーをアンタップ');
+            addPermanentBuff(0, tc.instanceId, 0, 2);
+            log('アレスティア 還元: クリーチャーをアンタップし+0/+2(永続)');
           }
           G.targetMode = null; render(); updateHints();
         }};
@@ -1396,7 +1397,7 @@ function updateHints() {
   } else if (G.chargingMode === 'pick_land') {
     hint.innerHTML = '⭐ <b>チャージ</b> — チャージする土地をクリックしてください';
     hint.style.color = '#ffaa00';
-  } else if (G.mulliganMode) {
+  } else if (G.mulliganMode && !SPECTATOR_MODE) {
     hint.innerHTML = '🔄 <b>マリガン</b> — 戻すカードをクリック（赤枠）して「確認」を押す';
     hint.style.color = '#aaaaff';
   } else if (G.awaitingPriority && G.priorityFor === NET_MY_IDX) {

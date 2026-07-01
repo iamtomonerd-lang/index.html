@@ -106,15 +106,15 @@ function runCardTests() {
     assert('ETB 僧侶(AI): 相手クリーチャーに強制攻撃フラグ', G.players[0].field[0] && G.players[0].field[0].mustAttack);
   });
 
-  // 4. ETB damage1opponent: 天からの使者が相手クリーチャーに1ダメージ
+  // 4. ETB damage2creature: 天からの使者が相手クリーチャーに2ダメージ
   withState(()=>{
-    const target = _testAddCreature(0,'shinmai_heishi'); // 1/2
+    const target = _testAddCreature(0,'shinmai_heishi'); // 1/3
     const tenshi = _testAddCreature(1,'ten_kara_shisha');
     fireETB(1, tenshi.instanceId);
     drainStack();
     const t = G.players[0].field.find(x=>x.instanceId===target.instanceId);
-    // 1/2に1ダメージ→生存（damage=1）
-    assert('ETB 使者(AI): 相手クリーチャーに1ダメージ', t && t.damage===1);
+    // 1/3に2ダメージ→生存（damage=2）
+    assert('ETB 使者(AI): 相手クリーチャーに2ダメージ', t && t.damage===2);
   });
 
   // 5. ETB mustAttackTarget: セラシアの盾兵が攻撃強制
@@ -243,61 +243,49 @@ function runCardTests() {
     assert('Arestiaバフ: 実効パワーに反映(5+1=6)', eff===6);
   });
 
-  // 15. 介善（新仕様）: ■1で相手クリーチャー1体に5ダメージ
+  // 15. 介入する剣閃（新仕様）: 相手クリーチャー1体に5ダメージ
   withState(()=>{
     G.players[0].hand = ['kaizen'];
     G.players[0].mana = {R:0,U:0,G:0,W:4,B:0,C:0};
     const t1 = _testAddCreature(1,'shinmai_heishi'); // 1/2 ← 5ダメージ対象
-    const t2 = _testAddCreature(1,'shinmai_heishi'); // 1/2 ← 攻撃強制対象
     playKaizen(0, 0);
-    assert('介善(非OC): 3つの効果がスタックに積まれる', G.stack.length===3);
-    // ■1 (1体に5ダメージ) — 最上位が最初に解決
+    assert('介入する剣閃(非OC): 1つの効果がスタックに積まれる', G.stack.length===1);
     G.stack.pop().resolve();
-    assert('介善 ■1: 解決時にtargetModeがセット', G.targetMode && G.targetMode.type==='opponentCreature');
+    assert('介入する剣閃: 解決時にtargetModeがセット', G.targetMode && G.targetMode.type==='opponentCreature');
     G.targetMode.callback({instId: t1.instanceId});
-    assert('介善 ■1: 5ダメージで破壊', !G.players[1].field.find(x=>x.instanceId===t1.instanceId));
-    // ■2 (攻撃強制)
-    G.stack.pop().resolve();
-    assert('介善 ■2: 解決時にtargetModeがセット', G.targetMode && G.targetMode.type==='opponentCreature');
-    G.targetMode.callback({instId: t2.instanceId});
-    assert('介善 ■2: 対象に攻撃強制フラグ', G.players[1].field.find(x=>x.instanceId===t2.instanceId)?.mustAttack===true);
-    // ■3 (kaizenBlockDraw)
-    G.stack.pop().resolve();
-    assert('介善 ■3: kaizenBlockDrawがセット', G.kaizenBlockDraw===0);
-    assert('介善: 墓地に置かれる', G.players[0].graveyard.includes('kaizen'));
+    assert('介入する剣閃: 5ダメージで破壊', !G.players[1].field.find(x=>x.instanceId===t1.instanceId));
+    assert('介入する剣閃: 墓地に置かれる', G.players[0].graveyard.includes('kaizen'));
   });
 
-  // 16. 介善: 相手クリーチャーなしでも全スタックが処理される
+  // 16. 介入する剣閃: 相手クリーチャーなしでもスタックが処理される
   withState(()=>{
     G.players[0].hand = ['kaizen'];
     G.players[0].mana = {R:0,U:0,G:0,W:4,B:0,C:0};
     playKaizen(0, 0);
-    assert('介善(対象なし): 3スタック積まれる', G.stack.length===3);
-    G.stack.pop().resolve(); // ■1: 対象なしスキップ
-    G.stack.pop().resolve(); // ■2: 対象なしスキップ
-    G.stack.pop().resolve(); // ■3: kaizenBlockDraw設定
-    assert('介善(対象なし): 墓地に置かれる', G.players[0].graveyard.includes('kaizen'));
+    assert('介入する剣閃(対象なし): 1スタック積まれる', G.stack.length===1);
+    G.stack.pop().resolve(); // 対象なしスキップ
+    assert('介入する剣閃(対象なし): 墓地に置かれる', G.players[0].graveyard.includes('kaizen'));
   });
 
-  // 16a. 介善■2: P/T入れ替え（旧テスト維持 — 旧noDamageKill機能は残存）
+  // 16a. noDamageKill: P/T入れ替え（汎用フラグ、直接セットして動作確認）
   withState(()=>{
-    const c = _testAddCreature(0,'bastian'); // 3/2
+    const c = _testAddCreature(0,'ayumu'); // 3/2
     c.noDamageKill = true;
     applyDamageToCreature(0, c.instanceId, 2, 1);
     const alive = G.players[0].field.find(x=>x.instanceId===c.instanceId);
-    assert('介善■2: 致死ダメージでも入れ替えで生存', !!alive);
-    assert('介善■2: 入れ替え後パワー=元タフネス(2)', alive && getEffectivePower(0, alive)===2);
-    assert('介善■2: 入れ替え後タフネス=元パワー(3)', alive && getEffectiveToughness(0, alive)===3);
-    assert('介善■2: ダメージは引き継ぐ(2)', alive && alive.damage===2);
-    assert('介善■2: 置き換えは1回限り(フラグ解除)', alive && alive.noDamageKill===false);
+    assert('noDamageKill: 致死ダメージでも入れ替えで生存', !!alive);
+    assert('noDamageKill: 入れ替え後パワー=元タフネス(2)', alive && getEffectivePower(0, alive)===2);
+    assert('noDamageKill: 入れ替え後タフネス=元パワー(3)', alive && getEffectiveToughness(0, alive)===3);
+    assert('noDamageKill: ダメージは引き継ぐ(2)', alive && alive.damage===2);
+    assert('noDamageKill: 置き換えは1回限り(フラグ解除)', alive && alive.noDamageKill===false);
   });
 
-  // 16b. 介善■2: 入れ替え後も致死なら破壊
+  // 16b. noDamageKill: 入れ替え後も致死なら破壊
   withState(()=>{
-    const c = _testAddCreature(0,'bastian'); // 3/2
+    const c = _testAddCreature(0,'ayumu'); // 3/2
     c.noDamageKill = true;
     applyDamageToCreature(0, c.instanceId, 3, 1);
-    assert('介善■2: 入れ替え後タフネス以上のダメージで破壊', !G.players[0].field.find(x=>x.instanceId===c.instanceId));
+    assert('noDamageKill: 入れ替え後タフネス以上のダメージで破壊', !G.players[0].field.find(x=>x.instanceId===c.instanceId));
   });
 
   // 16c. 介善■3: ブロック時1ドロー
@@ -328,7 +316,7 @@ function runCardTests() {
 
   // 18. バスティアンCX8バフ: +3/+3
   withState(()=>{
-    const bast = _testAddCreature(0,'bastian'); // 3/2
+    const bast = _testAddCreature(0,'bastian'); // 3/3
     // CX8: 土地8枚
     G.players[0].lands = Array.from({length:8},(_,i)=>({instanceId:300+i, cardId:'hito_heichi', tapped:false, chargeCard:null}));
     const bonus = getCXBonus(0, bast);
@@ -340,20 +328,20 @@ function runCardTests() {
     assert('バスティアンCX7: ボーナスなし', bonus2.power===0);
   });
 
-  // 19. バスティアンETB: 2ダメージ→CX6で追加3ダメージ
+  // 19. バスティアンETB: 2ダメージ→CX6で追加2ダメージ
   withState(()=>{
     const t1 = _testAddCreature(1,'arestia');   // 5/5
-    const t2 = _testAddCreature(1,'serashia_heishi'); // 2/5
+    const t2 = _testAddCreature(1,'serashia_heishi'); // 2/3
     _testAddCreature(0,'bastian');
     bastianChooseETB(G.players[0].field[0].instanceId, true); // CX6あり
     assert('バスティアンETB: 2ダメージの対象選択', G.targetMode && G.targetMode.type==='opponentCreature');
     G.targetMode.callback({instId: t1.instanceId});
     const a = G.players[1].field.find(x=>x.instanceId===t1.instanceId);
     assert('バスティアンETB: 2ダメージ適用', a && a.damage===2);
-    assert('バスティアンETB CX6: 追加3ダメージの対象選択', G.targetMode && G.targetMode.type==='opponentCreature');
+    assert('バスティアンETB CX6: 追加2ダメージの対象選択', G.targetMode && G.targetMode.type==='opponentCreature');
     G.targetMode.callback({instId: t2.instanceId});
     const b = G.players[1].field.find(x=>x.instanceId===t2.instanceId);
-    assert('バスティアンETB CX6: 3ダメージ適用', b && b.damage===3);
+    assert('バスティアンETB CX6: 2ダメージ適用', b && b.damage===2);
   });
 
   // 20. 土地タップでマナ生成

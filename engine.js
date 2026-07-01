@@ -1,4 +1,16 @@
 
+// 特殊マッチ用: 保存済みデッキやAI学習デッキに関わらず、両者確実に白固定デッキを使う
+function buildFixedWhiteDeck() {
+  let deck = [];
+  DB_WHITE_MAIN.forEach(c => { for (let i=0;i<4;i++) deck.push(c); });
+  return shuffle(deck); // 10種×4枚=40枚
+}
+function buildFixedWhiteLandDeck() {
+  let deck = [];
+  DB_WHITE_LAND.forEach(l => { for (let i=0;i<2;i++) deck.push(l); });
+  return shuffle(deck); // 5種×2枚=10枚
+}
+
 // Build decks
 function buildMainDeck() {
   try {
@@ -133,7 +145,10 @@ let G; // global game state
 let SPECTATOR_MODE = false;          // 観戦モードON/OFF
 let SPECTATOR_VIEWPOINT = 0;         // 視点: 0=P1(上)/ 1=P2(下)
 let SPECTATOR_AUTO_DRIVE = false;    // 自動駆動ON/OFF
-let SPECTATOR_TICK_INTERVAL = 2000;  // 自動駆動の間隔(ms) デフォルト2000（超遅）
+let SPECTATOR_TICK_INTERVAL = 3000;  // 自動駆動の間隔(ms) デフォルト3000
+// 特殊マッチモード用グローバル
+let SPECIAL_MATCH_MODE = false;       // 特殊マッチモードON/OFF
+let SPECIAL_MATCH_RECORDS = [];        // 対戦記録 {date, playerWon: boolean}
 
 function initGame() {
   if (typeof REPLAY_HISTORY !== 'undefined') REPLAY_HISTORY = []; // 新ゲームでリプレイ履歴をクリア
@@ -149,8 +164,8 @@ function initGame() {
     players: [
       {
         life: 20,
-        deck: buildMainDeck(),
-        landDeck: buildLandDeck(),
+        deck: SPECIAL_MATCH_MODE ? buildFixedWhiteDeck() : buildMainDeck(),
+        landDeck: SPECIAL_MATCH_MODE ? buildFixedWhiteLandDeck() : buildLandDeck(),
         hand: [],
         field: [], // {instanceId, cardId, tapped, damage, sick, charges, tempBuff}
         lands: [], // {instanceId, cardId, tapped, chargeCard}
@@ -164,8 +179,8 @@ function initGame() {
       },
       {
         life: 20,
-        deck: buildAIMainDeck(),
-        landDeck: buildAILandDeck(),
+        deck: SPECIAL_MATCH_MODE ? buildFixedWhiteDeck() : buildAIMainDeck(),
+        landDeck: SPECIAL_MATCH_MODE ? buildFixedWhiteLandDeck() : buildAILandDeck(),
         hand: [],
         field: [],
         lands: [],
@@ -398,7 +413,9 @@ function drawCard(player) {
     return false;
   }
   const cardId = p.deck.shift();
+  const cardName = CARD_DB[cardId]?.name || cardId;
   const result = addCardToHand(player, cardId);
+  log(`${cardName}を引いた`);
   animDrawCard(player);
   if (!G.drawCount) G.drawCount = [0, 0];
   G.drawCount[player] = (G.drawCount[player] || 0) + 1;
@@ -935,10 +952,16 @@ function playCardFromHand(player, handIndex) {
     if (card.effect === 'junigeki') {
       // 盾撃は1つのスタックアイテムとして解決し、解決時に■1→■2を順次処理する。
       // （クイック割込みは「盾撃の解決前」に行われ、盾撃解決時は■1・■2とも必ず処理される）
+      const opp = 1-player;
+      const hasOppCreature = G.players[opp].field.length > 0;
+      const hasOwnCreature = G.players[player].field.length > 0;
+      if (!hasOppCreature && !hasOwnCreature) {
+        log(`${card.name}: 対象なしのためプレイできません`);
+        return;
+      }
       payMana(player, card.cost);
       p.hand.splice(handIndex, 1);
       log(`${card.name} をスタックに積んだ`, 'important');
-      const opp = 1-player;
       // ■2を処理してから解決を完了する
       const junigekiStep2 = () => {
         if (G.players[player].field.length === 0) {
@@ -957,7 +980,8 @@ function playCardFromHand(player, handIndex) {
         G.targetMode = { type:'ownCreature', sourcePlayer:player, callback:(tgt) => {
           G.targetMode = null;
           addPermanentBuff(player, tgt.instId, 0, 1);
-          log(`${card.name} ■2: 自クリーチャー+0/+1(永続)`);
+          const targetName = getCreatureName(player, tgt.instId);
+          log(`${card.name} ■2: ${targetName}を+0/+1(永続)`);
           p.graveyard.push(cardId);
           render(); updateHints(); continueStack();
         }};
@@ -1197,13 +1221,7 @@ function playKaizen(player, handIndex) {
   const opp = 1 - player;
 
   // ■効果を逆順にスタック積み（LIFOで上から順に解決）
-  // ■3: このターン自クリーチャーブロック時1ドロー (最後に積む = 最後に解決)
-  G.stack.push({ name:`${card.name} ■3: ブロック時ドロー付与`, icon:'✨', owner:player, fastResolve:true, resolve:() => {
-    G.kaizenBlockDraw = player;
-    log(`${card.name} ■3: このターン、自クリーチャーがブロックする時1枚引く`, 'important');
-    render(); updateHints(); continueStack();
-  }});
-  // OC: クリーチャー展開
+  // OC: クリーチャー展開 (最後に積む = 最後に解決)
   if (ocAtCast) {
     G.stack.push({ name:`${card.name} OC: クリーチャー展開`, icon:'✨', owner:player, fastResolve:true, resolve:() => {
       p.graveyard.push(cardId);
@@ -1211,34 +1229,17 @@ function playKaizen(player, handIndex) {
       kaizenOCDeploy(player);
     }});
   }
-  // ■2: 相手クリーチャー1体→このターン攻撃強制
-  G.stack.push({ name:`${card.name} ■2: 相手クリーチャー攻撃強制`, icon:'✨', owner:player, fastResolve:true, resolve:() => {
-    if (G.players[opp].field.length === 0) {
-      log(`${card.name} ■2: 対象なし`); render(); updateHints(); continueStack(); return;
-    }
-    G.targetMode = { type:'opponentCreature', sourcePlayer:player, callback:(tgt) => {
-      G.targetMode = null;
-      const tc = G.players[opp].field.find(c => c.instanceId === tgt.instId);
-      if (tc) {
-        tc.mustAttack = true;
-        G.mustAttackCreatures.add(tc.instanceId);
-        log(`${card.name} ■2: ${CARD_DB[tc.cardId].name} を攻撃強制`);
-      }
-      render(); updateHints(); continueStack();
-    }};
-    render(); updateHints();
-  }});
-  // ■1: 相手クリーチャー1体に5ダメージ (最後に積む = 最初に解決, LIFO)
-  G.stack.push({ name:`${card.name} ■1: 相手クリーチャーに5ダメージ`, icon:'✨', owner:player, resolve:() => {
+  // 相手クリーチャー1体に5ダメージ (最後に積む = 最初に解決, LIFO)
+  G.stack.push({ name:`${card.name}: 相手クリーチャーに5ダメージ`, icon:'✨', owner:player, resolve:() => {
     if (!ocAtCast) p.graveyard.push(cardId);
     if (G.players[opp].field.length === 0) {
-      log(`${card.name} ■1: 対象なし`); continueStack(); return;
+      log(`${card.name}: 対象なし`); continueStack(); return;
     }
     G.targetMode = { type:'opponentCreature', sourcePlayer:player, callback:(tgt) => {
       G.targetMode = null;
       const targetName = getCreatureName(opp, tgt.instId);
       applyDamageToCreature(opp, tgt.instId, 5, player);
-      log(`${card.name} ■1: ${targetName}に5ダメージ`);
+      log(`${card.name}: ${targetName}に5ダメージ`);
       render(); updateHints(); continueStack();
     }};
     render(); updateHints();
@@ -1480,25 +1481,14 @@ function resolveETBEffect(player, instanceId) {
   const card = CARD_DB[inst.cardId];
   const opp = 1-player;
 
-  if (card.etb === 'damage1opponent') {
-    const targets = G.players[opp].field;
-    if (targets.length === 0) { log(`${card.name} ETB: 対象なしのためスキップ`); continueStack(); return; }
-    G.targetMode = { type:'opponentCreature', sourcePlayer: player, callback:(tgt) => {
-      const targetName = getCreatureName(opp, tgt.instId);
-      applyDamageToCreature(opp, tgt.instId, 1, player);
-      log(`${card.name} ETB: ${targetName}に1ダメージ`, 'damage');
-      G.targetMode = null; render(); updateHints();
-      continueStack();
-    }};
-    log(`${card.name} ETB: 対象を選択（1ダメージ）`);
-    render(); updateHints();
-  } else if (card.etb === 'look3keep1white') {
-    if (player === 0) {
-      G._lookCont = () => continueStack();
-    } else {
-      G._lookCont = () => continueStack();
-    }
-    doLook3Keep1White(player);
+  // 恒常「攻撃できない」: 場に出た時に一度だけ登録
+  if (card.selfCantAttack) {
+    G.cantAttackPermanent.add(instanceId);
+  }
+
+  if (card.etb === 'lookKeepWhite') {
+    G._lookCont = () => continueStack();
+    doLookKeepColored(player, card.lookCount || 3, 'W');
   } else if (card.etb === 'mustAttackTarget') {
     const targets = G.players[opp].field;
     if (targets.length === 0) { log(`${card.name} ETB: 対象なしのためスキップ`); continueStack(); return; }
@@ -1512,17 +1502,27 @@ function resolveETBEffect(player, instanceId) {
     }};
     log(`${card.name} ETB: 対象を選択（次ターン攻撃強制）`);
     render(); updateHints();
-  } else if (card.etb === 'damage3opponent') {
+  } else if (card.etb === 'mustAttackTargetThenDraw') {
     const targets = G.players[opp].field;
-    if (targets.length === 0) { log(`${card.name} ETB: 対象なしのためスキップ`); continueStack(); return; }
+    if (targets.length === 0) {
+      log(`${card.name} ETB: 対象なしのためスキップ`);
+      drawCard(player);
+      log(`${card.name} ETB: その後、1枚引く`);
+      render(); updateHints();
+      continueStack();
+      return;
+    }
     G.targetMode = { type:'opponentCreature', sourcePlayer: player, callback:(tgt) => {
+      const tc = G.players[opp].field.find(x=>x.instanceId===tgt.instId);
       const targetName = getCreatureName(opp, tgt.instId);
-      applyDamageToCreature(opp, tgt.instId, 3, player);
-      log(`${card.name} ETB: ${targetName}に3ダメージ`, 'damage');
+      if (tc) { tc.mustAttack = true; G.mustAttackCreatures.add(tgt.instId); }
+      log(`${card.name} ETB: ${targetName}に攻撃強制`, 'important');
+      drawCard(player);
+      log(`${card.name} ETB: その後、1枚引く`);
       G.targetMode = null; render(); updateHints();
       continueStack();
     }};
-    log(`${card.name} ETB: 対象を選択（3ダメージ）`);
+    log(`${card.name} ETB: 対象を選択（次ターン攻撃強制）`);
     render(); updateHints();
   } else if (card.etb === 'damage2opponent_always_cx6damage3') {
     const hasCX6 = getCXValue(player) >= 6;
@@ -1763,14 +1763,14 @@ function bastianChooseETB(instanceId, hasCX6Override, playerArg) {
     if (hasCX6 && G.players[opp].field.length > 0) {
       G.targetMode = { type:'opponentCreature', sourcePlayer: src, callback:(tgt2) => {
         const targetName2 = getCreatureName(opp, tgt2.instId);
-        applyDamageToCreature(opp, tgt2.instId, 3, src);
-        log(`バスティオン 出た時 C6: ${targetName2}に追加3ダメージ`, 'damage');
+        applyDamageToCreature(opp, tgt2.instId, 2, src);
+        log(`バスティオン 出た時 C6: ${targetName2}に追加2ダメージ`, 'damage');
         G.targetMode = null;
         checkDeath();
         render(); updateHints();
         continueStack();
       }};
-      log('バスティオン 出た時 C6: 3ダメージの対象を選択');
+      log('バスティオン 出た時 C6: 追加2ダメージの対象を選択');
       render(); updateHints();
       if (src === 1) { aiAutoPickTarget(); }
     } else {
@@ -1856,9 +1856,11 @@ function renderLook3Modal() {
     if (!isWhite) { el.style.opacity = '0.4'; el.style.cursor = 'default'; }
     else {
       el.onclick = () => {
+        const seenCards = top3.map(c => CARD_DB[c].name).join('・');
         addCardToHand(player, cid);
         const rest = top3.filter(c2=>c2!==cid);
         rest.forEach(c2=>p.deck.push(c2));
+        log(`3ルック1: 見たカード『${seenCards}』`);
         log(`3ルック1: ${card.name} をキープ`);
         window._look3Cards = null; window._modalReturnRender = null;
         closeModal(); render(); updateHints();
@@ -1871,7 +1873,9 @@ function renderLook3Modal() {
 function look3NoKeep() {
   const top3 = window._look3Cards || [];
   const player = window._look3Player || 0;
+  const seenCards = top3.map(cid=>CARD_DB[cid].name).join('・');
   top3.forEach(cid=>G.players[player].deck.push(cid));
+  log(`3ルック1: 見たカード『${seenCards}』`);
   log('3ルック1: 全て底へ');
   window._look3Cards = null; window._modalReturnRender = null;
   closeModal(); render(); updateHints();
@@ -1933,8 +1937,10 @@ function renderLookColoredModal() {
     if (!ok) { el.style.opacity = '0.4'; el.style.cursor = 'default'; }
     else {
       el.onclick = () => {
+        const seenCards = top.map(c => CARD_DB[c].name).join('・');
         addCardToHand(player, cid);
         top.filter(c2 => c2 !== cid).forEach(c2 => p.deck.push(c2));
+        log(`${n}ルック1: 見たカード『${seenCards}』`);
         log(`${n}ルック1: ${card.name} をキープ`);
         window._lookCCards = null; window._modalReturnRender = null;
         closeModal(); render(); updateHints();
@@ -1947,7 +1953,9 @@ function renderLookColoredModal() {
 function lookColoredNoKeep() {
   const top = window._lookCCards || [];
   const player = window._lookCPlayer || 0;
+  const seenCards = top.map(cid => CARD_DB[cid].name).join('・');
   top.forEach(cid => G.players[player].deck.push(cid));
+  log(`ルック1: 見たカード『${seenCards}』`);
   log('ルック1: 全て底へ');
   window._lookCCards = null; window._modalReturnRender = null;
   closeModal(); render(); updateHints();
@@ -2561,6 +2569,10 @@ function endGame(winner) {
       else rec.losses = (rec.losses || 0) + 1;
       localStorage.setItem('dcg_record', JSON.stringify(rec));
     } catch(e) {}
+    // 特殊マッチの記録
+    if (SPECIAL_MATCH_MODE) {
+      onSpecialMatchEnd(winner === 0);
+    }
   }
   const who = NET_MODE === 'hotseat' ? (winner === 0 ? 'P1の' : 'P2の') : winner === 0 ? 'あなたの' : 'AIの';
   log(`ゲーム終了！ ${who}勝利！`, 'important');
@@ -2807,6 +2819,7 @@ function closeReplayViewer() {
 // PHASE MANAGEMENT
 // ============================================================
 function endPhase() {
+  if (SPECTATOR_MODE) return; // 観戦モード中は操作不可
   if (NET_MODE === 'guest' && netCanAct()) { netSendAction('endPhase', {}); return; }
   if (G.phase === 'ended') return;
   // Open priority window for non-active player before ending phase
@@ -3021,6 +3034,9 @@ function resolveSingleCombat(atkPlayer, atkInstId, kakutouTargetId, blockerInstI
       const tgtPow = getEffectivePower(opp, tgtInst);
       tgtInst.damage += atkPow;
       if (!atkInvuln) atkInst.damage += tgtPow;
+      // 聖印: ダメージを与えたクリーチャーの持ち主が同量ライフ回復
+      if (atkCard.lifelink && atkPow > 0) { G.players[atkPlayer].life += atkPow; showLifeChange(atkPlayer, atkPow); log(`${atkCard.name} 聖印: ライフ+${atkPow}`, 'heal'); }
+      if (CARD_DB[tgtInst.cardId].lifelink && tgtPow > 0 && !atkInvuln) { G.players[opp].life += tgtPow; showLifeChange(opp, tgtPow); log(`${CARD_DB[tgtInst.cardId].name} 聖印: ライフ+${tgtPow}`, 'heal'); }
       // 接死
       if (atkCard.deathtouch && atkPow > 0) tgtInst._deathtouched = true;
       if (CARD_DB[tgtInst.cardId].deathtouch && tgtPow > 0 && !atkInvuln) atkInst._deathtouched = true;
@@ -3036,6 +3052,9 @@ function resolveSingleCombat(atkPlayer, atkInstId, kakutouTargetId, blockerInstI
       const blkPow = getEffectivePower(opp, blkInst);
       blkInst.damage += atkPow;
       if (!atkInvuln) atkInst.damage += blkPow;
+      // 聖印: ダメージを与えたクリーチャーの持ち主が同量ライフ回復
+      if (atkCard.lifelink && atkPow > 0) { G.players[atkPlayer].life += atkPow; showLifeChange(atkPlayer, atkPow); log(`${atkCard.name} 聖印: ライフ+${atkPow}`, 'heal'); }
+      if (blkCard.lifelink && blkPow > 0 && !atkInvuln) { G.players[opp].life += blkPow; showLifeChange(opp, blkPow); log(`${blkCard.name} 聖印: ライフ+${blkPow}`, 'heal'); }
       // 接死
       if (atkCard.deathtouch && atkPow > 0) blkInst._deathtouched = true;
       if (blkCard.deathtouch && blkPow > 0 && !atkInvuln) atkInst._deathtouched = true;
@@ -3058,7 +3077,7 @@ function resolveSingleCombat(atkPlayer, atkInstId, kakutouTargetId, blockerInstI
             if (blkInstNow && blkCard.toughness > 1) {
               if (opp === 0) {
                 const capInstId = blkInstNow.instanceId;
-                showModal(`${blkCard.name} コピー`, `<p>タフネス${blkCard.toughness - 1}のコピーを出しますか？</p><button onclick="closeModal();G._awaitingModal=false;spawnCopyWithReducedToughness(0,${capInstId});render();updateHints();" style="margin:4px;padding:6px 12px;background:#4a9eff;border:none;border-radius:4px;color:#fff;cursor:pointer;">はい</button><button onclick="closeModal();G._awaitingModal=false;updateHints();" style="margin:4px;padding:6px 12px;background:#888;border:none;border-radius:4px;color:#fff;cursor:pointer;">いいえ</button>`);
+                showModal(`${blkCard.name} コピー`, `<p>タフネス${blkCard.toughness - 1}のコピーを出しますか？</p><button onclick="closeModal();G._awaitingModal=false;spawnCopyWithReducedToughness(0,${capInstId});render();updateHints();continueStack();" style="margin:4px;padding:6px 12px;background:#4a9eff;border:none;border-radius:4px;color:#fff;cursor:pointer;">はい</button><button onclick="closeModal();G._awaitingModal=false;updateHints();continueStack();" style="margin:4px;padding:6px 12px;background:#888;border:none;border-radius:4px;color:#fff;cursor:pointer;">いいえ</button>`);
                 G._awaitingModal = true;
                 return;
               } else {
@@ -3066,7 +3085,7 @@ function resolveSingleCombat(atkPlayer, atkInstId, kakutouTargetId, blockerInstI
               }
             }
           }
-          render();
+          render(); continueStack();
         });
       }
       if (blkCard.onBlock === 'gain3life') {
@@ -3091,6 +3110,7 @@ function resolveSingleCombat(atkPlayer, atkInstId, kakutouTargetId, blockerInstI
               render(); updateHints();
             } else {
               log(`${blkCard.name}: 相手クリーチャーなし、2ダメージ無効`);
+              continueStack();
             }
           });
         } else {
@@ -3101,6 +3121,7 @@ function resolveSingleCombat(atkPlayer, atkInstId, kakutouTargetId, blockerInstI
               log(`${blkCard.name}: 攻撃クリーチャーに2ダメージ`, 'damage');
               render();
             }
+            continueStack();
           });
         }
       }
@@ -3116,6 +3137,7 @@ function resolveSingleCombat(atkPlayer, atkInstId, kakutouTargetId, blockerInstI
           } else {
             triggerEffect(`${blkCard.name} コピー誘発(AI)`, blkCard.icon||'🛡️', opp, () => {
               spawnCopyWithReducedToughness(opp, blockerInstId);
+              continueStack();
             });
           }
         }
@@ -3136,6 +3158,7 @@ function resolveSingleCombat(atkPlayer, atkInstId, kakutouTargetId, blockerInstI
             } else {
               triggerEffect(`${blkCard.name} コピー誘発${copyCount > 1 ? ` (${i+1}/${copyCount})(AI)` : '(AI)'}`, blkCard.icon||'🛡️', 1, () => {
                 spawnCopyWithReducedToughness(1, blockerInstId);
+                continueStack();
               });
             }
           }
@@ -3150,11 +3173,19 @@ function resolveSingleCombat(atkPlayer, atkInstId, kakutouTargetId, blockerInstI
               G.targetMode = null; render(); updateHints();
               continueStack();
             }};
+            render();
           } else {
             const ally = G.players[1].field.find(c=>c.instanceId!==blockerInstId);
             if (ally) { addPermanentBuff(1, ally.instanceId, 1, 1); log(`AI ${blkCard.name} C8: 味方+1/+1`,'important'); }
+            render(); continueStack();
           }
-          render();
+        });
+      }
+      if (blkCard.cx8Block === 'buffAllAlly' && getCXValue(opp) >= 8) {
+        triggerEffect(`${blkCard.name} C8ブロック誘発`, blkCard.icon||'✨', opp, () => {
+          G.players[opp].field.forEach(c => addPermanentBuff(opp, c.instanceId, 1, 1));
+          log(`${opp===1?'AI ':''}${blkCard.name} C8: 自分のクリーチャー全て+1/+1`, 'important');
+          render(); continueStack();
         });
       }
       // 介善■3: このターン自クリーチャーブロック時1ドロー
@@ -3170,6 +3201,8 @@ function resolveSingleCombat(atkPlayer, atkInstId, kakutouTargetId, blockerInstI
     G.players[opp].life -= atkPow;
     showFloatDamage(atkPow, opp === 0 ? 'player' : 'ai');
     log(`${atkCard.name} が${atkPow}ダメージ！`, 'damage');
+    // 聖印: プレイヤーへの攻撃でダメージを与えても発動
+    if (atkCard.lifelink && atkPow > 0) { G.players[atkPlayer].life += atkPow; showLifeChange(atkPlayer, atkPow); log(`${atkCard.name} 聖印: ライフ+${atkPow}`, 'heal'); }
   }
 
   // Vigilance untap
@@ -3643,6 +3676,7 @@ function endTurn() {
 // CHARGE SYSTEM
 // ============================================================
 function startCharge() {
+  if (SPECTATOR_MODE) return; // 観戦モード中は操作不可
   if (NET_MODE === 'guest') { netSendAction('charge', {}); return; }
   // チャージは自分のターンのみ可能 → 操作主体は常にアクティブプレイヤー
   // (local: ボタンはP0のターンのみ有効 / host: ゲストの中継はゲストのターンのみ)
@@ -3750,6 +3784,22 @@ function activateChargedLand(player, instId) {
     });
     renderStack();
     openPriorityWindow(opp, null, `${landCard.name} 起動`);
+  } else if (landCard.chargedAbility === 'lookKeepWhite') {
+    // Cost: タップ(この土地) + W2
+    if (land.tapped) { log(`${landCard.name}: タップ済みのため起動できません`); return; }
+    if (!canAfford(player, {W:2})) { log('マナ不足 (白2)'); return; }
+    const n = landCard.chargeLookCount || 3;
+    land.tapped = true;
+    payMana(player, {W:2});
+    log(`${landCard.name}: ${n}ルック1(白) → スタックに積む`);
+    G.stack.push({
+      name: `${landCard.name} 起動(${n}ルック1)`,
+      icon: landCard.icon || '✨',
+      owner: player,
+      resolve: () => { G._lookCont = () => continueStack(); doLookKeepColored(player, n, 'W'); render(); updateHints(); }
+    });
+    renderStack();
+    openPriorityWindow(opp, null, `${landCard.name} 起動`);
   } else if (landCard.chargedAbility === 'kaizouReturn') {
     // shigen_heichi: OC + tap -> produce WW, send to land deck bottom
     if (!isOCActive(player)) { log('OC未達成'); return; }
@@ -3791,6 +3841,39 @@ function activateChargedLand(player, instId) {
           continueStack();
         }};
         log('対象を選択（5ダメージ）');
+        render(); updateHints();
+      }
+    });
+    renderStack();
+    openPriorityWindow(opp, null, `${landCard.name} 還元起動`);
+  } else if (landCard.chargedAbility === 'damage3opponentDraw') {
+    // kemono_heichi: 自身を土地デッキ底へ送り → 相手クリーチャーに3ダメージ。その後1枚引く
+    const lIdx = p.lands.findIndex(l=>l.instanceId===instId);
+    if (lIdx === -1) return;
+    p.lands.splice(lIdx, 1);
+    p.landDeck.push(landCard.id);
+    if (land.chargeCard) p.exile.push(land.chargeCard);
+    log(`${landCard.name} 還元: 土地デッキ底へ → スタックに積む`);
+    G.stack.push({
+      name: `${landCard.name} 起動(3ダメージ)`,
+      icon: landCard.icon || '✨',
+      owner: player,
+      resolve: () => {
+        if (G.players[opp].field.length === 0) {
+          log(`${landCard.name} 還元: 対象なしのためスキップ`);
+          drawCard(player);
+          log(`${landCard.name} 還元: その後、1枚引く`);
+          render(); updateHints(); continueStack(); return;
+        }
+        G.targetMode = { type:'opponentCreature', sourcePlayer:player, callback:(tgt) => {
+          applyDamageToCreature(opp, tgt.instId, 3, player);
+          log(`${landCard.name} 還元: 3ダメージ`, 'damage');
+          drawCard(player);
+          log(`${landCard.name} 還元: その後、1枚引く`);
+          G.targetMode = null; render(); updateHints();
+          continueStack();
+        }};
+        log('対象を選択（3ダメージ）');
         render(); updateHints();
       }
     });
@@ -3885,6 +3968,42 @@ function activateChargedLand(player, instId) {
           continueStack();
         }};
         log('白クリーチャーを選択（+0/+2永続）');
+        render(); updateHints();
+      }
+    });
+    renderStack();
+    openPriorityWindow(opp, null, `${landCard.name} 起動`);
+  } else if (landCard.chargedAbility === 'buffWhiteCreatureDraw') {
+    // serashia_miyako: tap -> give own white creature +0/+3 permanent. その後1枚引く
+    if (land.tapped) { log('タップ済み'); return; }
+    const whites = G.players[player].field.filter(c => CARD_DB[c.cardId].color === 'W');
+    if (whites.length === 0) { log(`${landCard.name}: 白クリーチャーがいません`); return; }
+    land.tapped = true;
+    log(`${landCard.name}: 白クリーチャー+0/+3 → スタックに積む`);
+    G.stack.push({
+      name: `${landCard.name} 起動(白+0/+3)`,
+      icon: landCard.icon || '✨',
+      owner: player,
+      resolve: () => {
+        const ws = G.players[player].field.filter(c => CARD_DB[c.cardId].color === 'W');
+        if (ws.length === 0) {
+          log(`${landCard.name}: 白クリーチャーなし`);
+          drawCard(player);
+          log(`${landCard.name}: その後、1枚引く`);
+          render(); updateHints(); continueStack(); return;
+        }
+        G.targetMode = { type:'ownCreature', sourcePlayer: player, aiPick: pool => pool.filter(c => CARD_DB[c.cardId].color === 'W').reduce((a,b) => getEffectiveToughness(player,b) < getEffectiveToughness(player,a) ? b : a), callback:(tgt) => {
+          const tc = G.players[player].field.find(x => x.instanceId === tgt.instId);
+          if (tc && CARD_DB[tc.cardId].color === 'W') {
+            addPermanentBuff(player, tgt.instId, 0, 3);
+            log(`${landCard.name}: 白クリーチャー+0/+3(永続)`);
+          }
+          drawCard(player);
+          log(`${landCard.name}: その後、1枚引く`);
+          G.targetMode = null; render(); updateHints();
+          continueStack();
+        }};
+        log('白クリーチャーを選択（+0/+3永続）');
         render(); updateHints();
       }
     });
@@ -4214,28 +4333,30 @@ function resolveCombat() {
             triggerEffect(`${blkCard.name} コピー誘発${copyCount > 1 ? ` (${i+1}/${copyCount})(AI)` : '(AI)'}`, blkCard.icon||'🛡️', 1, () => {
               const blkNow = ai.field.find(c=>c.instanceId===_blkId);
               if (blkNow && getEffectiveToughness(1, blkNow) > 1) { spawnCopyWithReducedToughness(1, _blkId); }
+              continueStack();
             });
           }
         }
         if (blkCard.onBlock === 'draw1') {
           triggerEffect(`${blkCard.name} ブロック誘発(1ドロー)`, blkCard.icon||'✨', 1, () => {
-            drawCard(1); log(`AI ${blkCard.name} ブロック: 1ドロー`);
+            drawCard(1); log(`AI ${blkCard.name} ブロック: 1ドロー`); continueStack();
           });
         }
         if (blkCard.onBlock === 'gain3life') {
           triggerEffect(`${blkCard.name} ブロック誘発(回復)`, blkCard.icon||'✨', 1, () => {
-            ai.life += 3; showLifeChange(1, +3); log(`AI ${blkCard.name} ブロック: ライフ3回復`, 'heal');
+            ai.life += 3; showLifeChange(1, +3); log(`AI ${blkCard.name} ブロック: ライフ3回復`, 'heal'); continueStack();
           });
         }
         if (blkCard.cx8Block === 'buff1ally' && getCXValue(1) >= 8) {
           triggerEffect(`${blkCard.name} C8ブロック誘発`, blkCard.icon||'✨', 1, () => {
             const allies = ai.field.filter(c=>c.instanceId!==_blkId);
             if (allies.length > 0) { addPermanentBuff(1, allies[0].instanceId, 1, 1); log(`AI ${blkCard.name} C8ブロック: 味方+1/+1`); }
+            continueStack();
           });
         }
         if (G.blockDrawActive && G.blockDrawActive[1]) {
           triggerEffect('介善 誘発(ブロック時1ドロー)', '✨', 1, () => {
-            drawCard(1); log('AI 介善: ブロック時1ドロー');
+            drawCard(1); log('AI 介善: ブロック時1ドロー'); continueStack();
           });
         }
       });
@@ -4303,6 +4424,24 @@ function fireAttackTriggers(player, atkInstId) {
   const opp = 1 - player;
   const atk = p.field.find(c => c.instanceId === atkInstId);
   if (!atk) return;
+
+  // 0) 守備側の「相手の攻撃時」誘発（セラシアの僧侶など）
+  G.players[opp].field.forEach(c => {
+    const cc = CARD_DB[c.cardId];
+    if (cc.onOpponentAttack === 'damage2opponent') {
+      triggerEffect(`${cc.name} 誘発（相手の攻撃時）`, cc.icon || '🙏', opp, () => {
+        if (p.field.length === 0) { log(`${cc.name}: 対象なし`); render(); updateHints(); return; }
+        G.targetMode = { type:'opponentCreature', sourcePlayer: opp, callback:(tgt) => {
+          G.targetMode = null;
+          applyDamageToCreature(player, tgt.instId, 2, opp);
+          log(`${cc.name}: 相手クリーチャーに2ダメージ`, 'damage');
+          checkDeath(); render(); updateHints(); continueStack();
+        }};
+        log(`${cc.name}: 2ダメージの対象を選択`);
+        render(); updateHints();
+      });
+    }
+  });
 
   // 1) 味方のアタックに反応する常在誘発（メグル・ミチルC6 など、攻撃クリーチャー自身も含む）
   p.field.forEach(c => {
@@ -4571,6 +4710,7 @@ function aiHandlePriority() {
 }
 
 function passPriority() {
+  if (SPECTATOR_MODE) return; // 観戦モード中は操作不可
   if (NET_MODE === 'guest') {
     // 自分に優先権がある時のみパスを送信（相手の優先権は奪えない）
     if (G.awaitingPriority && G.priorityFor === NET_MY_IDX) netSendAction('passPriority', {});
@@ -4600,6 +4740,7 @@ function resolveStack() {
 // MULLIGAN
 // ============================================================
 function doMulligan() {
+  if (SPECTATOR_MODE) return; // 観戦モード中は操作不可
   const p = G.players[0];
   if (p.mulliganUsed) { log('マリガンは1回のみ使用できます'); return; }
   p.mulliganUsed = true;
@@ -4680,8 +4821,21 @@ function startSpectatorMode() {
   NET_MODE = 'local';
   initGame();
   closeModal();
+
+  // マリガンボタンを隠す（観戦モードではマリガンを許可しない）
+  const btnMulligan = document.getElementById('btn-mulligan');
+  if (btnMulligan) btnMulligan.style.display = 'none';
+
+  // マリガンモードを強制的に無効化（観戦モードではマリガンを許可しない）
+  if (G) G.mulliganMode = false;
+
   log('🎬 観戦モード開始。両AI が対戦します。');
   render();
+  updateSpectatorDisplay();
+
+  // マリガンUIを完全に隠す（render()の後に再度確認）
+  const btnMulliganConfirm = document.getElementById('mulligan-controls');
+  if (btnMulliganConfirm) btnMulliganConfirm.style.display = 'none';
 
   // 自動駆動開始（SPECTATOR_TICK_INTERVAL で設定された間隔）
   if (window._spectatorTimer) clearInterval(window._spectatorTimer);
@@ -4693,13 +4847,31 @@ function startSpectatorMode() {
       updateSpectatorControls();
       return;
     }
-    // 自動駆動ティック
+    // 自動駆動ティック（両AIが自動で進行）
+    if (!SPECTATOR_AUTO_DRIVE || !G || G.phase === 'ended') return;
     try {
-      if (G.awaitingPriority) { passPriority(); return; }
-      if (G.playerBlockMode) { endPhase(); return; }
-      if (G.activePlayer === 0 && G.phase === 'main') { endTurn(); return; }
-      if (G.activePlayer === 1 && G.phase === 'main') { aiTurn(); return; }
-    } catch(e) { console.error(e); }
+      // 優先権状態：自動でパス
+      if (G.awaitingPriority) {
+        passPriority();
+        render();
+        return;
+      }
+      // ブロック状態：自動でフェーズ終了
+      if (G.playerBlockMode) {
+        endPhase();
+        render();
+        return;
+      }
+      // mainフェーズ：AIターン実行
+      if (G.phase === 'main' && G.activePlayer === 1) {
+        aiTurn();
+        render();
+        return;
+      }
+      // その他のフェーズ：自動で次フェーズへ
+      endPhase();
+      render();
+    } catch(e) { console.error('Spectator error:', e); }
   }, SPECTATOR_TICK_INTERVAL);
 
   updateSpectatorControls();
@@ -4822,4 +4994,123 @@ function updateSpectatorControls() {
   if (resumeBtn) resumeBtn.style.display = SPECTATOR_MODE && !SPECTATOR_AUTO_DRIVE ? 'block' : 'none';
   if (nextBtn) nextBtn.style.display = SPECTATOR_MODE && !SPECTATOR_AUTO_DRIVE ? 'block' : 'none';
   if (speedMenu) speedMenu.style.display = SPECTATOR_MODE ? 'flex' : 'none';
+}
+
+// ============================================================
+// 特殊マッチモード
+// ============================================================
+function loadSpecialMatchRecords() {
+  const stored = localStorage.getItem('specialMatchRecords');
+  if (stored) {
+    try {
+      SPECIAL_MATCH_RECORDS = JSON.parse(stored);
+    } catch(e) {
+      SPECIAL_MATCH_RECORDS = [];
+    }
+  }
+}
+
+function saveSpecialMatchRecords() {
+  localStorage.setItem('specialMatchRecords', JSON.stringify(SPECIAL_MATCH_RECORDS));
+}
+
+function recordSpecialMatchResult(aiWon) {
+  if (!SPECIAL_MATCH_MODE) return;
+  SPECIAL_MATCH_RECORDS.push({date: new Date().toISOString(), aiWon});
+  // 直近20戦を保持
+  if (SPECIAL_MATCH_RECORDS.length > 20) {
+    SPECIAL_MATCH_RECORDS.shift();
+  }
+  saveSpecialMatchRecords();
+}
+
+function getSpecialMatchStats() {
+  const aiWins = SPECIAL_MATCH_RECORDS.filter(r=>r.aiWon).length;
+  const total = SPECIAL_MATCH_RECORDS.length;
+  const rate = total > 0 ? Math.round(aiWins * 100 / total) : 0;
+  return {aiWins, total, aiLoss: total - aiWins, rate};
+}
+
+function updateSpecialMatchDisplay() {
+  const stats = getSpecialMatchStats();
+  const statsDiv = document.getElementById('special-match-stats');
+  if (statsDiv) {
+    document.getElementById('special-match-wins').textContent = stats.aiWins;
+    document.getElementById('special-match-loss').textContent = stats.aiLoss;
+    document.getElementById('special-match-rate').textContent = stats.rate;
+    statsDiv.style.display = stats.total > 0 ? 'block' : 'none';
+  }
+}
+
+function startSpecialMatch() {
+  loadSpecialMatchRecords();
+  updateSpecialMatchDisplay();
+  const stats = getSpecialMatchStats();
+
+  if (stats.aiWins >= 15) {
+    alert(`✅ 成功! AI が直近20戦で${stats.aiWins}勝達成しました。\nレート: ${stats.rate}%`);
+    return;
+  }
+
+  SPECIAL_MATCH_MODE = true;
+  NET_MODE = 'local';
+  NET_MY_IDX = 0;
+  const homeScreen = document.getElementById('home-screen');
+  if (homeScreen) homeScreen.style.display = 'none';
+  const lobby = document.getElementById('net-lobby');
+  if (lobby) lobby.style.display = 'none';
+  initGame();
+}
+
+function onSpecialMatchEnd(playerWon) {
+  const aiWon = !playerWon;
+  recordSpecialMatchResult(aiWon);
+  updateSpecialMatchDisplay();
+  const stats = getSpecialMatchStats();
+
+  if (stats.aiWins >= 15) {
+    alert(`✅ 成功! AI が直近20戦で${stats.aiWins}勝達成しました。\nレート: ${stats.rate}%`);
+  } else {
+    alert(`現在 AI ${stats.aiWins}勝/${stats.aiLoss}敗 (${stats.rate}%)\n あと${15-stats.aiWins}勝で達成。`);
+    if (confirm('5000回学習を追加して続行しますか?')) {
+      setTimeout(() => runSpecialMatchLearning(5000), 500);
+    }
+  }
+
+  if (stats.total < 20 && confirm('次の試合を開始しますか?')) {
+    setTimeout(() => startSpecialMatch(), 500);
+  }
+}
+
+function runSpecialMatchLearning(gameCount) {
+  const batchSize = 200;
+  const batchCount = Math.ceil(gameCount / batchSize);
+  let completed = 0;
+
+  function runBatch() {
+    if (completed >= batchCount) {
+      alert(`✅ ${gameCount}回の学習が完了しました。\n試合を再開してください。`);
+      return;
+    }
+
+    const n = Math.min(batchSize, gameCount - completed * batchSize);
+    try {
+      runTrainingBatch(AI_WEIGHTS, AI_WEIGHTS, n, buildMainDeck(), buildMainDeck(), buildLandDeck(), buildLandDeck());
+      completed++;
+      log(`🤖 学習進行: ${completed}/${batchCount} バッチ (${completed * batchSize}/${gameCount}ゲーム)`, 'important');
+
+      if (completed < batchCount) {
+        setTimeout(runBatch, 50);
+      } else {
+        alert(`✅ ${gameCount}回の学習が完了しました。\n試合を再開してください。`);
+      }
+    } catch(e) {
+      console.error('学習エラー:', e);
+      alert(`学習中にエラーが発生しました: ${e.message}`);
+    }
+  }
+
+  log(`🤖 ${gameCount}回の学習を開始します...`, 'important');
+  showModal('学習中', `<p style="text-align:center;color:#88ff88;font-size:14px;"><strong>${gameCount}回のゲームを学習中...</strong></p><p style="text-align:center;font-size:12px;color:#aaa;">ブラウザを閉じないでください</p>`);
+  runBatch();
 }

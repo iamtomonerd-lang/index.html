@@ -10,46 +10,46 @@ const CARD_DB = {
   },
   'ten_kara_shisha': {
     id:'ten_kara_shisha', name:'天からの使者', type:'creature', color:'W',
-    cost:{W:1,C:1}, power:1, toughness:1, subtype:'天使', icon:'👼',
-    keywords:['飛行'], text:'■飛行\n■出た時、相手のクリーチャー１体に1ダメージ',
-    flying:true, etb:'damage1opponent'
+    cost:{W:1,C:1}, power:2, toughness:2, subtype:'天使', icon:'👼',
+    keywords:['飛行'], text:'■飛行\n■出た時、相手のクリーチャー1体に2ダメージ',
+    flying:true, etb:'damage2creature'
   },
   'eiyuu_kouho': {
     id:'eiyuu_kouho', name:'英雄候補', type:'creature', color:'W',
     cost:{W:1,C:3}, power:3, toughness:5, subtype:'人間(戦士)', icon:'⚔️',
-    keywords:['格闘'], text:'■格闘\n■出た時、3ルック1(白)',
-    kakutou:true, etb:'look3keep1white'
+    keywords:['格闘'], text:'■格闘\n■出た時、5ルック1(白)',
+    kakutou:true, etb:'lookKeepWhite', lookCount:5
   },
   'serashia_heishi': {
     id:'serashia_heishi', name:'セラシアの兵士', type:'creature', color:'W',
-    cost:{W:2,C:1}, power:2, toughness:5, subtype:'人間(戦士)', icon:'🗡️',
-    keywords:[], text:'■出た時、相手クリーチャー１体選ぶ。次の相手のターン中、そのクリーチャーは可能なら攻撃する\n■ブロック時、1枚引く',
-    etb:'mustAttackTarget', onBlock:'draw1'
+    cost:{W:1,C:1}, power:2, toughness:3, subtype:'人間(戦士)', icon:'🗡️',
+    keywords:[], text:'■攻撃できない\n■出た時、相手クリーチャー１体選ぶ。次の相手のターン中、そのクリーチャーは可能なら攻撃する\n■ブロック時、1枚引く',
+    selfCantAttack:true, etb:'mustAttackTarget', onBlock:'draw1'
   },
   'serashia_junhei': {
     id:'serashia_junhei', name:'セラシアの盾兵', type:'creature', color:'W',
-    cost:{W:2,C:1}, power:1, toughness:5, subtype:'人間(戦士)', icon:'🛡️',
-    keywords:[], text:'■出た時、相手クリーチャー１体選ぶ。次の相手のターン中、そのクリーチャーは可能なら攻撃する\n■ブロック時、相手クリーチャー1体に2ダメージ',
-    etb:'mustAttackTarget', onBlock:'damage2attacker'
+    cost:{W:1,C:1}, power:1, toughness:3, subtype:'人間(戦士)', icon:'🛡️',
+    keywords:['聖印'], text:'■聖印\n■出た時、相手クリーチャー１体選ぶ。次の相手のターン中、そのクリーチャーは可能なら攻撃する\n■ブロック時、相手クリーチャー1体に2ダメージ',
+    lifelink:true, etb:'mustAttackTarget', onBlock:'damage2attacker'
   },
   'serashia_souryo': {
     id:'serashia_souryo', name:'セラシアの僧侶', type:'creature', color:'W',
-    cost:{W:3,C:2}, power:3, toughness:7, subtype:'人間(聖職者)', icon:'🙏',
-    keywords:['C8'], text:'■出た時、相手クリーチャー１体選ぶ。次の相手のターン中、そのクリーチャーは可能なら攻撃する\n■相手の攻撃時、相手のクリーチャー１体に3ダメージ\n■ブロック時、自分のライフを3回復\n〈C8〉\n■ブロック時、自分のクリーチャー1体を+1/+1',
-    etb:'mustAttackTarget', onOpponentAttack:'damage3opponent', onBlock:'gain3life', cx8Block:'buff1ally'
+    cost:{W:3,C:2}, power:5, toughness:7, subtype:'人間(聖職者)', icon:'🙏',
+    keywords:['C8'], text:'■出た時、相手クリーチャー１体選ぶ。次の相手のターン中、そのクリーチャーは可能なら攻撃する。その後、1枚引く\n■相手の攻撃時、相手のクリーチャー１体に2ダメージ\n■ブロック時、自分のライフを3回復\n〈C8〉\n■ブロック時、自分のクリーチャー全てを+1/+1',
+    etb:'mustAttackTargetThenDraw', onOpponentAttack:'damage2opponent', onBlock:'gain3life', cx8Block:'buffAllAlly'
   },
   'bastian': {
     id:'bastian', name:'絶対守護 バスティオン', type:'creature', color:'W',
-    cost:{W:4}, power:3, toughness:2, subtype:'人間(戦士)', icon:'🏰',
-    keywords:['格闘','C6','C8','OC'],
-    text:'■格闘\n■出た時、相手クリーチャー1体に2ダメージ\n〈C6〉\n■出た時、相手クリーチャー1体に3ダメージ\n〈C8〉\n■このクリーチャーは+3/+3される\n〈OC〉\n■このクリーチャーはタップしていてもブロックできる',
-    kakutou:true, etb:'damage2opponent_always_cx6damage3', cx8Buff:true, ocBlockWhileTapped:true
+    cost:{W:4}, power:3, toughness:3, subtype:'人間(戦士)', icon:'🏰',
+    keywords:['C6','C8','OC'],
+    text:'■出た時、相手クリーチャー1体に2ダメージ\n〈C6〉\n■出た時、相手クリーチャー1体に2ダメージ\n〈C8〉\n■このクリーチャーは+3/+3される\n〈OC〉\n■このクリーチャーはタップしていてもブロックできる',
+    etb:'damage2opponent_always_cx6damage3', cx8Buff:true, ocBlockWhileTapped:true
   },
   'arestia': {
     id:'arestia', name:'戦乙女 アレスティア', type:'creature', color:'W',
     cost:{W:3,C:5}, power:5, toughness:5, subtype:'人間(戦士)', icon:'⚡',
     keywords:['還元'],
-    text:'■相手は可能なら攻撃する\n■相手クリーチャーのアタック時、自分のクリーチャー全てを＋1/＋1する\n■自分のクリーチャーのブロック終了時、このバトル中自分のクリーチャーが破壊されていなければ、相手プレイヤーに2ダメージ\n■起動（還元）：自分のクリーチャー1体をアンタップする。これは相手ターンのみ起動できる',
+    text:'■相手は可能なら攻撃する\n■相手の攻撃時、自分のクリーチャー全てを＋1/＋1する\n■自分のクリーチャーのブロック終了時、このバトル中、自分のクリーチャーが破壊されていなければ、相手プレイヤーに2ダメージ与える\n■起動（還元）：自分のクリーチャー1体をアンタップし、＋0/＋2する',
     arestiaPassive:true, onAttackOpponent:'buff_all_own', onBlockEndDamage2:true,
     activated:'untapOwn'
   },
@@ -61,17 +61,17 @@ const CARD_DB = {
     effect:'junigeki'
   },
   'kaizen': {
-    id:'kaizen', name:'介善', type:'spell', color:'W',
-    cost:{W:4}, icon:'✨', keywords:['Quick'],
-    text:'■相手クリーチャー1体に５ダメージ\n■相手クリーチャー1体を選ぶ。このターン、それは可能なら攻撃する\n■このターン、自分のクリーチャーがブロックする時、1枚引く\n〈OC〉\n■自分の手札からマナ総量8以下のクリーチャーを出す。この能力によって出したクリーチャーはこのゲーム中、攻撃できない(ターン1:同名)',
+    id:'kaizen', name:'介入する剣閃', type:'spell', color:'W',
+    cost:{W:4}, icon:'⚔️', keywords:[],
+    text:'■相手クリーチャー1体に5ダメージ\n〈OC〉\n■自分の手札からマナ総量8以下のクリーチャーを出す。この能力によって出したクリーチャーはこのゲーム中、攻撃できない(ターン1:同名)',
     effect:'kaizen'
   },
   // LANDS
   'hito_heichi': {
     id:'hito_heichi', name:'人住まう平地', type:'land', color:'W',
     produces:'W', icon:'🌾',
-    text:'■起動(タップ)：白1マナ生成する\n■起動(タップ&白3マナ)：3ルック1(白)。これはこの土地がチャージされている時のみ起動できる',
-    chargedAbility:'look3keep1white'
+    text:'■起動(タップ)：白1マナ生成する\n■起動(タップ&白2マナ)：6ルック1(白)。これはこの土地がチャージされている時のみ起動できる',
+    chargedAbility:'lookKeepWhite', chargeLookCount:6
   },
   'wasure_heichi': {
     id:'wasure_heichi', name:'忘れ去られし平地', type:'land', color:'W',
@@ -88,13 +88,13 @@ const CARD_DB = {
   'kemono_heichi': {
     id:'kemono_heichi', name:'獣住む平地', type:'land', color:'W',
     produces:'W', icon:'🐾',
-    text:'■起動(タップ):白1マナ生成\n■起動(自身の還元):相手クリーチャー1体に5ダメージ。これはこの土地がチャージされているときのみ起動できる',
-    chargedAbility:'damage5opponent'
+    text:'■起動(タップ):白1マナ生成\n■起動(自身の還元):相手クリーチャー1体に3ダメージ。その後、1枚引く。これはこの土地がチャージされているときのみ起動できる',
+    chargedAbility:'damage3opponentDraw'
   },
   'serashia_miyako': {
     id:'serashia_miyako', name:'セラシアの都', type:'land', color:'C',
-    produces:'C', icon:'🏛️',
-    text:'■起動(タップ)：1マナ生成\n■起動(タップ)：自分の白のクリーチャー1体+0/+2。これはこの土地がチャージされている時のみ起動できる',
+    produces:'C', icon:'🏛️', cardNumber:'SD1-5-R',
+    text:'■起動(タップ)：1マナ生成\n■起動(タップ)：自分の白のクリーチャー1体+0/+3。これはこの土地がチャージされている時のみ起動できる',
     chargedAbility:'buffWhiteCreature'
   },
 

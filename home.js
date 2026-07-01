@@ -13,7 +13,12 @@ function showHomeScreen() {
   if (retireBtn) retireBtn.style.display = 'none';
   hideCardDetail();
   NET_MODE = 'local';
+  SPECIAL_MATCH_MODE = false;
   updateHomeRecord();
+  if (typeof loadSpecialMatchRecords === 'function') {
+    loadSpecialMatchRecords();
+    updateSpecialMatchDisplay();
+  }
 }
 
 // ── 戦績表示 ──────────────────────────────────────────────────

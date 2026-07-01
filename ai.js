@@ -16,6 +16,48 @@ function aiDoActivateChargedLand(landInstId) {
     doLook3Keep1White(1);
     log(`AI ${lc.name}: 3ルック1(白)`);
     render();
+  } else if (lc.chargedAbility === 'lookKeepWhite') {
+    const n = lc.chargeLookCount || 3;
+    if (land.tapped || !canAfford(1, {W:2})) return;
+    land.tapped = true;
+    payMana(1, {W:2});
+    doLookKeepColored(1, n, 'W');
+    log(`AI ${lc.name}: ${n}ルック1(白)`);
+    render();
+  } else if (lc.chargedAbility === 'damage3opponentDraw') {
+    const idx = ai.lands.findIndex(l=>l.instanceId===landInstId);
+    if (idx === -1) return;
+    ai.lands.splice(idx,1);
+    ai.landDeck.push(lc.id);
+    if (land.chargeCard) { if (!ai.exile) ai.exile=[]; ai.exile.push(land.chargeCard); }
+    log(`AI ${lc.name} 還元: 土地デッキ底へ`);
+    const targets = opp.field;
+    if (targets.length > 0) {
+      showAIThinking(true);
+      const tgt = mctsPickOption(targets, (sim, t) => {
+        const s0 = sim.state.players[0];
+        const st = s0.field.find(c=>c.id===t.instanceId);
+        if (st) { st.damage+=3; sim.simCheckDeath(0); } else s0.life-=3;
+      }) || targets[0];
+      showAIThinking(false);
+      applyDamageToCreature(0, tgt.instanceId, 3, 1);
+      log(`AI ${lc.name} 還元: 3ダメージ → ${CARD_DB[tgt.cardId].name}`, 'damage');
+    }
+    drawCard(1);
+    log(`AI ${lc.name} 還元: その後、1枚引く`);
+    checkDeath(); render();
+  } else if (lc.chargedAbility === 'buffWhiteCreatureDraw') {
+    if (land.tapped) return;
+    land.tapped = true;
+    const whites = ai.field.filter(c=>CARD_DB[c.cardId].color==='W');
+    if (whites.length > 0) {
+      const tgt = whites.reduce((a,b)=>getEffectiveToughness(1,b)<getEffectiveToughness(1,a)?b:a);
+      addPermanentBuff(1, tgt.instanceId, 0, 3);
+      log(`AI ${lc.name}: 白クリーチャー+0/+3(永続)`);
+    }
+    drawCard(1);
+    log(`AI ${lc.name}: その後、1枚引く`);
+    render();
   } else if (lc.chargedAbility === 'kaizouReturn') {
     if (!isOCActive(1) || land.tapped) return;
     land.tapped = true;
@@ -110,6 +152,7 @@ function aiActivateChargedLands() {
     if (lc.chargedAbility === 'look3keep1green' && !canAfford(1, {G:3})) continue;
     // look3keep1white requires mana
     if (lc.chargedAbility === 'look3keep1white' && !canAfford(1, {W:3})) continue;
+    if (lc.chargedAbility === 'lookKeepWhite' && !canAfford(1, {W:2})) continue;
     // look3keep1blue requires mana
     if (lc.chargedAbility === 'look3keep1blue' && !canAfford(1, {U:3})) continue;
 
@@ -135,6 +178,19 @@ function aiActivateChargedLands() {
         if (simLand.tapped) return; simLand.tapped=true;
         const ws=p1.field.filter(c=>CARD_DB[c.cardId].color==='W');
         if (ws.length){const t=ws.reduce((a,b)=>sim.hp(a)<sim.hp(b)?a:b);t.tempToughness=(t.tempToughness||0)+1;}
+      } else if (lc.chargedAbility === 'lookKeepWhite') {
+        if (!sim.canAfford(p1,{W:2})) return;
+        sim.payMana(p1,{W:2}); simLand.tapped=true;
+        if (p1.deck.length) p1.hand.push(p1.deck.shift());
+      } else if (lc.chargedAbility === 'damage3opponentDraw') {
+        const ix=p1.lands.indexOf(simLand); if(ix!==-1){p1.lands.splice(ix,1);p1.landDeck.push(lc.id);}
+        if (p0.field.length){const t=p0.field.reduce((a,b)=>sim.hp(b)<sim.hp(a)?b:a);t.damage+=3;sim.simCheckDeath(0);}else p0.life-=3;
+        if (p1.deck.length) p1.hand.push(p1.deck.shift());
+      } else if (lc.chargedAbility === 'buffWhiteCreatureDraw') {
+        if (simLand.tapped) return; simLand.tapped=true;
+        const ws=p1.field.filter(c=>CARD_DB[c.cardId].color==='W');
+        if (ws.length){const t=ws.reduce((a,b)=>sim.hp(a)<sim.hp(b)?a:b);t.tempToughness=(t.tempToughness||0)+1;}
+        if (p1.deck.length) p1.hand.push(p1.deck.shift());
       } else if (lc.chargedAbility === 'look3keep1blue') {
         if (!sim.canAfford(p1,{U:3})) return;
         sim.payMana(p1,{U:3}); simLand.tapped=true;
@@ -191,7 +247,9 @@ function aiDecideManaHold() {
 
 function aiTurn() {
   if (G.phase === 'ended') return;
-  const ai = G.players[1];
+  // 観戦モード対応：現在のアクティブプレイヤーのAI処理を実行
+  const aiIdx = SPECTATOR_MODE ? G.activePlayer : 1;
+  const ai = G.players[aiIdx];
   log('AIのターン...', 'important');
 
   // 盾撃(クイック)を構えるためのマナ保留（混合戦略：ブラフ＋相手展開への備え）。
@@ -319,7 +377,8 @@ function aiTurn() {
 }
 
 function aiDoCharge(handIdx, landInstId) {
-  const ai = G.players[1];
+  const aiIdx = SPECTATOR_MODE ? G.activePlayer : 1;
+  const ai = G.players[aiIdx];
   const land = ai.lands.find(l => l.instanceId === landInstId);
   if (!land || land.chargeCard) return;
   if (handIdx < 0 || handIdx >= ai.hand.length) return;
@@ -350,8 +409,9 @@ function aiBestKillableTarget(defenderPlayer, damage, candidates) {
 
 // Apply only the effect of an AI spell (mana/hand already handled separately)
 function aiPlaySpellEffect(card) {
-  const ai = G.players[1];
-  const player = G.players[0];
+  const aiIdx = SPECTATOR_MODE ? G.activePlayer : 1;
+  const ai = G.players[aiIdx];
+  const player = G.players[1 - aiIdx];
 
   if (card.effect === 'junigeki') {
     // 対象選択(AI受け): ■1=MCTSで相手クリーチャー / ■2=最も危険(低タフネス)な自クリーチャー。
@@ -458,41 +518,28 @@ function aiPlaySpellEffect(card) {
 
 // AI介善: ■効果を上から順に処理（5ダメージx2→ダメージ死亡無効→OC展開）
 function aiKaizenEffects() {
-  const ai = G.players[1];
-  const player = G.players[0];
-  const ocAtCast = isOCActive(1);
-  const total = ocAtCast ? 3 : 2;
-  // 効果1-1: MCTSで最善クリーチャーに5ダメージ(1体目)
-  let tgt1 = null;
+  const aiIdx = SPECTATOR_MODE ? G.activePlayer : 1;
+  const ai = G.players[aiIdx];
+  const player = G.players[1 - aiIdx];
+  const ocAtCast = isOCActive(aiIdx);
+  const total = ocAtCast ? 2 : 1;
+  // 相手クリーチャー1体に5ダメージ
   if (player.field.length > 0) {
-    tgt1 = mctsPickOption(player.field, (sim, t) => {
-      const p0 = sim.state.players[0];
+    const tgt1 = mctsPickOption(player.field, (sim, t) => {
+      const p0 = sim.state.players[1 - aiIdx];
       const simTgt = p0.field.find(c => c.id === t.instanceId);
-      if (simTgt) { simTgt.damage += 5; sim.simCheckDeath(0); }
+      if (simTgt) { simTgt.damage += 5; sim.simCheckDeath(1 - aiIdx); }
       else p0.life -= 5;
     }) || player.field[0];
-    showEffectStep('AI 介善', '1-1', total, `5ダメージ(1体目) → ${CARD_DB[tgt1.cardId].name}`);
-    applyDamageToCreature(0, tgt1.instanceId, 5, 1);
+    showEffectStep('AI 介入する剣閃', '1', total, `5ダメージ → ${CARD_DB[tgt1.cardId].name}`);
+    applyDamageToCreature(1 - aiIdx, tgt1.instanceId, 5, aiIdx);
   } else {
-    log(`AI 介善 効果1-1/${total}: 対象なしのためスキップ`);
+    log(`AI 介入する剣閃 効果1/${total}: 対象なしのためスキップ`);
   }
-  // 効果1-2: 2体目に5ダメージ
-  if (player.field.length > 0) {
-    const tgt2 = player.field.reduce((a,b) => {
-      return b !== tgt1 && (CARD_DB[b.cardId].power||0) > (CARD_DB[a.cardId].power||0) ? b : a;
-    });
-    showEffectStep('AI 介善', '1-2', total, `5ダメージ(2体目) → ${CARD_DB[tgt2.cardId].name}`);
-    applyDamageToCreature(0, tgt2.instanceId, 5, 1);
-  } else {
-    log(`AI 介善 効果1-2/${total}: 対象なしのためスキップ`);
-  }
-  // ■2: ダメージ死亡無効
-  G.players[1].field.forEach(inst => { inst.noDamageKill = true; });
-  log('AI 介善 ■2: 自クリーチャーダメージ死亡無効', 'important');
   // OC: クリーチャー展開
   if (ocAtCast) {
-    showEffectStep('AI 介善', 'OC', total, '〈OC〉クリーチャー展開');
-    kaizenOCDeploy(1);
+    showEffectStep('AI 介入する剣閃', 'OC', total, '〈OC〉クリーチャー展開');
+    kaizenOCDeploy(aiIdx);
   }
 }
 
