@@ -4069,14 +4069,14 @@ function activateChargedLand(player, instId) {
     renderStack();
     openPriorityWindow(opp, null, `${landCard.name} 起動`);
   } else if (landCard.chargedAbility === 'buffWhiteCreature') {
-    // serashia_miyako: tap -> give own white creature +0/+2 permanent
+    // serashia_miyako: tap -> give own white creature +0/+3 permanent
     if (land.tapped) { log('タップ済み'); return; }
     const whites = G.players[player].field.filter(c => CARD_DB[c.cardId].color === 'W');
     if (whites.length === 0) { log(`${landCard.name}: 白クリーチャーがいません`); return; }
     land.tapped = true;
-    log(`${landCard.name}: 白クリーチャー+0/+2 → スタックに積む`);
+    log(`${landCard.name}: 白クリーチャー+0/+3 → スタックに積む`);
     G.stack.push({
-      name: `${landCard.name} 起動(白+0/+2)`,
+      name: `${landCard.name} 起動(白+0/+3)`,
       icon: landCard.icon || '✨',
       owner: player,
       resolve: () => {
@@ -4085,8 +4085,8 @@ function activateChargedLand(player, instId) {
         G.targetMode = { type:'ownCreature', sourcePlayer: player, aiPick: pool => pool.filter(c => CARD_DB[c.cardId].color === 'W').reduce((a,b) => getEffectiveToughness(player,b) < getEffectiveToughness(player,a) ? b : a), callback:(tgt) => {
           const tc = G.players[player].field.find(x => x.instanceId === tgt.instId);
           if (tc && CARD_DB[tc.cardId].color === 'W') {
-            addPermanentBuff(player, tgt.instId, 0, 2);
-            log(`${landCard.name}: 白クリーチャー+0/+2(永続)`);
+            addPermanentBuff(player, tgt.instId, 0, 3);
+            log(`${landCard.name}: 白クリーチャー+0/+3(永続)`);
           }
           G.targetMode = null; render(); updateHints();
           continueStack();

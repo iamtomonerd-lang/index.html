@@ -668,7 +668,7 @@ class SimGame {
         if (land.tapped) continue;
         land.tapped=true;
         const whites=p.field.filter(c=>CARD_DB[c.cardId].color==='W');
-        if (whites.length) { const tgt=whites.reduce((a,b)=>this.hp(a)<this.hp(b)?a:b); tgt.tempToughness=(tgt.tempToughness||0)+1; }
+        if (whites.length) { const tgt=whites.reduce((a,b)=>this.hp(a)<this.hp(b)?a:b); tgt.tempToughness=(tgt.tempToughness||0)+3; }
       }
     }
   }

@@ -92,8 +92,8 @@ function aiDoActivateChargedLand(landInstId) {
     const whites = ai.field.filter(c=>CARD_DB[c.cardId].color==='W');
     if (whites.length > 0) {
       const tgt = whites.reduce((a,b)=>getEffectiveToughness(1,b)<getEffectiveToughness(1,a)?b:a);
-      addPermanentBuff(1, tgt.instanceId, 0, 2);
-      log(`AI ${lc.name}: 白クリーチャー+0/+2(永続)`);
+      addPermanentBuff(1, tgt.instanceId, 0, 3);
+      log(`AI ${lc.name}: 白クリーチャー+0/+3(永続)`);
     }
     render();
   } else if (lc.chargedAbility === 'kaizouReturnGreen') {
@@ -177,7 +177,7 @@ function aiActivateChargedLands() {
       } else if (lc.chargedAbility === 'buffWhiteCreature') {
         if (simLand.tapped) return; simLand.tapped=true;
         const ws=p1.field.filter(c=>CARD_DB[c.cardId].color==='W');
-        if (ws.length){const t=ws.reduce((a,b)=>sim.hp(a)<sim.hp(b)?a:b);t.tempToughness=(t.tempToughness||0)+1;}
+        if (ws.length){const t=ws.reduce((a,b)=>sim.hp(a)<sim.hp(b)?a:b);t.tempToughness=(t.tempToughness||0)+3;}
       } else if (lc.chargedAbility === 'lookKeepWhite') {
         if (!sim.canAfford(p1,{W:2})) return;
         sim.payMana(p1,{W:2}); simLand.tapped=true;
