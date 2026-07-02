@@ -3227,3 +3227,57 @@ function applyUrameCare(attackers, aiIdx, isLethal) {
 
   return { attackers: result, notes };
 }
+
+// ============================================================
+// 無意義行動の撲滅（空振り・無駄撃ち・自滅を実行前に止める）
+// ============================================================
+
+// A+B. 呪文の「今使う意味」を採点（0-100）。30未満なら見送り推奨。
+function spellMeaningScore(cardId, aiIdx) {
+  const cd = CARD_DB[cardId];
+  if (!cd || cd.type !== 'spell') return { score: 60, reason: '' };
+  const oppIdx = 1 - aiIdx;
+  const oppField = G.players[oppIdx].field || [];
+  const me = G.players[aiIdx];
+
+  if (cd.effect === 'kaizen') {
+    // OC時は手札からのクリーチャー展開があるため空振りではない
+    const ocDeploy = isOCActive(aiIdx) && me.hand.some(id => {
+      const k = CARD_DB[id];
+      return k && k.type === 'creature' && totalCost(k.cost || {}) <= 8;
+    });
+    if (oppField.length === 0) {
+      return ocDeploy ? { score: 60, reason: '' }
+                      : { score: 0, reason: '対象がいない（完全に空振り）' };
+    }
+    // 過剰撃ち防止: 大物(パワー3以上)がいなければ温存（劣勢時は例外で使用OK）
+    const biggestPow = Math.max(...oppField.map(c => getEffectivePower(oppIdx, c)));
+    const losing = me.life < G.players[oppIdx].life - 3 ||
+                   me.field.length + 1 < oppField.length;
+    if (biggestPow >= 3 || ocDeploy || losing) return { score: 80, reason: '' };
+    return { score: 20, reason: `大物がいない（最大パワー${biggestPow}）ので大事に温存` };
+  }
+  if (cd.effect === 'junigeki') {
+    if (oppField.length === 0) return { score: 10, reason: '相手クリーチャーがいない（2ダメージ側が空振り）' };
+    return { score: 70, reason: '' };
+  }
+  return { score: 60, reason: '' }; // その他の呪文は通常判定に任せる
+}
+
+// E. 実行前の最終関門: 意味がなければfalse（監査記録＋💭思考表示つき）
+function gateMeaninglessCast(cardId, aiIdx, opts) {
+  const cd = CARD_DB[cardId];
+  if (!cd || cd.type !== 'spell') return true;
+  const m = spellMeaningScore(cardId, aiIdx);
+  const quiet = opts && opts.quiet;
+  if (!quiet && typeof recordDecisionAudit === 'function') {
+    recordDecisionAudit('cast_' + cardId, { turn: G.turn }, m.score);
+  }
+  if (m.score < 30) {
+    if (!quiet && typeof aiThink === 'function') {
+      aiThink(`${cd.name}は使わない: ${m.reason}（マナは構えに回す）`);
+    }
+    return false;
+  }
+  return true;
+}

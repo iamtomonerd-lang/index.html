@@ -313,13 +313,19 @@ function aiTurn() {
   let aiPlayedCard = false;
 
   // MCTSが推奨するカードを順に試みる
+  // 無意義防止C: 場の数＋この後スタックで出る召喚数で上限5体を計算（あふれ召喚＝カード捨てを根絶）
+  let queuedSummons = 0;
   for (const cardIdToPlay of mctsPlays) {
     const idx = ai.hand.indexOf(cardIdToPlay);
     if (idx === -1) continue;
     const cid = ai.hand[idx];
     const card = CARD_DB[cid];
     if (!canAfford(1, card.cost)) continue;
-    if (card.type === 'creature' && ai.field.length < 5) {
+    if (card.type === 'creature') {
+      if (ai.field.length + queuedSummons >= 5) {
+        aiThink(`${card.name}は召喚見送り: 場の上限（5体）を超えて無駄になるため`);
+        continue;
+      }
       payMana(1, card.cost);
       ai.hand.splice(idx, 1);
       const inst = newInstance(cid);
@@ -336,8 +342,11 @@ function aiTurn() {
         render();
       }});
       renderStack(); render();
+      queuedSummons++;
       aiPlayedCard = true;
     } else if (card.type === 'spell') {
+      // 無意義防止A+B: 空振り・無駄撃ちになる呪文は使わない（マナは構えに回す）
+      if (typeof gateMeaninglessCast === 'function' && !gateMeaninglessCast(cid, 1)) continue;
       payMana(1, card.cost);
       ai.hand.splice(idx, 1);
       showAIBalloon(`${card.icon} ${card.name} 使用！`);
@@ -355,7 +364,10 @@ function aiTurn() {
   // MCTSが見つからなかった場合のフォールバック（従来のgreedyを使用）
   if (!aiPlayedCard) {
     const playable = ai.hand.map((cid, i) => ({cid, i, card: CARD_DB[cid]}))
-      .filter(({card}) => card.type !== 'land' && canAfford(1, card.cost));
+      .filter(({card}) => card.type !== 'land' && canAfford(1, card.cost))
+      // 無意義防止A+B: 空振り・無駄撃ちになる呪文は候補から外す
+      .filter(({cid, card}) => card.type !== 'spell' ||
+        typeof gateMeaninglessCast !== 'function' || gateMeaninglessCast(cid, 1));
     // aiPickBestCardはレート戦の手加減でnullを返すことがある（その場合はプレイしない）
     const picked = playable.length > 0 ? aiPickBestCard(playable) : null;
     if (picked) {

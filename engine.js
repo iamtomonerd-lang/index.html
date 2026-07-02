@@ -1511,7 +1511,10 @@ function resolveETBEffect(player, instanceId) {
   } else if (card.etb === 'mustAttackTarget') {
     const targets = G.players[opp].field;
     if (targets.length === 0) { log(`${card.name} ETB: 対象なしのためスキップ`); continueStack(); return; }
-    G.targetMode = { type:'opponentCreature', sourcePlayer: player, callback:(tgt) => {
+    G.targetMode = { type:'opponentCreature', sourcePlayer: player,
+      // 無意義防止D(AI用): 攻撃できない相手に攻撃強制しても無意味 → 攻撃可能な相手を優先
+      aiPick: (pool) => _pickAttackForceTarget(pool, opp, card.name),
+      callback:(tgt) => {
       const tc = G.players[opp].field.find(x=>x.instanceId===tgt.instId);
       const targetName = getCreatureName(opp, tgt.instId);
       if (tc) { tc.mustAttack = true; G.mustAttackCreatures.add(tgt.instId); }
@@ -1531,7 +1534,10 @@ function resolveETBEffect(player, instanceId) {
       continueStack();
       return;
     }
-    G.targetMode = { type:'opponentCreature', sourcePlayer: player, callback:(tgt) => {
+    G.targetMode = { type:'opponentCreature', sourcePlayer: player,
+      // 無意義防止D(AI用): 攻撃できない相手に攻撃強制しても無意味 → 攻撃可能な相手を優先
+      aiPick: (pool) => _pickAttackForceTarget(pool, opp, card.name),
+      callback:(tgt) => {
       const tc = G.players[opp].field.find(x=>x.instanceId===tgt.instId);
       const targetName = getCreatureName(opp, tgt.instId);
       if (tc) { tc.mustAttack = true; G.mustAttackCreatures.add(tgt.instId); }
@@ -4752,6 +4758,19 @@ function _resolveNextFast(cont, reason) {
   }
 }
 
+// 攻撃強制ETBのAI対象選択: 攻撃できないクリーチャー（兵士など）を選んでも
+// 効果が完全に無意味になるため、攻撃可能な相手の中から最大パワーを選ぶ。
+function _pickAttackForceTarget(pool, oppIdx, srcName) {
+  const attackable = pool.filter(c =>
+    !CARD_DB[c.cardId].selfCantAttack && !G.cantAttackPermanent.has(c.instanceId));
+  const from = attackable.length > 0 ? attackable : pool;
+  if (typeof aiThink === 'function' && attackable.length > 0 && attackable.length < pool.length) {
+    aiThink(`${srcName}の攻撃強制: 攻撃できない相手は選ばない（効果が無意味になるため）`);
+  }
+  return from.reduce((a, b) =>
+    getEffectivePower(oppIdx, b) > getEffectivePower(oppIdx, a) ? b : a);
+}
+
 function aiAutoPickTarget() {
   if (!G.targetMode) return;
   const tm = G.targetMode;
@@ -4783,8 +4802,11 @@ function aiHandlePriority() {
   const player = G.players[0];
 
   // Quick呪文が実際に存在するかを先に確認
+  // 無意義防止A: 空振りになるクイックは候補から外す（quiet=毎回の優先権でログを出さない）
   const quickSpells = ai.hand.map((cid, i) => ({ cid, i, card: CARD_DB[cid] }))
-    .filter(({ card }) => card.keywords && card.keywords.includes('Quick') && canAfford(1, card.cost));
+    .filter(({ card }) => card.keywords && card.keywords.includes('Quick') && canAfford(1, card.cost))
+    .filter(({ cid }) => typeof gateMeaninglessCast !== 'function' ||
+      gateMeaninglessCast(cid, 1, { quiet: true }));
 
   // Quick呪文がある場合のみ、残りのアンタップ土地からマナを生成（Quick対応用に保留していた分）
   if (quickSpells.length > 0) {
