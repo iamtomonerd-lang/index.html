@@ -243,6 +243,9 @@ function initGame() {
     for (let i = 0; i < 7; i++) drawCard(p);
   }
 
+  // 案4: 相手モデリング — 新しい対局の開始（過去の観測は減衰させて引き継ぐ）
+  if (typeof oppModelNewGame === 'function') oppModelNewGame();
+
   G.phase = 'main';
 
   const retireBtn = document.getElementById('btn-retire');
@@ -947,6 +950,9 @@ function playCardFromHand(player, handIndex) {
   }
 
   if (!canAfford(player, card.cost)) { log('マナが足りません'); return; }
+
+  // 案4: 相手モデリング — 人間(P0)のカードプレイをAIが観測する
+  if (player === 0 && typeof oppModelNotePlay === 'function') oppModelNotePlay(cardId);
 
   if (card.type === 'spell') {
     if (card.effect === 'junigeki') {
@@ -3527,6 +3533,8 @@ function fireEndTurnEffects(player) {
 }
 
 function endTurn() {
+  // 案4: 相手モデリング — 人間がマナを構えたままターンを返したかを観測
+  if (G.activePlayer === 0 && typeof oppModelNoteEndTurn === 'function') oppModelNoteEndTurn();
   // ターン終了時のクリーチャー誘発（終了プレイヤーの分）
   fireEndTurnEffects(G.activePlayer);
   // 中央にターン終了を表示

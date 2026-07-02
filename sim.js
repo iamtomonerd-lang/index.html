@@ -201,6 +201,8 @@ class SimGame {
     this.brain = (typeof SIM_BRAIN_FORCE !== 'undefined' && SIM_BRAIN_FORCE)
       ? [SIM_BRAIN_FORCE[0], SIM_BRAIN_FORCE[1]]
       : [_db, _db];
+    // 案4: 相手モデルは実対戦MCTS(SimGame.lite)専用。訓練用対戦では使わない。
+    this.oppModel = null;
     this.state = this.initState();
   }
 
@@ -219,6 +221,9 @@ class SimGame {
     g.brain = (typeof SIM_BRAIN_FORCE !== 'undefined' && SIM_BRAIN_FORCE)
       ? [SIM_BRAIN_FORCE[0], SIM_BRAIN_FORCE[1]]
       : [_db, _db];
+    // 案4: 実対戦MCTSでは観測済みの相手モデルを参照する（訓練対戦では null）
+    g.oppModel = (typeof OPP_MODEL !== 'undefined' && typeof META_AI !== 'undefined' && META_AI.oppModel)
+      ? OPP_MODEL : null;
     g.state = null;
     return g;
   }
@@ -297,6 +302,8 @@ class SimGame {
         info.turns.forEach(t => { st.turn_sum += t; st.turn_count++; });
       }
     }
+    // 案1: 知識収集モード中は勝敗を「文脈付きカード知識」へ反映
+    if (typeof cardKnowledgeFinish==='function') cardKnowledgeFinish(this, winner);
     return { winner, tdScores:this.tdScores };
   }
 
@@ -481,6 +488,18 @@ class SimGame {
       // (4) 空盤面ペナルティ: 相手だけ盤面がある状況は危険。
       if (me.field.length===0 && opp.field.length>0) score -= wPow*2;
     }
+
+    // ── メタAI層（ai-meta.js）────────────────────────────────
+    // 案2: 自動生成特徴量（af_* 重みが学習されるまでは寄与0）
+    if (typeof autoFeatureScore === 'function') score += autoFeatureScore(this, player, w);
+    // 案3: 局面の自己分類と観点切替（sit_* 係数が既定=1のままなら寄与0）
+    if (typeof situationAdjust === 'function') {
+      score += situationAdjust(this, player, w, {
+        lifeComp: w.life*(me.life-opp.life),
+        boardComp: wPow*(myPow-oppPow) + wTou*(myTou-oppTou) + w.fieldCount*(me.field.length-opp.field.length),
+        tempoComp: wPow*0.5*myReady + w.handAdv*(me.hand.length-opp.hand.length),
+      });
+    }
     return score;
   }
 
@@ -580,7 +599,9 @@ class SimGame {
           p.field.push(inst);
           this.simETB(ap,inst);
           this.simCheckDeath(0); this.simCheckDeath(1);
-          const gain=this.simEval(ap)-scoreBefore + (this.w[ap]['card_'+cid]||0);
+          let gain=this.simEval(ap)-scoreBefore + (this.w[ap]['card_'+cid]||0);
+          // 案1: 自己対戦で獲得した「文脈付きカード知識」を事前分布として加算
+          if (typeof cardKnowledgeBonus==='function') gain += cardKnowledgeBonus(this, ap, cid);
           this.restore(snap);
           if (gain>bestGain){bestGain=gain;bestOption={type:'creature',i,cid,card};}
         }
@@ -589,11 +610,15 @@ class SimGame {
         //   「マナを残して割込む」価値がロールアウトに正しく反映される。
         const _isQuick = card.keywords && card.keywords.includes('Quick');
         if (card.type==='spell' && !_isQuick && this.canAfford(p,card.cost)) {
-          const gain=this.evalSpellGain(ap,card) + (this.w[ap]['card_'+cid]||0);
+          let gain=this.evalSpellGain(ap,card) + (this.w[ap]['card_'+cid]||0);
+          // 案1: 文脈付きカード知識を事前分布として加算
+          if (typeof cardKnowledgeBonus==='function') gain += cardKnowledgeBonus(this, ap, cid);
           if (gain>bestGain){bestGain=gain;bestOption={type:'spell',i,cid,card};}
         }
       });
       if (!bestOption) break;
+      // 案1: 知識収集モード中はプレイ時の局面文脈を記録（勝敗確定時に知識へ反映）
+      if (typeof cardKnowledgeRecord==='function') cardKnowledgeRecord(this, ap, bestOption.cid);
       if (!this.playedCards[ap].has(bestOption.cid)) this.playedCards[ap].set(bestOption.cid, {count:0, turns:[]});
       const _pc = this.playedCards[ap].get(bestOption.cid); _pc.count++; _pc.turns.push(s.turn);
       if (bestOption.type==='creature') {
@@ -980,6 +1005,10 @@ class SimGame {
   simPickBlocker(defender,atk,candidates,atkPow) {
     if (!candidates.length) return null;
     const w=this.w[defender];
+    // 案4: 実対戦MCTS中のみ、人間(P0)の観測ブロック傾向で判定を補正。
+    // よくブロックする相手はシミュ内でもブロックし、しない相手はスルーする。
+    const _omBias = (defender===0 && this.oppModel && typeof oppModelBlockBias==='function')
+      ? oppModelBlockBias(this.oppModel) : 0;
     let best=null, bestVal=-Infinity;
     for (const b of candidates) {
       const bc=CARD_DB[b.cardId];
@@ -989,7 +1018,8 @@ class SimGame {
       const aDies=((CARD_DB[atk.cardId].toughness||0)-atk.damage)<=blkPow;
       let val=(aDies?w.fieldPower*atkPow+w.fieldCount:0)
              -(bSurvives?0:w.fieldPower*blkPow+w.fieldCount)
-             +w.life*atkPow*w.blockRisk;
+             +w.life*atkPow*w.blockRisk
+             +_omBias;
       if (val>bestVal){bestVal=val;best=b;}
     }
     return bestVal>0?best:null;
@@ -1124,6 +1154,9 @@ function deterministicState(baseState) {
   }
   p0.hand = deck.slice(0, Math.min(handSize, deck.length));
   p0.deck = deck.slice(p0.hand.length);
+  // 案4: 相手モデリング — 観測した「マナ構え→クイック割込み」傾向を
+  // サンプル手札に反映（構えている相手の手札にクイックを混ぜる）
+  if (typeof oppModelAdjustSample === 'function') oppModelAdjustSample(s);
   return s;
 }
 
@@ -1210,7 +1243,10 @@ function mctsRollout(simState, nid) {
 // Returns array of cardIds to play in order
 function mctsSearch(timeMs) {
   try {
-    const deadline = Date.now() + (timeMs || mctsTimeBudget());
+    const _budget = (timeMs || mctsTimeBudget());
+    const _start = Date.now();
+    let deadline = _start + _budget;
+    let _extended = false;
     const rootState = mctsStateFromG();
     const root = new MCTSNode(rootState, null, null, 1);
     root.untriedActions = mctsEnumerateActions(rootState, 1);
@@ -1220,6 +1256,21 @@ function mctsSearch(timeMs) {
     // 無引数SimGame生成の高速化(約56倍)で同じ時間でも遥かに多く探索できるようになった。
     while (Date.now() < deadline && iterations < MCTS_MAX_ITERS) {
       iterations++;
+      // 案5: メタ推論 — 探索の途中経過から「もう明確」なら早期終了し、
+      // 締切間際でも拮抗しているなら1回だけ予算を延長して考え続ける。
+      if (typeof metaSearchDecide === 'function' && (iterations & 63) === 0 && root.children.length >= 2) {
+        const d = metaSearchDecide(root.children, Date.now() - _start, _budget, _extended);
+        if (d === 'stop') {
+          if (typeof META_SEARCH_LAST !== 'undefined') { META_SEARCH_LAST.earlyStops++; META_SEARCH_LAST.savedMs += Math.max(0, deadline - Date.now()); }
+          break;
+        }
+        if (d === 'extend') {
+          _extended = true;
+          const extra = Math.round(_budget * 0.6);
+          deadline += extra;
+          if (typeof META_SEARCH_LAST !== 'undefined') { META_SEARCH_LAST.extends++; META_SEARCH_LAST.spentExtraMs += extra; }
+        }
+      }
       try {
         // 1. Selection: walk tree using UCB1
         let node = root;
@@ -1286,7 +1337,9 @@ function mctsPickAttackers(candidates) {
   if (candidates.length === 1) return new Set([candidates[0].instanceId]);
 
   const budget = Math.min(mctsTimeBudget(), 350); // 攻撃選択は少し短め
-  const deadline = Date.now() + budget;
+  const _start = Date.now();
+  let deadline = _start + budget;
+  let _extended = false;
   const baseState = mctsStateFromG();
 
   // 攻撃者の組み合わせを列挙（最大15通り）
@@ -1344,6 +1397,20 @@ function mctsPickAttackers(candidates) {
       : 1 / (1 + Math.exp(-sim.simEval(1) * 0.02));
     wins[idx] += result;
     trials[idx]++;
+    // 案5: メタ推論 — 候補の優劣が明確なら早期終了、締切間際で拮抗なら1回だけ延長
+    if (typeof metaSampleDecide === 'function' && (ci & 31) === 0) {
+      const d = metaSampleDecide(wins, trials, Date.now() - _start, budget, _extended);
+      if (d === 'stop') {
+        if (typeof META_SEARCH_LAST !== 'undefined') { META_SEARCH_LAST.earlyStops++; META_SEARCH_LAST.savedMs += Math.max(0, deadline - Date.now()); }
+        break;
+      }
+      if (d === 'extend') {
+        _extended = true;
+        const extra = Math.round(budget * 0.6);
+        deadline += extra;
+        if (typeof META_SEARCH_LAST !== 'undefined') { META_SEARCH_LAST.extends++; META_SEARCH_LAST.spentExtraMs += extra; }
+      }
+    }
   }
 
   // 最も勝率の高い組み合わせを返す
@@ -1369,7 +1436,9 @@ function mctsPickBlockers(attackerInsts) {
   if (eligible.length === 0 || attackerInsts.length === 0) return {};
 
   const budget = Math.min(mctsTimeBudget(), 300);
-  const deadline = Date.now() + budget;
+  const _start = Date.now();
+  let deadline = _start + budget;
+  let _extended = false;
   const baseState = mctsStateFromG();
 
   // 割り当て候補を列挙（各攻撃者に「誰をあてるか or なし」）
@@ -1435,6 +1504,20 @@ function mctsPickBlockers(attackerInsts) {
       : 1 / (1 + Math.exp(-sim.simEval(1) * 0.02));
     wins[idx] += result;
     trials[idx]++;
+    // 案5: メタ推論 — 候補の優劣が明確なら早期終了、締切間際で拮抗なら1回だけ延長
+    if (typeof metaSampleDecide === 'function' && (ci & 31) === 0) {
+      const d = metaSampleDecide(wins, trials, Date.now() - _start, budget, _extended);
+      if (d === 'stop') {
+        if (typeof META_SEARCH_LAST !== 'undefined') { META_SEARCH_LAST.earlyStops++; META_SEARCH_LAST.savedMs += Math.max(0, deadline - Date.now()); }
+        break;
+      }
+      if (d === 'extend') {
+        _extended = true;
+        const extra = Math.round(budget * 0.6);
+        deadline += extra;
+        if (typeof META_SEARCH_LAST !== 'undefined') { META_SEARCH_LAST.extends++; META_SEARCH_LAST.spentExtraMs += extra; }
+      }
+    }
   }
 
   let bestIdx = 0, bestRate = -1;
@@ -1452,7 +1535,9 @@ function mctsOrderAttackers(insts) {
   if (insts.length <= 1) return insts;
   const baseState = mctsStateFromG();
   const budget = Math.min(mctsTimeBudget(), 150);
-  const deadline = Date.now() + budget;
+  const _start = Date.now();
+  let deadline = _start + budget;
+  let _extended = false;
 
   // 候補順序: 元の順・パワー昇順・パワー降順・タフネス昇順
   const byPowAsc = [...insts].sort((a,b) => getEffectivePower(1,a) - getEffectivePower(1,b));
@@ -1495,6 +1580,20 @@ function mctsOrderAttackers(insts) {
     const result = rp1.life <= 0 ? 0 : rp0.life <= 0 ? 1 : 1/(1+Math.exp(-sim.simEval(1)*0.02));
     wins[idx] += result;
     trials[idx]++;
+    // 案5: メタ推論 — 候補の優劣が明確なら早期終了、締切間際で拮抗なら1回だけ延長
+    if (typeof metaSampleDecide === 'function' && (ci & 31) === 0) {
+      const d = metaSampleDecide(wins, trials, Date.now() - _start, budget, _extended);
+      if (d === 'stop') {
+        if (typeof META_SEARCH_LAST !== 'undefined') { META_SEARCH_LAST.earlyStops++; META_SEARCH_LAST.savedMs += Math.max(0, deadline - Date.now()); }
+        break;
+      }
+      if (d === 'extend') {
+        _extended = true;
+        const extra = Math.round(budget * 0.6);
+        deadline += extra;
+        if (typeof META_SEARCH_LAST !== 'undefined') { META_SEARCH_LAST.extends++; META_SEARCH_LAST.spentExtraMs += extra; }
+      }
+    }
   }
 
   let bestIdx = 0, bestRate = -1;
@@ -1520,7 +1619,9 @@ function mctsPickOption(options, applyToSim) {
   if (options.length === 0) return null;
   if (options.length === 1) return options[0];
   const budget = Math.min(mctsTimeBudget(), 250);
-  const deadline = Date.now() + budget;
+  const _start = Date.now();
+  let deadline = _start + budget;
+  let _extended = false;
   const baseState = mctsStateFromG();
   const wins = new Array(options.length).fill(0);
   const trials = new Array(options.length).fill(0);
@@ -1542,6 +1643,20 @@ function mctsPickOption(options, applyToSim) {
       : 1 / (1 + Math.exp(-sim.simEval(1) * 0.02));
     wins[idx] += result;
     trials[idx]++;
+    // 案5: メタ推論 — 候補の優劣が明確なら早期終了、締切間際で拮抗なら1回だけ延長
+    if (typeof metaSampleDecide === 'function' && (ci & 31) === 0) {
+      const d = metaSampleDecide(wins, trials, Date.now() - _start, budget, _extended);
+      if (d === 'stop') {
+        if (typeof META_SEARCH_LAST !== 'undefined') { META_SEARCH_LAST.earlyStops++; META_SEARCH_LAST.savedMs += Math.max(0, deadline - Date.now()); }
+        break;
+      }
+      if (d === 'extend') {
+        _extended = true;
+        const extra = Math.round(budget * 0.6);
+        deadline += extra;
+        if (typeof META_SEARCH_LAST !== 'undefined') { META_SEARCH_LAST.extends++; META_SEARCH_LAST.spentExtraMs += extra; }
+      }
+    }
   }
   let bestIdx = 0, bestRate = -1;
   for (let i = 0; i < options.length; i++) {
@@ -1573,8 +1688,13 @@ function adaptiveMutate(w) {
   for (let i=0;i<n;i++) {
     const k=keys[Math.floor(Math.random()*keys.length)];
     const v=(m[k]||0)+(Math.random()-0.5)*2*_mutationSigma;
-    // カード個別重みは負値も許可(-3〜3)、戦略重みは正値のみ
-    m[k]=k.startsWith('card_') ? Math.max(-3, Math.min(3, v)) : Math.max(0.01, v);
+    // カード個別・自動特徴量(af_)は負値も許可(-3〜3)、局面係数(sit_)は1中心(0.2〜2.5)、
+    // 分類境界(sit_th_*)は意味のある範囲に制限、その他の戦略重みは正値のみ
+    m[k]=k.startsWith('card_')||k.startsWith('af_') ? Math.max(-3, Math.min(3, v))
+       : k==='sit_th_life' ? Math.max(4, Math.min(16, v))
+       : k==='sit_th_edge' ? Math.max(2, Math.min(10, v))
+       : k.startsWith('sit_') ? Math.max(0.2, Math.min(2.5, v))
+       : Math.max(0.01, v);
   }
   return m;
 }
@@ -1961,6 +2081,7 @@ function showTrainingPanel() {
         </label>
         <button onclick="closeModal();showBalancePanel()" style="padding:6px 12px;background:#1a2a2a;border:1px solid #447777;color:#aaffff;border-radius:4px;cursor:pointer;">📊 バランス分析</button>
         <button onclick="closeModal();showAIDeckPanel()" style="padding:6px 12px;background:#2a2a1a;border:1px solid #777744;color:#ffffaa;border-radius:4px;cursor:pointer;">🃏 AIデッキ</button>
+        <button onclick="closeModal();showMetaAIPanel()" style="padding:6px 12px;background:#2a1a3a;border:1px solid #7744aa;color:#ddaaff;border-radius:4px;cursor:pointer;">🤖 AI自律強化</button>
         <button onclick="updateDefaultWeights()" style="padding:6px 12px;background:#2a3a1a;border:1px solid #66aa44;color:#ccffaa;border-radius:4px;cursor:pointer;">⭐ デフォルト値を更新</button>
         <button onclick="resetToDefaultWeights()" style="padding:6px 10px;background:#1a1a1a;border:1px solid #555;color:#888;border-radius:4px;cursor:pointer;">↺ デフォルトに戻す</button>
       </div>
