@@ -4843,12 +4843,15 @@ function aiHandlePriority() {
       aiPlaySpellEffect(card);
     }});
     renderStack();
+    render();
+    // Quick呪文を使った後も優先権処理を継続（スタック解決→次の優先権）
+    continueStack();
   } else {
     // AIが対応せず優先権をパスしたことを中央バーに表示
     log('AI: 優先権パス');
     showPhaseFlash('AI 優先権パス', G.stack.length > 0 ? `${G.stack[G.stack.length-1].name} を解決` : '');
+    closePriorityAndResolve();
   }
-  closePriorityAndResolve();
 }
 
 function passPriority() {
