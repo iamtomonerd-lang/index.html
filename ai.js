@@ -684,6 +684,16 @@ function aiAttack() {
 
   if (attackerInsts.length === 0) { setTimeout(() => endTurnAfterMainPhase(), 300); return; }
 
+  // Phase B: Hard Constraints（攻撃の妥当性チェック）
+  if (!isLethal && !oppOpenBoard && typeof validateAttackDecision === 'function') {
+    if (!validateAttackDecision(attackerInsts, 1)) {
+      // 攻撃禁止: 無意味な攻撃と判定
+      aiThink('⚠️ Hard Constraints: ダメージが不十分なため攻撃を回避（ターン温存）');
+      setTimeout(() => endTurnAfterMainPhase(), 300);
+      return;
+    }
+  }
+
   // D. AI思考表示: 攻撃方針の理由
   if (isLethal) aiThink(`このターンで倒し切れると計算（合計パワー${totalPow}）→ 総攻撃！`);
   else if (oppOpenBoard) aiThink('相手の場が空なので全員で攻撃（ノーリスクで打点を稼ぐ）');

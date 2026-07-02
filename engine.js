@@ -2607,6 +2607,27 @@ function endGame(winner) {
     if (SPECIAL_MATCH_MODE) {
       onSpecialMatchEnd(winner === 0);
     }
+
+    // Phase E: Pattern Blocker（AIが負けた場合、パターンを記録）
+    if (winner === 0 && typeof recordLossPattern === 'function') {
+      // プレイヤー勝利 = AI敗北 → パターン記録
+      const turn = G.turn || 1;
+      const aiPlayer = G.players[1];
+      const playerField = G.players[0].field;
+      if (playerField.length > 0) {
+        const topThreat = playerField.reduce((a,b)=>
+          getEffectivePower(0,b) > getEffectivePower(0,a) ? b : a
+        );
+        recordLossPattern({
+          turn, atkPlayer: 0, defPlayer: 1,
+          atkPow: getEffectivePower(0, topThreat),
+          atkTou: getEffectiveToughness(0, topThreat),
+          blkTou: aiPlayer.field.length > 0 ?
+            Math.max(...aiPlayer.field.map(c=>getEffectiveToughness(1,c))) : 0,
+          outcome: 'loss'
+        });
+      }
+    }
   }
   const who = NET_MODE === 'hotseat' ? (winner === 0 ? 'P1の' : 'P2の') : winner === 0 ? 'あなたの' : 'AIの';
   log(`ゲーム終了！ ${who}勝利！`, 'important');

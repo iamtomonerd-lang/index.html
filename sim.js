@@ -195,6 +195,44 @@ function aiPickBestCard(handItems) {
 
     if (score > bestScore) { bestScore = score; best = item; }
   }
+
+  // Phase B: Hard Constraints（カード選択の妥当性チェック）
+  if (best) {
+    const card = best.card;
+    const cost = totalCost(card.cost || {});
+    // マナ浪費チェック: ほぼ無意味なカード使用は禁止
+    if (cost > 0 && card.type === 'creature') {
+      const pow = card.power || 0;
+      if (cost > pow * 2 && oppField === 0 && myField >= 3) {
+        // 相手の場が空で自分が有利なのに、高コストの低パワークリーチャーを使う = 無意味
+        if (typeof aiThink === 'function') aiThink(`⚠️ Hard Constraints: ${card.name} はコスト対効果が低いためパス`);
+        best = null;
+      }
+    }
+  }
+
+  // Phase C + D: Decision Audit & Context-Aware Fallback
+  if (best && typeof recordDecisionAudit === 'function' && typeof calculateSanityScore === 'function') {
+    const card = best.card;
+    const context = {
+      decision: 'play_card',
+      improvesBoard: (card.type === 'creature') ? 1 : (oppField > 0 ? 2 : 0),
+      manaEfficiency: (totalCost(card.cost || {}) > 0) ? (card.power || 1) / totalCost(card.cost) : 1
+    };
+    const score = calculateSanityScore('play_card', context);
+    recordDecisionAudit('play_card', {cardId: card.id, turn}, score);
+
+    // Phase D: 妥当性スコアが極端に低い場合、より安全な（スコア低い）カード選択に切り替え
+    if (score < 30 && handItems.length > 1) {
+      const alternatives = handItems.filter(h => h !== best);
+      const safer = alternatives[Math.floor(Math.random() * alternatives.length)];
+      if (safer && typeof aiThink === 'function') {
+        aiThink(`フォールバック: より妥当性の高い判断に切り替え（${score}→改善）`);
+      }
+      return safer || best;
+    }
+  }
+
   return best;
 }
 
@@ -216,14 +254,34 @@ function aiShouldBlock(atkInst, blkInst, atkPlayer) {
   // Phase3: ブロック判定強化 - 終盤ではブロック優先度を高める
   const turn = G.turn || 1;
   if (turn >= 11 && me.life < 15) {
-    // 終盤・低ライフ: ブロックして生き残る方が重要
     blockValue += 3.0;
   } else if (turn <= 4 && atkPow <= 2) {
-    // 序盤: 小さいクリーチャーへのブロック抑制
     blockValue -= 0.5;
   }
 
-  return (blockValue + w.life*atkPow*w.blockRisk) > 0;
+  const baseDecision = (blockValue + w.life*atkPow*w.blockRisk) > 0;
+
+  // Phase A: Sanity Check（妥当性再確認）
+  if (baseDecision && typeof sanitizeBlockDecision === 'function') {
+    if (!sanitizeBlockDecision(atkInst, blkInst, atkPlayer)) return false;
+  }
+
+  // Phase E: Pattern Blocker（過去に負けたパターンの回避）
+  if (baseDecision && typeof shouldBlockPattern === 'function') {
+    const situation = {turn, atkPow, blkTou, atkTou, blkSurvives, atkDies, atkPlayer, defPlayer: defender};
+    if (shouldBlockPattern(situation)) {
+      if (typeof aiThink === 'function') aiThink('パターンマッチ: 過去に失敗したブロック方法は回避');
+      return false;
+    }
+  }
+
+  // Phase C: Decision Audit Log（監査記録）
+  if (typeof recordDecisionAudit === 'function' && typeof calculateSanityScore === 'function') {
+    const score = calculateSanityScore('block', {atkPow, blkTou, blkSurvives, atkDies, lifeGap: me.life - opp.life});
+    recordDecisionAudit('block', {atkPow, blkTou, turn}, score);
+  }
+
+  return baseDecision;
 }
 
 // ============================================================
@@ -2783,3 +2841,221 @@ function getAICardPreferences(weights) {
     })
     .sort((a, b) => b.value - a.value);
 }
+
+// ============================================================
+// AI意味不明な行動の防止（5施策: B→A→C→D→E）
+// ============================================================
+
+// グローバル状態: 監査ログ＆パターン記憶
+let AI_DECISION_AUDIT = [];       // C案: 各判断の sanity_score
+let AI_PATTERN_BLOCKS = [];       // E案: 「この状況この行動は負けた」パターン
+let AI_SANITY_ENABLED = true;     // 妥当性チェックのON/OFF
+
+// ────────────────────────────────────────────────────────────
+// Phase B: Hard Constraints（硬い制約・明らかにおかしい行動を禁止）
+// ────────────────────────────────────────────────────────────
+
+function validateBlockingDecision(atkInst, blkInst, atkPlayer) {
+  const defender = 1 - atkPlayer;
+  const atkPow = getEffectivePower(atkPlayer, atkInst);
+  const blkPow = getEffectivePower(defender, blkInst);
+  const blkTou = getEffectiveToughness(defender, blkInst);
+  const atkTou = getEffectiveToughness(atkPlayer, atkInst);
+  const blkSurvives = (blkTou - blkInst.damage) > atkPow;
+  const atkDies = (atkTou - atkInst.damage) <= blkPow;
+  
+  // B案: Hard Constraints
+  // 1) 相打ちで負ける場合：ライフ差が極大でない限りブロック禁止
+  if (!blkSurvives && !atkDies) {
+    const me = G.players[defender];
+    const opp = G.players[atkPlayer];
+    // 相打ちで我が方クリーチャーが破壊されるのに、ライフ優位でない場合は禁止
+    if (me.life <= opp.life + 5) {
+      return false; // ブロック禁止
+    }
+  }
+  // 2) ブロッカーが死に、攻撃も通る場合：禁止
+  if (!blkSurvives && !atkDies) {
+    return false;
+  }
+  return true; // ブロック許可
+}
+
+function validateAttackDecision(candidates, player) {
+  const me = G.players[player];
+  const opp = G.players[1 - player];
+  const totalPow = candidates.reduce((s, c) => s + getEffectivePower(player, c), 0);
+  
+  // B案: Hard Constraints
+  // リーサル計算の合理性チェック
+  const untappedBlockers = opp.field.filter(c => !c.tapped).length;
+  const sorted = [...candidates].sort((a, b) => getEffectivePower(player, a) - getEffectivePower(player, b));
+  const blockedPow = sorted.slice(0, untappedBlockers).reduce((s, c) => s + getEffectivePower(player, c), 0);
+  const damageThrough = totalPow - blockedPow;
+  
+  // 攻撃してもダメージが10未満で、相手ライフが10以上の場合「無意味な攻撃」と判定
+  if (damageThrough < 10 && opp.life > 10 && G.turn > 8) {
+    return false; // 攻撃禁止（ターン8以降で無意味な攻撃は避ける）
+  }
+  return true; // 攻撃許可
+}
+
+// ────────────────────────────────────────────────────────────
+// Phase A: Sanity Check（妥当性の再確認＝ブロック判定の二重チェック）
+// ────────────────────────────────────────────────────────────
+
+function sanitizeBlockDecision(atkInst, blkInst, atkPlayer) {
+  if (!AI_SANITY_ENABLED) return true; // チェック無効時はスキップ
+  
+  // Hard Constraintsを確認
+  if (!validateBlockingDecision(atkInst, blkInst, atkPlayer)) {
+    if (typeof aiThink === 'function') aiThink('ブロック禁止: Hard Constraints違反（損失が大きすぎる）');
+    return false;
+  }
+  
+  // 追加チェック: 本当にブロック価値があるか再計算
+  const defender = 1 - atkPlayer;
+  const atkPow = getEffectivePower(atkPlayer, atkInst);
+  const blkPow = getEffectivePower(defender, blkInst);
+  const blkTou = getEffectiveToughness(defender, blkInst);
+  const atkTou = getEffectiveToughness(atkPlayer, atkInst);
+  const blkSurvives = (blkTou - blkInst.damage) > atkPow;
+  const atkDies = (atkTou - atkInst.damage) <= blkPow;
+  
+  // 最悪の場合（両方死ぬ）でも、ライフ余裕がない場合はOK
+  if (!blkSurvives && !atkDies) {
+    const me = G.players[defender];
+    if (me.life < atkPow * 2) return true; // ライフが危ないなら相打ちもOK
+  }
+  
+  return true;
+}
+
+// ────────────────────────────────────────────────────────────
+// Phase C: Decision Audit Log（判断の監査）
+// ────────────────────────────────────────────────────────────
+
+function recordDecisionAudit(decision, context, sanity_score) {
+  // sanity_score: 0-100（100=最も合理的）
+  AI_DECISION_AUDIT.push({
+    time: Date.now(),
+    decision, context, sanity_score
+  });
+  if (AI_DECISION_AUDIT.length > 500) AI_DECISION_AUDIT = AI_DECISION_AUDIT.slice(-500);
+  
+  // スコアが30未満なら警告ログ
+  if (sanity_score < 30) {
+    if (typeof aiThink === 'function') {
+      aiThink(`⚠️ 妥当性低い判断: ${decision} (score=${sanity_score})`);
+    }
+  }
+}
+
+function calculateSanityScore(decision, context) {
+  // 決定の妥当性スコア（0-100）を計算
+  // decision: 'block' | 'attack' | 'play_card' etc
+  // context: {atkPow, blkTou, lifeGap, boardState, ...}
+  
+  let score = 50; // ニュートラル
+  
+  if (decision === 'block') {
+    // ブロック妥当性: 一方的に勝てる場合は高スコア
+    if (context.atkDies && context.blkSurvives) score = 95;
+    else if (context.atkDies) score = 85;
+    else if (context.blkSurvives) score = 75;
+    else if (Math.abs(context.lifeGap) < 5) score = 65; // ライフが拮抗してる場合のみ相打ちOK
+    else score = 20; // 損な相打ちは低スコア
+  } else if (decision === 'attack') {
+    // 攻撃妥当性: リーサル見えてるか、有意なダメージを見込めるか
+    if (context.isLethal) score = 98;
+    else if (context.damageThrough >= 10) score = 75;
+    else if (context.damageThrough >= 5) score = 50;
+    else score = 20;
+  } else if (decision === 'play_card') {
+    // カード妥当性: 盤面改善できるか、マナ効率は良いか
+    if (context.improvesBoard > 2) score = 80;
+    else if (context.improvesBoard > 0) score = 60;
+    else if (context.manaEfficiency > 0.8) score = 55;
+    else score = 25;
+  }
+  
+  return Math.max(0, Math.min(100, score));
+}
+
+// ────────────────────────────────────────────────────────────
+// Phase D: Context-Aware Fallback（文脈認識フォールバック）
+// ────────────────────────────────────────────────────────────
+
+function applyContextFallback(bestOption, allOptions, context) {
+  // bestOption: 最適候補（MCTS/Greedy選択）
+  // allOptions: 全候補
+  // sanity_scoreが異常に低い場合、より安全な代替案に切り替える
+  
+  if (!bestOption) return null;
+  
+  const bestScore = (typeof calculateSanityScore === 'function')
+    ? calculateSanityScore(context.decision, {...context, option: bestOption})
+    : 50;
+  
+  // スコアが30未満で、より安全な代替案がある場合は切り替え
+  if (bestScore < 30) {
+    const saferOption = allOptions.find(opt => {
+      const optScore = (typeof calculateSanityScore === 'function')
+        ? calculateSanityScore(context.decision, {...context, option: opt})
+        : 50;
+      return optScore > bestScore + 20; // 20ポイント以上改善
+    });
+    
+    if (saferOption && typeof aiThink === 'function') {
+      aiThink(`フォールバック: 妥当性の高い判断に切り替え（${bestScore}→より高）`);
+    }
+    return saferOption || bestOption;
+  }
+  
+  return bestOption;
+}
+
+// ────────────────────────────────────────────────────────────
+// Phase E: Pattern Blocker（パターン記憶＆回避）
+// ────────────────────────────────────────────────────────────
+
+function recordLossPattern(situation) {
+  // 負けた試合のパターンを記録
+  // situation: {turn, atkPow, blkTou, atkTou, blkSurvives, atkDies, outcome:'loss'}
+  AI_PATTERN_BLOCKS.push({
+    time: Date.now(),
+    pattern: situation,
+    blocked: false
+  });
+  if (AI_PATTERN_BLOCKS.length > 200) AI_PATTERN_BLOCKS = AI_PATTERN_BLOCKS.slice(-200);
+  try {
+    localStorage.setItem('dcg_ai_pattern_blocks', JSON.stringify(AI_PATTERN_BLOCKS));
+  } catch(e) {}
+}
+
+function shouldBlockPattern(situation) {
+  // 現在の状況が「過去に負けたパターン」に合致するかチェック
+  return AI_PATTERN_BLOCKS.some(block => {
+    const p = block.pattern;
+    // パターン照合: ターン、パワー差、タフネス差が近い場合は回避
+    const turnMatch = Math.abs((G.turn || 1) - p.turn) <= 2;
+    const powMatch = Math.abs(getEffectivePower(p.atkPlayer, p.atkInst) - p.atkPow) <= 1;
+    const touMatch = Math.abs(getEffectiveToughness(p.defPlayer, p.blkInst) - p.blkTou) <= 1;
+    
+    if (turnMatch && powMatch && touMatch && !block.blocked) {
+      block.blocked = true; // 一度ブロックしたら記憶
+      return true;
+    }
+    return false;
+  });
+}
+
+function loadPatternBlocks() {
+  try {
+    const s = localStorage.getItem('dcg_ai_pattern_blocks');
+    AI_PATTERN_BLOCKS = s ? JSON.parse(s) : [];
+  } catch(e) { AI_PATTERN_BLOCKS = []; }
+}
+
+loadPatternBlocks();
+
