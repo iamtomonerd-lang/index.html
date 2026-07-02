@@ -684,6 +684,19 @@ function aiAttack() {
 
   if (attackerInsts.length === 0) { setTimeout(() => endTurnAfterMainPhase(), 300); return; }
 
+  // 裏目ケア: 相手の返し札（僧侶の攻撃時誘発・構えたクイック呪文・返しの総攻撃）を
+  // 織り込んで攻撃者を絞る。リーサル時はケア不要で全力。
+  if (typeof applyUrameCare === 'function') {
+    const care = applyUrameCare(attackerInsts, 1, isLethal);
+    care.notes.forEach(n => aiThink(n));
+    attackerInsts = care.attackers;
+    if (attackerInsts.length === 0) {
+      aiThink('裏目ケアの結果、今ターンの攻撃は見送り（安全優先）');
+      setTimeout(() => endTurnAfterMainPhase(), 300);
+      return;
+    }
+  }
+
   // Phase B: Hard Constraints（攻撃の妥当性チェック）
   if (!isLethal && !oppOpenBoard && typeof validateAttackDecision === 'function') {
     if (!validateAttackDecision(attackerInsts, 1)) {

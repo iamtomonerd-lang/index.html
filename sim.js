@@ -245,8 +245,11 @@ function aiShouldBlock(atkInst, blkInst, atkPlayer) {
   const blkPow = getEffectivePower(defender,blkInst);
   const blkTou = getEffectiveToughness(defender,blkInst);
   const atkTou = getEffectiveToughness(atkPlayer,atkInst);
-  const blkSurvives = (blkTou-blkInst.damage) > atkPow;
-  const atkDies = (atkTou-atkInst.damage) <= blkPow;
+  const atkCard = CARD_DB[atkInst.cardId] || {};
+  const blkCard = CARD_DB[blkInst.cardId] || {};
+  // 裏目ケアA: 接死持ちの攻撃はタフネスで耐えられない／自分の接死ブロックは相手を必ず倒せる
+  const blkSurvives = !(atkCard.deathtouch && atkPow > 0) && (blkTou-blkInst.damage) > atkPow;
+  const atkDies = ((atkTou-atkInst.damage) <= blkPow) || (blkCard.deathtouch && blkPow > 0);
   let blockValue = 0;
   if (atkDies) blockValue += w.fieldPower*atkPow + w.fieldCount;
   if (!blkSurvives) blockValue -= w.fieldPower*blkPow + w.fieldCount;
@@ -259,7 +262,13 @@ function aiShouldBlock(atkInst, blkInst, atkPlayer) {
     blockValue -= 0.5;
   }
 
-  const baseDecision = (blockValue + w.life*atkPow*w.blockRisk) > 0;
+  // 裏目ケアA: 貫通持ちを小さいクリーチャーでブロックしても超過分は通る
+  // → 「ブロックで実際に防げるダメージ」で価値を評価（無駄なチャンプブロックを避ける）
+  const preventedPow = (atkCard.trample && !blkSurvives)
+    ? Math.min(atkPow, Math.max(0, blkTou - blkInst.damage))
+    : atkPow;
+
+  const baseDecision = (blockValue + w.life*preventedPow*w.blockRisk) > 0;
 
   // Phase A: Sanity Check（妥当性再確認）
   if (baseDecision && typeof sanitizeBlockDecision === 'function') {
@@ -3059,3 +3068,162 @@ function loadPatternBlocks() {
 
 loadPatternBlocks();
 
+
+// ============================================================
+// 裏目ケア（相手の返し札を読む思考: A見える危険/B構え読み/C最悪想定/Dリスク分散/E裏目学習）
+// ============================================================
+
+// ── E. 裏目の学習: 食らった裏目カードの記憶（localStorage永続化・ゲームをまたいで保持）──
+let AI_URAME_MEMORY = {};   // {cardId: 食らった回数}
+function loadUrameMemory() {
+  try {
+    const s = localStorage.getItem('dcg_ai_urame');
+    AI_URAME_MEMORY = s ? JSON.parse(s) : {};
+    if (!AI_URAME_MEMORY || typeof AI_URAME_MEMORY !== 'object') AI_URAME_MEMORY = {};
+  } catch(e) { AI_URAME_MEMORY = {}; }
+}
+function recordUrameEvent(cardId, kind) {
+  AI_URAME_MEMORY[cardId] = (AI_URAME_MEMORY[cardId] || 0) + 1;
+  try { localStorage.setItem('dcg_ai_urame', JSON.stringify(AI_URAME_MEMORY)); } catch(e) {}
+  const cd = (typeof CARD_DB !== 'undefined') ? CARD_DB[cardId] : null;
+  if (typeof aiThink === 'function' && cd) {
+    aiThink(`裏目を記憶: 「${cd.name}」は次から警戒する（通算${AI_URAME_MEMORY[cardId]}回目）`);
+  }
+}
+// 警戒度 0〜3（食らった回数が多いほど強く警戒）
+function getUrameWariness(cardId) {
+  return Math.min(3, AI_URAME_MEMORY[cardId] || 0);
+}
+loadUrameMemory();
+
+// ── B. 枚数勘定: 相手の公開ゾーン（墓地・場）から「もう使った枚数」を数える ──
+function countOppSeenCard(oppIdx, cardId) {
+  const o = G.players[oppIdx];
+  let n = 0;
+  (o.graveyard || []).forEach(id => { if (id === cardId) n++; });
+  (o.field || []).forEach(c => { if (c.cardId === cardId) n++; });
+  (o.exile || []).forEach(id => { if (id === cardId) n++; });
+  return n;
+}
+// 相手の山＋手札にまだ残っていそうな枚数（4枚積み前提の引き算）
+function estimateOppRemaining(oppIdx, cardId) {
+  const seen = countOppSeenCard(oppIdx, cardId);
+  // 「相手がそのカードを使うデッキか」の判断:
+  //  特殊マッチ=デッキ固定で確実に入っている / それ以外=見せた or 過去に裏目を食らったカードのみ警戒
+  const knownDeck = (typeof SPECIAL_MATCH_MODE !== 'undefined' && SPECIAL_MATCH_MODE);
+  const playsIt = knownDeck || seen > 0 || getUrameWariness(cardId) > 0;
+  if (!playsIt) return 0;
+  return Math.max(0, 4 - seen);
+}
+
+// ── B. クイック警戒: 相手が「構えている」かを読む ──
+// 構えマナ＋残り枚数＋裏目記憶から、警戒レベル0〜1と脅威リストを返す
+function assessQuickRisk(oppIdx) {
+  const o = G.players[oppIdx];
+  if (!o.hand || o.hand.length === 0) return { level: 0, threats: [] };
+  const untappedMana = (o.lands || []).filter(l => !l.tapped).length;
+  if (untappedMana === 0) return { level: 0, threats: [] };
+  const threats = [];
+  Object.keys(CARD_DB).forEach(cid => {
+    const cd = CARD_DB[cid];
+    if (!cd || cd.type !== 'spell') return;
+    const isQuick = (cd.keywords && cd.keywords.includes('Quick')) || cd.quick;
+    if (!isQuick) return;
+    if (totalCost(cd.cost || {}) > untappedMana) return; // 構えマナ不足＝撃てない
+    const remaining = estimateOppRemaining(oppIdx, cid);
+    if (remaining <= 0) return; // 使い切った（枚数勘定）
+    threats.push({ cardId: cid, name: cd.name, remaining, wary: getUrameWariness(cid) });
+  });
+  if (threats.length === 0) return { level: 0, threats: [] };
+  const maxWary = Math.max(...threats.map(t => t.wary));
+  // 基本0.4、裏目経験1回ごとに+0.2（最大1.0）
+  return { level: Math.min(1, 0.4 + 0.2 * maxWary), threats };
+}
+
+// ── A. 見える裏目: 相手の場（公開情報）の危険を数値化 ──
+function assessOpponentDangers(aiIdx) {
+  const oppIdx = 1 - aiIdx;
+  const dangers = { attackPing: 0, pingSources: [], blockPunishers: [], deathtouchBlockers: [] };
+  (G.players[oppIdx].field || []).forEach(c => {
+    const cd = CARD_DB[c.cardId];
+    if (!cd) return;
+    // 僧侶タイプ: こちらの攻撃宣言のたびに2ダメージ飛んでくる
+    if (cd.onOpponentAttack === 'damage2opponent') {
+      dangers.attackPing += 2;
+      dangers.pingSources.push(cd.name);
+    }
+    const canBlock = !c.tapped || (cd.ocBlockWhileTapped && isOCActive(oppIdx));
+    if (canBlock && cd.onBlock) dangers.blockPunishers.push({ name: cd.name, effect: cd.onBlock });
+    if (canBlock && cd.deathtouch) dangers.deathtouchBlockers.push(cd.name);
+  });
+  return dangers;
+}
+
+// ── A+C+D. 攻撃前の裏目ケア本体 ──
+// attackers: 攻撃予定リスト → 裏目を織り込んで絞ったリストと説明文を返す
+function applyUrameCare(attackers, aiIdx, isLethal) {
+  const notes = [];
+  if (isLethal || !attackers || attackers.length === 0) return { attackers, notes }; // リーサル時は全力（ケア不要）
+  const oppIdx = 1 - aiIdx;
+  const isForced = c => c.mustAttack ||
+    (c.sick && CARD_DB[c.cardId].kakutou && c.entryTurn === G.turn);
+  let result = attackers.slice();
+
+  const dangers = assessOpponentDangers(aiIdx);
+  const quick = assessQuickRisk(oppIdx);
+
+  // A: 攻撃時ping（僧侶など）ケア — 宣言しただけで死ぬ攻撃者は見送り
+  if (dangers.attackPing > 0) {
+    const fragile = result.filter(c => !isForced(c) &&
+      (getEffectiveToughness(aiIdx, c) - (c.damage || 0)) <= dangers.attackPing);
+    if (fragile.length > 0) {
+      result = result.filter(c => !fragile.includes(c));
+      const names = fragile.map(c => CARD_DB[c.cardId].name).join('・');
+      notes.push(`${dangers.pingSources.join('・')}の「攻撃時2ダメージ」をケア: ${names}は攻撃を見送り`);
+    }
+  }
+
+  // B→C: クイック警戒 — 裏目経験があるほど慎重に（D: 脆い攻撃者を1体温存）
+  if (quick.level > 0 && result.length > 0) {
+    const quickDmg = 2; // 盾撃(2ダメージ)が代表的な脅威
+    const vulnerable = result.filter(c => !isForced(c) &&
+      (getEffectiveToughness(aiIdx, c) - (c.damage || 0)) <= quickDmg);
+    const threatNames = quick.threats.map(t => t.name).join('・');
+    if (quick.level >= 0.6 && vulnerable.length > 0 && result.length > 1) {
+      // 裏目経験あり: 脆い攻撃者のうち1体を温存（全滅リスクの分散）
+      const spare = vulnerable.reduce((a, b) =>
+        getEffectivePower(aiIdx, b) > getEffectivePower(aiIdx, a) ? b : a); // 一番価値の高い脆い子を守る
+      result = result.filter(c => c !== spare);
+      notes.push(`${threatNames}を警戒（相手が構えマナあり・過去に裏目経験）: ${CARD_DB[spare.cardId].name}は温存`);
+    } else if (vulnerable.length > 0) {
+      const restCount = quick.threats.reduce((s, t) => s + t.remaining, 0);
+      notes.push(`${threatNames}の可能性に注意して攻撃（残り${restCount}枚と推定）`);
+    }
+  }
+
+  // C+D: 反撃ワーストケース — 攻撃後、返しの総攻撃で負けるなら1体防御に残す
+  if (result.length > 0) {
+    const me = G.players[aiIdx];
+    const oppField = G.players[oppIdx].field || [];
+    if (oppField.length > 0) {
+      const attackerIds = new Set(result.map(c => c.instanceId));
+      // 攻撃に出すとタップ（警戒持ちは残る）→ 残る防御要員
+      const homeGuards = me.field.filter(c =>
+        !attackerIds.has(c.instanceId) || CARD_DB[c.cardId].vigilance);
+      const blockable = Math.min(homeGuards.length, oppField.length);
+      const sortedPow = oppField.map(c => getEffectivePower(oppIdx, c)).sort((a, b) => b - a);
+      const throughPow = sortedPow.slice(blockable).reduce((s, p) => s + p, 0);
+      if (throughPow >= me.life) {
+        const recallable = result.filter(c => !isForced(c) && !CARD_DB[c.cardId].vigilance);
+        if (recallable.length > 0) {
+          const weakest = recallable.reduce((a, b) =>
+            getEffectivePower(aiIdx, b) < getEffectivePower(aiIdx, a) ? b : a);
+          result = result.filter(c => c !== weakest);
+          notes.push(`返しの総攻撃で負ける恐れ: ${CARD_DB[weakest.cardId].name}を防御に残す`);
+        }
+      }
+    }
+  }
+
+  return { attackers: result, notes };
+}

@@ -977,6 +977,10 @@ function playCardFromHand(player, handIndex) {
       payMana(player, card.cost);
       p.hand.splice(handIndex, 1);
       log(`${card.name} をスタックに積んだ`, 'important');
+      // 裏目学習E: 相手（人間）がAIのターン中にクイックを実際に撃った → 記憶して次から構えを警戒
+      if (player === 0 && G.activePlayer === 1 && typeof recordUrameEvent === 'function') {
+        recordUrameEvent(cardId, 'quick');
+      }
       // ■2を処理してから解決を完了する
       const junigekiStep2 = () => {
         if (G.players[player].field.length === 0) {
@@ -4549,6 +4553,8 @@ function fireAttackTriggers(player, atkInstId) {
           G.targetMode = null;
           applyDamageToCreature(player, tgt.instId, 2, opp);
           log(`${cc.name}: 相手クリーチャーに2ダメージ`, 'damage');
+          // 裏目学習E: AIの攻撃がこの誘発で罰されたら記憶（次から警戒）
+          if (player === 1 && typeof recordUrameEvent === 'function') recordUrameEvent(cc.id, 'attackTrigger');
           checkDeath(); render(); updateHints(); continueStack();
         }};
         log(`${cc.name}: 2ダメージの対象を選択`);
