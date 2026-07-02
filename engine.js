@@ -4798,6 +4798,10 @@ function aiAutoPickTarget() {
 function aiHandlePriority() {
   if (_demoActive) return; // デモ録画中はAIの自動応答を抑止（手動で割込みを見せるため）
   if (!G.awaitingPriority || G.priorityFor !== 1) return;
+  // 多重保険: 既に処理中なら重複実行を避ける
+  if (G._aiPriorityHandling) return;
+  G._aiPriorityHandling = true;
+
   const ai = G.players[1];
   const player = G.players[0];
 
@@ -4832,25 +4836,30 @@ function aiHandlePriority() {
   showAIThinking(false);
   let chosen = (best && best.type === 'play') ? best.item : null;
 
-  if (chosen) {
-    const { cid, i, card } = chosen;
-    log(`AI: ${card.name} を対応で使用 (Quick)`, 'important');
-    showAIBalloon(`⚡ ${card.icon} ${card.name} 対応！`);
-    payMana(1, card.cost);
-    ai.hand.splice(i, 1);
-    G.stack.push({ name: card.name, icon: card.icon || '✨', owner: 1, resolve: () => {
-      ai.graveyard.push(cid);
-      aiPlaySpellEffect(card);
-    }});
-    renderStack();
-    render();
-    // Quick呪文を使った後も優先権処理を継続（スタック解決→次の優先権）
-    continueStack();
-  } else {
-    // AIが対応せず優先権をパスしたことを中央バーに表示
-    log('AI: 優先権パス');
-    showPhaseFlash('AI 優先権パス', G.stack.length > 0 ? `${G.stack[G.stack.length-1].name} を解決` : '');
-    closePriorityAndResolve();
+  try {
+    if (chosen) {
+      const { cid, i, card } = chosen;
+      log(`AI: ${card.name} を対応で使用 (Quick)`, 'important');
+      showAIBalloon(`⚡ ${card.icon} ${card.name} 対応！`);
+      payMana(1, card.cost);
+      ai.hand.splice(i, 1);
+      G.stack.push({ name: card.name, icon: card.icon || '✨', owner: 1, resolve: () => {
+        ai.graveyard.push(cid);
+        aiPlaySpellEffect(card);
+      }});
+      renderStack();
+      render();
+      // Quick呪文を使った後も優先権処理を継続（スタック解決→次の優先権）
+      continueStack();
+    } else {
+      // AIが対応せず優先権をパスしたことを中央バーに表示
+      log('AI: 優先権パス');
+      showPhaseFlash('AI 優先権パス', G.stack.length > 0 ? `${G.stack[G.stack.length-1].name} を解決` : '');
+      closePriorityAndResolve();
+    }
+  } finally {
+    // 多重保険: 何があっても G.awaitingPriority を確実にクリア
+    if (!G.awaitingPriority) G._aiPriorityHandling = false;
   }
 }
 
