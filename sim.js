@@ -1154,15 +1154,39 @@ class SimGame {
   }
   payMana(p,cost) { for (const [k,v] of Object.entries(cost)) p.mana[k]=(p.mana[k]||0)-v; }
 
-  snapshot() { return JSON.parse(JSON.stringify(this.state)); }
-  restore(snap) { this.state=JSON.parse(JSON.stringify(snap)); }
+  snapshot() { return fastCloneState(this.state); }
+  restore(snap) { this.state = fastCloneState(snap); }
+}
+
+// ── 純スペックA: 状態クローンの一元化と削減 ─────────────────────────
+// 実測の結果（test/bench-mcts.js）、V8ではJSON方式（C++実装）の方が
+// JS再帰コピーより速かったため、既定はJSON方式のまま。
+// 本当の高速化は「クローンの回数を減らす」こと：
+//   ・mctsEnumerateActions: 読むだけなのでクローン廃止
+//   ・mctsApplyAction: 入口で複製した状態をそのまま返す（出口の再複製を廃止）
+// フラグはベンチでの再検証用に残す（環境が変われば逆転もありうる）。
+let USE_FAST_CLONE = false; // true=JS再帰コピー / false=JSON方式（実測で高速）
+function _fastCloneAny(v) {
+  if (v === null || typeof v !== 'object') return v;
+  if (Array.isArray(v)) {
+    const n = v.length, out = new Array(n);
+    for (let i = 0; i < n; i++) out[i] = _fastCloneAny(v[i]);
+    return out;
+  }
+  const out = {};
+  for (const k in v) out[k] = _fastCloneAny(v[k]);
+  return out;
+}
+function fastCloneState(state) {
+  return USE_FAST_CLONE ? _fastCloneAny(state) : JSON.parse(JSON.stringify(state));
 }
 
 // ── MCTS (Monte Carlo Tree Search) ──────────────────────────────────
 const MCTS_EXPLORATION = 1.414; // UCB1 exploration constant
 const MCTS_ROLLOUT_DEPTH = 22;  // max turns per rollout
-// 反復上限。生成高速化により同一時間で多数探索できるため、実質「時間予算」を律速にする。
-const MCTS_MAX_ITERS = 6000;
+// 反復上限。純スペックD: クローン高速化で時間内の反復数が跳ね上がるため、
+// 上限で頭打ちしないよう大きく引き上げ（実質の律速は時間予算のまま）。
+const MCTS_MAX_ITERS = 60000;
 let MCTS_LAST_ITERS = 0; // 診断用: 直近 mctsSearch の反復数
 // 改善8: 局面に応じた時間予算（通常/終盤/クリティカル）。探索の質を上げるため引き上げ。
 const MCTS_TIME_NORMAL    = 500; // ms - 通常
@@ -1244,7 +1268,7 @@ function mctsStateFromG() {
 // Determinization: replace opponent (p0) hand with random sample from their deck
 // This models hidden-information MCTS (single-observer determinization)
 function deterministicState(baseState) {
-  const s = JSON.parse(JSON.stringify(baseState));
+  const s = fastCloneState(baseState);
   const p0 = s.players[0];
   const handSize = p0.hand.length;
   if (handSize === 0 || p0.deck.length === 0) return s;
@@ -1262,7 +1286,8 @@ function deterministicState(baseState) {
 // Enumerate possible actions from an AI-turn SimGame state (player=1, main phase)
 function mctsEnumerateActions(simState, nid) {
   const sim = SimGame.lite();
-  sim.state = JSON.parse(JSON.stringify(simState));
+  // 純スペックA: この関数は状態を読むだけで書き換えない → クローン不要（1回分の複製を節約）
+  sim.state = simState;
   sim.nid = nid;
   const p1 = sim.state.players[1];
   const actions = [];
@@ -1284,7 +1309,7 @@ function mctsEnumerateActions(simState, nid) {
 // Apply an action to a SimGame state, return new state snapshot + new nid
 function mctsApplyAction(simState, action, nid) {
   const sim = SimGame.lite();
-  sim.state = JSON.parse(JSON.stringify(simState));
+  sim.state = fastCloneState(simState);
   sim.nid = nid;
   const ap = 1; // AI is always player 1
   const p = sim.state.players[ap];
@@ -1292,7 +1317,7 @@ function mctsApplyAction(simState, action, nid) {
   if (action.type === 'play') {
     // Re-find the card by cardId (index may shift after previous plays)
     const idx = p.hand.indexOf(action.cardId);
-    if (idx === -1) return { state: sim.snapshot(), nid: sim.nid };
+    if (idx === -1) return { state: sim.state, nid: sim.nid };
     const card = CARD_DB[action.cardId];
     if (card && card.type === 'creature' && p.field.length < 5 && sim.canAfford(p, card.cost)) {
       sim.payMana(p, card.cost);
@@ -1310,15 +1335,16 @@ function mctsApplyAction(simState, action, nid) {
       p.graveyard.push(action.cardId);
     }
   }
+  // 純スペックA: 冒頭で複製済みの状態をそのまま返す（snapshotでの再複製は無駄）
   // 'pass': no state change, just ends main phase
-  return { state: sim.snapshot(), nid: sim.nid };
+  return { state: sim.state, nid: sim.nid };
 }
 
 // Rollout: play game to completion from simState, return 1 if P1 wins, 0 otherwise
 // 改善7: P0もheuristic（SimGame.simPlayCards＋simAttack）でプレイ → ランダムより精度高
 function mctsRollout(simState, nid) {
   const sim = SimGame.lite();
-  sim.state = JSON.parse(JSON.stringify(simState));
+  sim.state = fastCloneState(simState);
   sim.nid = nid;
   sim.maxTurns = MCTS_ROLLOUT_DEPTH;
   // both players use SimGame's heuristic (not random)
@@ -1340,18 +1366,51 @@ function mctsRollout(simState, nid) {
 
 // MCTS search: find best sequence of card plays for AI (player 1)
 // Returns array of cardIds to play in order
-function mctsSearch(timeMs) {
+// 純スペックC: 時間バンク。自明な局面で浮いた思考時間を貯金し、
+// 判断が割れる難しい局面で追加消費する（合計は増やさず配分を最適化）。
+let MCTS_TIME_BANK = 0;
+const MCTS_BANK_MAX = 4000; // 貯金の上限(ms)
+
+function mctsSearch(timeMs, rootBundle) {
   try {
-    const deadline = Date.now() + (timeMs || mctsTimeBudget());
-    const rootState = mctsStateFromG();
+    const budget = timeMs || mctsTimeBudget();
+    const start = Date.now();
+    let deadline = start + budget;
+    let extended = false; // バンク延長は1回だけ
+    const rootState = rootBundle || mctsStateFromG();
     const root = new MCTSNode(rootState, null, null, 1);
     root.untriedActions = mctsEnumerateActions(rootState, 1);
 
+    // C: 選択肢が実質1つ（passのみ等）なら探索不要 → 全額貯金して即決
+    if (root.untriedActions.length <= 1) {
+      MCTS_TIME_BANK = Math.min(MCTS_BANK_MAX, MCTS_TIME_BANK + budget);
+      MCTS_LAST_ITERS = 0;
+      const only = root.untriedActions[0];
+      return (only && only.type === 'play') ? [only.cardId] : [];
+    }
+
     let iterations = 0;
-    // 反復上限を引き上げ、実質的に「時間予算」を律速にする。
-    // 無引数SimGame生成の高速化(約56倍)で同じ時間でも遥かに多く探索できるようになった。
     while (Date.now() < deadline && iterations < MCTS_MAX_ITERS) {
       iterations++;
+
+      // C: 定期チェック（256回ごと）— 圧勝の手が確定したら早期終了して貯金、
+      //    逆に締切間際でも判断が割れていたら貯金から延長して読み切る
+      if ((iterations & 255) === 0 && root.children.length >= 2) {
+        const kids = [...root.children].sort((a, b) => b.visits - a.visits);
+        const now = Date.now();
+        if (now - start > budget * 0.35 &&
+            kids[0].visits > root.visits * 0.6 && kids[0].visits > kids[1].visits * 4) {
+          MCTS_TIME_BANK = Math.min(MCTS_BANK_MAX, MCTS_TIME_BANK + (deadline - now));
+          break; // 圧倒的一位 → 残り時間を貯金して確定
+        }
+        if (!extended && MCTS_TIME_BANK > 100 && deadline - now < 60 &&
+            kids[1].visits > kids[0].visits * 0.8) {
+          const extra = Math.min(MCTS_TIME_BANK, budget); // 接戦 → 貯金で延長
+          MCTS_TIME_BANK -= extra;
+          deadline += extra;
+          extended = true;
+        }
+      }
       try {
         // 1. Selection: walk tree using UCB1
         let node = root;
@@ -3471,3 +3530,78 @@ function verifyImitationLessons(games) {
   if (typeof aiThink === 'function') aiThink(`模倣学習の検証: ${msg}`);
   return { rate, adopted, decided };
 }
+
+// ============================================================
+// 純スペックB: Web Worker思考（UIを止めずに長考）
+// 思考を裏スレッドに逃がすことで、画面を固めずに時間予算を2.5倍に拡大。
+// Workerが使えない環境（file://直開き等）では従来の同期探索に自動フォールバック。
+// ============================================================
+let MCTS_WORKER = null;
+let MCTS_WORKER_READY = false;
+let _mctsWorkerReqId = 0;
+const _mctsWorkerPending = {};
+const MCTS_WORKER_BUDGET_SCALE = 2.5;
+
+function initMctsWorker() {
+  try {
+    if (typeof Worker === 'undefined') return;                 // Worker非対応環境
+    if (typeof importScripts === 'function') return;           // 自分がWorker内なら何もしない
+    MCTS_WORKER = new Worker('mcts-worker.js');
+    MCTS_WORKER.onmessage = (e) => {
+      const msg = e.data || {};
+      if (msg.type === 'ready') {
+        MCTS_WORKER_READY = true;
+        console.log('[MCTS] Worker起動 — 思考を裏スレッド化（予算2.5倍）');
+        return;
+      }
+      if (msg.type === 'result' && _mctsWorkerPending[msg.id]) {
+        const cb = _mctsWorkerPending[msg.id];
+        delete _mctsWorkerPending[msg.id];
+        cb(msg);
+      }
+    };
+    MCTS_WORKER.onerror = (err) => {
+      console.warn('[MCTS] Worker失敗 → 同期探索にフォールバック:', err && err.message);
+      MCTS_WORKER_READY = false;
+      try { MCTS_WORKER.terminate(); } catch(e2) {}
+      MCTS_WORKER = null;
+    };
+  } catch (e) { MCTS_WORKER = null; MCTS_WORKER_READY = false; }
+}
+
+// aiTurn用: Workerがあれば裏スレッドで長考、なければ従来の同期探索（Promiseを返す）
+function mctsSearchSmart() {
+  const base = mctsTimeBudget();
+  if (!MCTS_WORKER_READY || !MCTS_WORKER) {
+    return Promise.resolve(mctsSearch(base));
+  }
+  return new Promise((resolve) => {
+    const id = ++_mctsWorkerReqId;
+    const budget = Math.round(base * MCTS_WORKER_BUDGET_SCALE);
+    let settled = false;
+    const timer = setTimeout(() => {          // Workerが黙ったら同期にフォールバック
+      if (settled) return; settled = true;
+      delete _mctsWorkerPending[id];
+      resolve(mctsSearch(base));
+    }, budget + 2500);
+    _mctsWorkerPending[id] = (msg) => {
+      if (settled) return; settled = true;
+      clearTimeout(timer);
+      if (msg.plays) { MCTS_LAST_ITERS = msg.iters || 0; resolve(msg.plays); }
+      else resolve(mctsSearch(base));         // Worker内エラー → 同期で再探索
+    };
+    try {
+      MCTS_WORKER.postMessage({
+        type: 'search', id, budget,
+        bundle: mctsStateFromG(),             // 局面はメイン側で確定してから渡す
+        weights: AI_WEIGHTS,                  // 学習済みの重み・辞書を同期
+        winningMoves: AI_WINNING_MOVES,
+        imitationOn: AI_IMITATION_ON
+      });
+    } catch (e) {
+      settled = true; clearTimeout(timer); delete _mctsWorkerPending[id];
+      resolve(mctsSearch(base));
+    }
+  });
+}
+initMctsWorker();

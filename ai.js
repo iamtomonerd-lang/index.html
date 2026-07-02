@@ -256,7 +256,7 @@ function aiCardPlayReason(card, aiIdx) {
   return '盤面をさらに強化';
 }
 
-function aiTurn() {
+async function aiTurn() {  // 純スペックB: Worker長考をawaitするため非同期化（呼び出し側は投げっぱなしでOK）
   if (G.phase === 'ended') return;
   // 観戦モード対応：現在のアクティブプレイヤーのAI処理を実行
   const aiIdx = SPECTATOR_MODE ? G.activePlayer : 1;
@@ -307,8 +307,11 @@ function aiTurn() {
   aiUseLandTapAbilities();
 
   // 改善8: 局面に応じた時間でMCTS実行
+  // 純スペックB: Workerが使える環境なら裏スレッドで長考（UIは固まらない・予算2.5倍）
   showAIThinking(true);
-  let mctsPlays = mctsSearch(mctsTimeBudget());
+  let mctsPlays = (typeof mctsSearchSmart === 'function')
+    ? await mctsSearchSmart()
+    : mctsSearch(mctsTimeBudget());
   showAIThinking(false);
   let aiPlayedCard = false;
 
