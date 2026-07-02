@@ -301,10 +301,20 @@ function _doConfirmStartMulligan() {
 function _mulliganDecision(hand) {
   const costs = hand.map(cid => { const cd = CARD_DB[cid]; return cd && cd.cost ? totalCost(cd.cost) : 0; });
   const cheapCount = costs.filter(c => c <= 3).length;   // コスト3以下＝序盤(〜3ターン)に動ける札
+
+  // Phase4: マリガン戦略強化 - 色バランスと効果を考慮
   let swapCount;
-  if (cheapCount >= 2) swapCount = 0;        // 良いカーブ → 交換しない
-  else if (cheapCount === 1) swapCount = 2;  // 序盤の札が1枚 → 高コスト2枚を交換
-  else swapCount = 3;                         // 序盤の札が無い → 高コスト3枚を交換
+  if (cheapCount >= 2) {
+    // 序盤札が十分 → 交換なし、ただし完全なマナロックなら1枚交換
+    const whiteCards = hand.filter(cid => {
+      const c = CARD_DB[cid];
+      return c && c.cost && c.cost.W && c.cost.W > 0;
+    }).length;
+    if (whiteCards === 0 && hand.some(cid => CARD_DB[cid]?.cost?.W)) swapCount = 1;
+    else swapCount = 0;
+  } else if (cheapCount === 1) swapCount = 2;  // 序盤の札が1枚 → 高コスト2枚を交換
+  else swapCount = 3;                          // 序盤の札が無い → 高コスト3枚を交換
+
   if (swapCount === 0) return [];
   return hand.map((cid, i) => ({ i, cost: costs[i] }))
              .sort((a, b) => b.cost - a.cost)
@@ -317,12 +327,17 @@ function aiMulligan() {
   const p = G.players[1];
   if (p.mulliganUsed) return;
   const idxs = _mulliganDecision(p.hand);
-  if (idxs.length === 0) { log('AI: マリガンなし'); return; }
+  if (idxs.length === 0) {
+    log('AI: マリガンなし');
+    if (typeof aiThink === 'function') aiThink('序盤に動ける札がそろっているので初手をキープ');
+    return;
+  }
   idxs.slice().sort((a, b) => b - a).forEach(i => p.deck.push(p.hand.splice(i, 1)[0]));
   p.deck = shuffle(p.deck);
   for (let k = 0; k < idxs.length; k++) drawCard(1);
   p.mulliganUsed = true;
   log(`AI: マリガン（${idxs.length}枚入れ替え）`);
+  if (typeof aiThink === 'function') aiThink(`序盤に動ける札が足りないため、コストの重い${idxs.length}枚を引き直し`);
 }
 
 function skipStartMulligan() {
@@ -1488,7 +1503,7 @@ function resolveETBEffect(player, instanceId) {
 
   if (card.etb === 'lookKeepWhite') {
     G._lookCont = () => continueStack();
-    doLookKeepColored(player, card.lookCount || 3, 'W');
+    doLookKeepColored(player, card.lookCount || 3, 'W', card.lookKeep || 1);
   } else if (card.etb === 'mustAttackTarget') {
     const targets = G.players[opp].field;
     if (targets.length === 0) { log(`${card.name} ETB: 対象なしのためスキップ`); continueStack(); return; }
@@ -1882,9 +1897,10 @@ function look3NoKeep() {
   if (G._lookCont) { const cb = G._lookCont; G._lookCont = null; cb(); }
 }
 
-// ── 汎用 Nルック1（指定色キープ）──────────────────────────────
+// ── 汎用 NルックK（指定色キープ、K=キープ枚数・省略時1）──────────
 const COLOR_NAME_JP = { W:'白', U:'青', B:'黒', R:'赤', G:'緑', C:'無色' };
-function doLookKeepColored(player, n, color) {
+function doLookKeepColored(player, n, color, keep) {
+  keep = keep || 1;
   const p = G.players[player];
   if (p.deck.length === 0) { if (G._lookCont) { const cb = G._lookCont; G._lookCont = null; cb(); } return; }
   const top = p.deck.splice(0, Math.min(n, p.deck.length));
@@ -1892,14 +1908,17 @@ function doLookKeepColored(player, n, color) {
   const cname = COLOR_NAME_JP[color] || color;
 
   if (player === 1 && NET_MODE === 'local') {
-    // AI: マッチする色があればキープ
+    // AI: マッチする色があれば最大keep枚キープ
     if (matches.length > 0) {
-      addCardToHand(player, matches[0]);
-      top.filter(cid => cid !== matches[0]).forEach(cid => p.deck.push(cid));
-      log(`AI ${n}ルック1(${cname}): ${cname}カードをキープ`);
+      const picked = matches.slice(0, keep);
+      picked.forEach(cid => addCardToHand(player, cid));
+      const remaining = [...top];
+      picked.forEach(cid => { const i = remaining.indexOf(cid); if (i !== -1) remaining.splice(i, 1); });
+      remaining.forEach(cid => p.deck.push(cid));
+      log(`AI ${n}ルック${keep}(${cname}): ${cname}カードを${picked.length}枚キープ`);
     } else {
       top.forEach(cid => p.deck.push(cid));
-      log(`AI ${n}ルック1(${cname}): ${cname}カードなし`);
+      log(`AI ${n}ルック${keep}(${cname}): ${cname}カードなし`);
     }
     if (G._lookCont) { const cb = G._lookCont; G._lookCont = null; cb(); }
     return;
@@ -1909,6 +1928,9 @@ function doLookKeepColored(player, n, color) {
   window._lookCCount = n;
   window._lookCCards = top;
   window._lookCPlayer = player;
+  window._lookCKeepTotal = keep;       // このルックで加えられる最大枚数
+  window._lookCKeepLeft = keep;        // 残りキープ可能枚数
+  window._lookCSeen = top.map(c => CARD_DB[c].name).join('・'); // 最初に見た全カード名
   renderLookColoredModal();
 }
 function renderLookColoredModal() {
@@ -1916,14 +1938,16 @@ function renderLookColoredModal() {
   const player = window._lookCPlayer || 0;
   const color = window._lookCColors || 'R';
   const n = window._lookCCount || top.length;
+  const keepTotal = window._lookCKeepTotal || 1;
+  const keepLeft = window._lookCKeepLeft != null ? window._lookCKeepLeft : 1;
   const cname = COLOR_NAME_JP[color] || color;
   const p = G.players[player];
-  let html = `<p style="margin-bottom:10px;">${cname}カードを1枚選んで手札に加えてください（${cname}以外は選択不可）:</p>
+  let html = `<p style="margin-bottom:10px;">${cname}カードを${keepTotal > 1 ? `最大${keepTotal}枚（あと${keepLeft}枚）` : '1枚'}選んで手札に加えてください（${cname}以外は選択不可）:</p>
     <p style="margin-bottom:8px;font-size:11px;color:#888;">右クリック/長押しで効果テキストを右上に表示できます</p>
     <div style="display:flex; flex-wrap:wrap; gap:8px;" id="lookc-cards"></div>
     <button onclick="modalPeek()" style="margin-top:10px; width:100%; background:#1a1a3a; border:1px solid #4444aa; color:#aaaaff; padding:8px; border-radius:6px; cursor:pointer;">👁 盤面を確認（手札・墓地・場）</button>
-    <button onclick="lookColoredNoKeep()" style="margin-top:8px; width:100%;">${cname}カードなし/パス（全て底へ）</button>`;
-  showModal(`${n}ルック1(${cname})`, html);
+    <button onclick="lookColoredNoKeep()" style="margin-top:8px; width:100%;">${keepTotal > 1 && keepLeft < keepTotal ? '選択を終了（残りを底へ）' : cname + 'カードなし/パス（全て底へ）'}</button>`;
+  showModal(`${n}ルック${keepTotal}(${cname})`, html);
   window._modalReturnRender = renderLookColoredModal;
 
   const container = document.getElementById('lookc-cards');
@@ -1937,29 +1961,39 @@ function renderLookColoredModal() {
     if (!ok) { el.style.opacity = '0.4'; el.style.cursor = 'default'; }
     else {
       el.onclick = () => {
-        const seenCards = top.map(c => CARD_DB[c].name).join('・');
         addCardToHand(player, cid);
-        top.filter(c2 => c2 !== cid).forEach(c2 => p.deck.push(c2));
-        log(`${n}ルック1: 見たカード『${seenCards}』`);
-        log(`${n}ルック1: ${card.name} をキープ`);
-        window._lookCCards = null; window._modalReturnRender = null;
-        closeModal(); render(); updateHints();
-        if (G._lookCont) { const cb = G._lookCont; G._lookCont = null; cb(); }
+        const i = top.indexOf(cid);
+        if (i !== -1) top.splice(i, 1);
+        log(`${n}ルック${keepTotal}: ${card.name} をキープ`);
+        window._lookCKeepLeft = keepLeft - 1;
+        // まだキープできて、選べる色カードが残っていれば選択を続行
+        const stillSelectable = top.some(c2 => CARD_DB[c2].color === color);
+        if (window._lookCKeepLeft > 0 && stillSelectable) {
+          renderLookColoredModal();
+          return;
+        }
+        // 終了: 残りを底へ
+        finishLookColored();
       };
     }
     container.appendChild(el);
   });
 }
-function lookColoredNoKeep() {
+function finishLookColored() {
   const top = window._lookCCards || [];
   const player = window._lookCPlayer || 0;
-  const seenCards = top.map(cid => CARD_DB[cid].name).join('・');
+  const n = window._lookCCount || 0;
+  const keepTotal = window._lookCKeepTotal || 1;
+  const seenCards = window._lookCSeen || top.map(cid => CARD_DB[cid].name).join('・');
   top.forEach(cid => G.players[player].deck.push(cid));
-  log(`ルック1: 見たカード『${seenCards}』`);
-  log('ルック1: 全て底へ');
-  window._lookCCards = null; window._modalReturnRender = null;
+  log(`${n}ルック${keepTotal}: 見たカード『${seenCards}』`);
+  if (top.length > 0) log(`${n}ルック${keepTotal}: 残り${top.length}枚を底へ`);
+  window._lookCCards = null; window._modalReturnRender = null; window._lookCSeen = null;
   closeModal(); render(); updateHints();
   if (G._lookCont) { const cb = G._lookCont; G._lookCont = null; cb(); }
+}
+function lookColoredNoKeep() {
+  finishLookColored();
 }
 
 // ── モーダル一時非表示（盤面確認） ───────────────────────────
@@ -2663,6 +2697,11 @@ function doRetire() {
       rec.losses = (rec.losses || 0) + 1;
       localStorage.setItem('dcg_record', JSON.stringify(rec));
     } catch(e) {}
+    // 特殊マッチ中のリタイアは「AIの勝ち」として記録する（記録漏れ防止）
+    if (SPECIAL_MATCH_MODE) {
+      recordSpecialMatchResult(true);
+      updateSpecialMatchDisplay();
+    }
     // レート戦中のリタイアはElo敗北処理
     if (RATED_MODE) {
       const oldR = eloGetRating();
@@ -2987,8 +3026,12 @@ function pickAIBlockerFor(atkPlayer, atkInstId, excludeInstId) {
   const oppField = G.players[opp].field;
   const atkInst = G.players[atkPlayer].field.find(c => c.instanceId === atkInstId);
   if (!atkInst) return null;
+  // 格闘の攻撃先に指定されているクリーチャーはブロックできない
+  const kkTargeted = new Set(Object.values(G.kakutouTargets || {}));
+  if (G.directlyAttackedCreatures) G.directlyAttackedCreatures.forEach(id => kkTargeted.add(id));
   const eligible = oppField.filter(b => {
     if (excludeInstId != null && b.instanceId === excludeInstId) return false; // 格闘対象はブロック不可
+    if (kkTargeted.has(b.instanceId)) return false; // 格闘の攻撃先はブロック不可
     const bc = CARD_DB[b.cardId];
     return (!b.tapped || (bc.ocBlockWhileTapped && isOCActive(opp))) && canFlyBlock(atkInst, b);
   });
@@ -3007,11 +3050,31 @@ function pickAIBlockerFor(atkPlayer, atkInstId, excludeInstId) {
               - (bSurvives ? 0 : AI_WEIGHTS.fieldPower * blkPow + AI_WEIGHTS.fieldCount);
     if (val > bestVal) { bestVal = val; bestBlocker = b; }
   }
+  // D. AI思考表示: ブロック判断の理由をログに出す
+  if (typeof aiThink === 'function') {
+    if (bestBlocker) {
+      const bName = CARD_DB[bestBlocker.cardId].name;
+      const atkPow = getEffectivePower(atkPlayer, atkInst);
+      const bPow = getEffectivePower(opp, bestBlocker);
+      const bTou = getEffectiveToughness(opp, bestBlocker);
+      const aTou = getEffectiveToughness(atkPlayer, atkInst);
+      const bSurv = (bTou - bestBlocker.damage) > atkPow;
+      const aDie = (aTou - atkInst.damage) <= bPow;
+      if (aDie && bSurv) aiThink(`「${bName}」でブロック — 一方的に倒せると判断`);
+      else if (aDie) aiThink(`「${bName}」でブロック — 相打ちでも攻撃を止める価値があると判断`);
+      else if (bSurv) aiThink(`「${bName}」でブロック — 生き残ってダメージを防げると判断`);
+      else aiThink(`「${bName}」でブロック — 被害覚悟で本体を守る`);
+    } else {
+      aiThink('ブロックしない — ブロックしても損になると判断（攻撃を通す）');
+    }
+  }
   return bestBlocker;
 }
 
 function resolveSingleCombat(atkPlayer, atkInstId, kakutouTargetId, blockerInstId) {
   const opp = 1 - atkPlayer;
+  // この攻撃の格闘対象指定はここで消費される（残留すると以後ブロック不可のままになる）
+  if (G.kakutouTargets) delete G.kakutouTargets[atkInstId];
   const atkInst = G.players[atkPlayer].field.find(c => c.instanceId === atkInstId);
   if (!atkInst) {
     G.combatArrows = []; render();
@@ -3254,6 +3317,10 @@ function resolveSingleCombat(atkPlayer, atkInstId, kakutouTargetId, blockerInstI
     } else if (!G.targetMode) {
       setTimeout(() => continueAIAttack(), 400);
     }
+  } else if (G.stack.length > 0 && !G.awaitingPriority && !G.targetMode && !G._awaitingModal) {
+    // 人間の攻撃: AIブロック誘発などがスタックに積まれたまま放置されると進行不能になるため、
+    // ここで優先権ウィンドウを開いて解決を開始する（呼び出し元は priorityContinuation で続行を接続できる）
+    openPriorityWindow(opp, null, '戦闘誘発効果');
   }
 }
 
@@ -3408,6 +3475,17 @@ function playerAttackQueueStart() {
   setTimeout(() => continuePlayerAttack(), 400);
 }
 
+// 格闘解決後: 攻撃キュー進行中なら次の攻撃へ戻る（ブロック誘発の解決待ちがあればその後で）
+function resumeAttackQueueAfterKakutou() {
+  if (!G._kakutouFromQueue) return;
+  G._kakutouFromQueue = false;
+  if (G.awaitingPriority) {
+    G.priorityContinuation = () => setTimeout(() => continuePlayerAttack(), 300);
+  } else {
+    setTimeout(() => continuePlayerAttack(), 400);
+  }
+}
+
 function continuePlayerAttack() {
   if (G.phase === 'ended' || !G._playerAttackQueue || G._playerAttackQueue.length === 0) {
     // 人間の攻撃完了 → AI のターンへ移行
@@ -3422,20 +3500,25 @@ function continuePlayerAttack() {
 
   // 次の攻撃をAIブロック判定へ
   const card = CARD_DB[atkInst.cardId];
-  log(`プレイヤー: ${card.name} で攻撃`, 'important');
 
-  // セラシアの僧侶の「相手の攻撃時」効果：攻撃クリーチャーに3ダメージ
-  const opponentSouryo = G.players[1].field.find(c => c.cardId === 'serashia_souryo');
-  if (opponentSouryo) {
-    const dmg = 3;
-    atkInst.damage += dmg;
-    log(`セラシアの僧侶: 攻撃クリーチャー「${card.name}」に${dmg}ダメージ`, 'damage');
-    if (checkCreatureDeath(0, atkInstId, 1)) {
-      log(`${card.name}は破壊されました`, 'important');
-      setTimeout(() => continuePlayerAttack(), 300);
+  // 格闘(出たターン): クリーチャーを対象に取って戦闘する。対象選択へ移行し、
+  // 解決後にキューを再開する（render.jsの格闘クリック処理が_kakutouFromQueueを見て戻す）
+  if (NET_MODE === 'local' && card.kakutou && atkInst.entryTurn === G.turn) {
+    const reachable = G.players[1].field.filter(c => card.flying || !CARD_DB[c.cardId].flying);
+    if (reachable.length === 0) {
+      log(`${card.name} 格闘: 対象にできるクリーチャーがいないため攻撃できません`);
+      setTimeout(() => continuePlayerAttack(), 200);
       return;
     }
+    G.kakutouTargetMode = true;
+    G.pendingKakutouInstId = atkInstId;
+    G._kakutouFromQueue = true;
+    log(`${card.name} 格闘: 攻撃対象のクリーチャーを選択してください`, 'important');
+    render(); updateHints();
+    return;
   }
+
+  log(`プレイヤー: ${card.name} で攻撃`, 'important');
 
   // AI がブロック可能か確認して優先権を開く
   const eligible = G.players[1].field.filter(b => {
@@ -3450,7 +3533,7 @@ function continuePlayerAttack() {
     showLifeChange(1, -getEffectivePower(0, atkInst));
     setTimeout(() => continuePlayerAttack(), 300);
   } else {
-    // AI がブロック可能 → AI に選択させる
+    // AI がブロック可能 → 優先権ウィンドウでAIがブロック判定
     G.aiCurrentAttackers = [{instId: atkInstId, targetType:'player', targetInstId:null}];
     G.playerBlockMode = false;  // AI がブロック決定
     G.aiBlockDefender = 0;       // プレイヤーを守備側
@@ -3462,14 +3545,22 @@ function continuePlayerAttack() {
         G.combatArrows = [{fromId: atkInstId, toId: blocker.instanceId, color: '#ff4444'}];
         log(`AI: ${CARD_DB[blocker.cardId].name} でブロック`, 'defend');
         render();
-        setTimeout(() => resolveSingleCombat(0, atkInstId, null, blocker.instanceId), 400);
+        setTimeout(() => {
+          resolveSingleCombat(0, atkInstId, null, blocker.instanceId);
+          if (G.awaitingPriority) {
+            // ブロック誘発の解決待ち → 解決が終わってから次の攻撃へ
+            G.priorityContinuation = () => setTimeout(() => continuePlayerAttack(), 300);
+          } else {
+            setTimeout(() => continuePlayerAttack(), 400);
+          }
+        }, 400);
       } else {
         log(`${card.name} はブロック不可 → 直接ダメージ`, 'damage');
         G.players[1].life -= getEffectivePower(0, atkInst);
         showLifeChange(1, -getEffectivePower(0, atkInst));
         checkDeath();
+        setTimeout(() => continuePlayerAttack(), 400);
       }
-      setTimeout(() => continuePlayerAttack(), 400);
     }, `${card.name} へのブロック`);
   }
 }
@@ -3540,6 +3631,8 @@ function endTurn() {
   G.targetMode = null;
   G.kakutouTargetMode = false;
   G.pendingKakutouInstId = null;
+  G.kakutouTargets = {};
+  if (G.directlyAttackedCreatures) G.directlyAttackedCreatures.clear();
   G.kaizen_used_names.clear(); // 介善OCの「ターン1:同名」制限はターン毎にリセット
   G.players.forEach(p => {
     p.field.forEach(c => { c.tempPower = 0; c.tempToughness = 0; });
@@ -5083,34 +5176,133 @@ function onSpecialMatchEnd(playerWon) {
 }
 
 function runSpecialMatchLearning(gameCount) {
-  const batchSize = 200;
-  const batchCount = Math.ceil(gameCount / batchSize);
-  let completed = 0;
+  // 白ミラー(特殊マッチ構成)で進化学習し、旧AIより強くなった時だけ採用して保存する。
+  // 保存先: localStorage 'dcg_ai_white' — 起動時に loadAIColorWeights('white') が自動で読み込む。
+  const mainCounts = {}; DB_WHITE_MAIN.forEach(id => { mainCounts[id] = 4; });
+  const landCounts = {}; DB_WHITE_LAND.forEach(id => { landCounts[id] = 2; });
+  // Phase5: 学習パラメータ最適化
+  const POP = 10;        // 集団サイズ拡大 (8→10)
+  const GENS = 8;        // ジェネレーション数増加 (5→8)
+  const pairsPerGen = POP * (POP - 1) / 2; // 45
+  const valN = 500;      // 検証戦数増加 (300→500)
+  const batchN = Math.max(12, Math.floor((gameCount - valN) / (pairsPerGen * GENS)));
+  // 「最新の旧AI」= 学習開始時点の現行重み。集団の1体として無変異で参加させ(追加学習)、
+  // 学習後の安全弁検証もこの旧AIと対戦して判定する。
+  const old = JSON.parse(JSON.stringify(AI_WEIGHTS));
+  const oldJson = JSON.stringify(old);
+  let pop = Array.from({ length: POP }, (_, i) => i === 0 ? { ...old } : adaptiveMutate(old));
+  let gen = 0;
 
-  function runBatch() {
-    if (completed >= batchCount) {
-      alert(`✅ ${gameCount}回の学習が完了しました。\n試合を再開してください。`);
-      return;
-    }
+  function updateProgress(txt) {
+    const el = document.getElementById('sm-learn-progress');
+    if (el) el.textContent = txt;
+  }
 
-    const n = Math.min(batchSize, gameCount - completed * batchSize);
+  // C. 学習ライブ実況: 世代ごとの出来事をモーダル内に追記する
+  function appendLearnLive(txt, color) {
+    const el = document.getElementById('sm-learn-live');
+    if (!el) return;
+    const d = document.createElement('div');
+    d.textContent = txt;
+    if (color) d.style.color = color;
+    el.appendChild(d);
+    el.scrollTop = el.scrollHeight;
+  }
+
+  function runGeneration() {
     try {
-      runTrainingBatch(AI_WEIGHTS, AI_WEIGHTS, n, buildMainDeck(), buildMainDeck(), buildLandDeck(), buildLandDeck());
-      completed++;
-      log(`🤖 学習進行: ${completed}/${batchCount} バッチ (${completed * batchSize}/${gameCount}ゲーム)`, 'important');
-
-      if (completed < batchCount) {
-        setTimeout(runBatch, 50);
-      } else {
-        alert(`✅ ${gameCount}回の学習が完了しました。\n試合を再開してください。`);
+      if (gen >= GENS) { finish(); return; }
+      const scores = new Array(POP).fill(0);
+      for (let i = 0; i < POP; i++) for (let j = i + 1; j < POP; j++) {
+        const wr = runTrainingBatch(pop[i], pop[j], batchN, mainCounts, mainCounts, landCounts, landCounts);
+        if (wr > 0.5) scores[i]++; else scores[j]++;
       }
+      const ranked = pop.map((w, i) => ({ w, s: scores[i] })).sort((a, b) => b.s - a.s);
+      // ライブ実況: この世代の首位が現行AIか、学習で生まれた改良候補か
+      const champIsOld = JSON.stringify(ranked[0].w) === oldJson;
+      appendLearnLive(
+        `第${gen + 1}世代: ${champIsOld ? '現行AIが首位を守りました' : '改良候補が首位に立ちました！'}（総当たり${POP - 1}戦中 ${ranked[0].s}勝）`,
+        champIsOld ? '#aaa' : '#88ff99'
+      );
+      pop = [ranked[0].w, ranked[1].w,
+             crossoverWeights(ranked[0].w, ranked[1].w),
+             crossoverWeights(ranked[1].w, ranked[2] ? ranked[2].w : ranked[0].w)];
+      while (pop.length < POP - 1) pop.push(adaptiveMutate(ranked[Math.floor(Math.random() * 3)].w));
+      // 最新の旧AIが淘汰されていたら無変異で1体再投入（毎世代の基準として維持し追加学習させる）
+      if (!pop.some(w => JSON.stringify(w) === oldJson)) pop.push({ ...old });
+      while (pop.length < POP) pop.push(adaptiveMutate(ranked[Math.floor(Math.random() * 3)].w));
+      gen++;
+      const done = gen * pairsPerGen * batchN;
+      log(`🤖 学習進行: 世代 ${gen}/${GENS} (${done}ゲーム消化)`, 'important');
+      updateProgress(`世代 ${gen}/${GENS} — ${done}ゲーム消化`);
+      setTimeout(runGeneration, 50);
     } catch(e) {
       console.error('学習エラー:', e);
+      closeModal();
       alert(`学習中にエラーが発生しました: ${e.message}`);
     }
   }
 
-  log(`🤖 ${gameCount}回の学習を開始します...`, 'important');
-  showModal('学習中', `<p style="text-align:center;color:#88ff88;font-size:14px;"><strong>${gameCount}回のゲームを学習中...</strong></p><p style="text-align:center;font-size:12px;color:#aaa;">ブラウザを閉じないでください</p>`);
-  runBatch();
+  function finish() {
+    updateProgress('新旧AIの検証対戦中...');
+    setTimeout(() => {
+      try {
+        const best = { ...pop[0], _version: AI_WEIGHTS_VERSION };
+        const wr = runTrainingBatch(best, old, valN, mainCounts, mainCounts, landCounts, landCounts);
+        closeModal();
+        const pct = (wr * 100).toFixed(1);
+        const adopted = wr >= 0.52; // ノイズ程度の差では採用しない（52%以上で明確な改善とみなす）
+        // A. 学習履歴ノートに記録（採用/見送りどちらも残す）
+        if (typeof recordAILearnEvent === 'function') {
+          recordAILearnEvent({
+            date: new Date().toISOString(),
+            games: gameCount, gens: GENS,
+            winRate: +pct, adopted,
+          });
+        }
+        // B. 学習前後の性格比較（採用時のみ「新しい性格」を表示）
+        const personaBefore = (typeof getAIPersona === 'function') ? getAIPersona(old) : null;
+        const personaAfter = (typeof getAIPersona === 'function') ? getAIPersona(best) : null;
+        if (adopted) {
+          AI_WEIGHTS = best;
+          if (typeof AI_TRAIN_STATS !== 'undefined') {
+            AI_TRAIN_STATS.games = (AI_TRAIN_STATS.games || 0) + gameCount;
+            AI_TRAIN_STATS.epoch = (AI_TRAIN_STATS.epoch || 0) + GENS;
+          }
+          saveAIColorWeights('white'); // localStorageへ永続化（リロード後も自動読込）
+          log(`🤖 学習完了: 新AIを採用・保存（新vs旧 勝率${pct}%）`, 'important');
+        } else {
+          log(`🤖 学習完了: 改善なしのため現在のAIを維持（新vs旧 勝率${pct}%）`, 'important');
+        }
+        // 結果画面: 判定＋性格の変化をゲージで表示
+        let resultHTML;
+        if (adopted) {
+          resultHTML = `<div style="text-align:center;color:#66ff88;font-size:14px;margin-bottom:8px;"><strong>✅ 新AIを採用しました！</strong></div>
+            <div style="text-align:center;font-size:12px;color:#ccc;margin-bottom:10px;">新AIが旧AIに勝率 <strong style="color:#88ff99;">${pct}%</strong> で勝ち越し（${valN}戦で検証）<br><span style="font-size:10px;color:#888;">保存済み — リロード後も自動で読み込まれます</span></div>`;
+        } else {
+          resultHTML = `<div style="text-align:center;color:#ffaa66;font-size:14px;margin-bottom:8px;"><strong>今回は見送り</strong></div>
+            <div style="text-align:center;font-size:12px;color:#ccc;margin-bottom:10px;">新AIの勝率が <strong style="color:#ffcc88;">${pct}%</strong> で、明確な改善（52%以上）に届きませんでした。<br><span style="font-size:10px;color:#888;">現在のAIをそのまま使います</span></div>`;
+        }
+        if (personaBefore && personaAfter && typeof renderPersonaHTML === 'function') {
+          const title = adopted ? '🎭 性格の変化（学習前 → 学習後）' : '🎭 見送った新AIの性格（参考: 現AIとの差）';
+          resultHTML += `<div style="background:rgba(255,255,255,0.03);border:1px solid #333;border-radius:8px;padding:10px 12px;text-align:left;">
+            <div style="font-size:12px;color:#aad4ff;margin-bottom:8px;font-weight:bold;">${title}</div>
+            ${renderPersonaHTML(personaAfter, personaBefore)}</div>`;
+        }
+        resultHTML += `<div style="text-align:center;margin-top:10px;"><button onclick="closeModal();showAIInsightPanel();" style="padding:6px 14px;background:#1a2a4a;border:1px solid #6688cc;color:#aaccff;border-radius:6px;font-size:12px;">🧠 AIの中身をくわしく見る</button></div>`;
+        showModal('🧠 学習結果', resultHTML);
+      } catch(e) {
+        console.error('学習エラー:', e);
+        closeModal();
+        alert(`学習中にエラーが発生しました: ${e.message}`);
+      }
+    }, 50);
+  }
+
+  log(`🤖 約${gameCount}回の学習を開始します...`, 'important');
+  showModal('学習中', `<p style="text-align:center;color:#88ff88;font-size:14px;"><strong>約${gameCount}回のゲームを学習中...</strong></p>
+    <p id="sm-learn-progress" style="text-align:center;font-size:12px;color:#aaa;">世代 0/${GENS}</p>
+    <div id="sm-learn-live" style="max-height:140px;overflow-y:auto;font-size:11px;color:#ccc;text-align:left;background:rgba(0,0,0,0.3);border:1px solid #2a2a3a;border-radius:6px;padding:6px 10px;margin:8px 0;"></div>
+    <p style="text-align:center;font-size:12px;color:#aaa;">ブラウザを閉じないでください</p>`);
+  setTimeout(runGeneration, 100);
 }

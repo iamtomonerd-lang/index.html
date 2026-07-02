@@ -245,6 +245,17 @@ function aiDecideManaHold() {
   return (Math.random() < p) ? wLand : null;
 }
 
+// D. AI思考表示: カードを使う理由を盤面の状況から短い言葉にする
+function aiCardPlayReason(card, aiIdx) {
+  const me = G.players[aiIdx], foe = G.players[1 - aiIdx];
+  if (card.type === 'spell') {
+    return foe.field.length > 0 ? '相手の盤面に対処するため使用' : '有利を広げるため使用';
+  }
+  if (me.field.length < foe.field.length) return '盤面の数で負けているため展開';
+  if (me.life < foe.life) return 'ライフで劣勢のため戦力を追加';
+  return '盤面をさらに強化';
+}
+
 function aiTurn() {
   if (G.phase === 'ended') return;
   // 観戦モード対応：現在のアクティブプレイヤーのAI処理を実行
@@ -314,6 +325,7 @@ function aiTurn() {
       const inst = newInstance(cid);
       inst.sick = true; inst.entryTurn = G.turn;
       log(`AI: ${card.name} をスタックに積んだ`);
+      aiThink(`${card.name}: ${aiCardPlayReason(card, aiIdx)}`);
       showAIBalloon(`${card.icon} ${card.name} 召喚！`);
       G.stack.push({ name: card.name, icon: card.icon||'⚔️', owner: 1, resolve: () => {
         if (ai.field.length >= 5) { ai.graveyard.push(cid); return; }
@@ -330,6 +342,7 @@ function aiTurn() {
       ai.hand.splice(idx, 1);
       showAIBalloon(`${card.icon} ${card.name} 使用！`);
       log(`AI: ${card.name} をスタックに積んだ`);
+      aiThink(`${card.name}: ${aiCardPlayReason(card, aiIdx)}`);
       G.stack.push({ name: card.name, icon: card.icon||'✨', owner: 1, resolve: () => {
         ai.graveyard.push(cid);
         aiPlaySpellEffect(card);
@@ -343,12 +356,15 @@ function aiTurn() {
   if (!aiPlayedCard) {
     const playable = ai.hand.map((cid, i) => ({cid, i, card: CARD_DB[cid]}))
       .filter(({card}) => card.type !== 'land' && canAfford(1, card.cost));
-    if (playable.length > 0) {
-      const {cid, i, card} = aiPickBestCard(playable);
+    // aiPickBestCardはレート戦の手加減でnullを返すことがある（その場合はプレイしない）
+    const picked = playable.length > 0 ? aiPickBestCard(playable) : null;
+    if (picked) {
+      const {cid, i, card} = picked;
       if (card.type === 'creature' && ai.field.length < 5) {
         payMana(1, card.cost); ai.hand.splice(i, 1);
         const inst = newInstance(cid); inst.sick = true; inst.entryTurn = G.turn;
         log(`AI: ${card.name} をスタックに積んだ`);
+        aiThink(`${card.name}: ${aiCardPlayReason(card, aiIdx)}`);
         showAIBalloon(`${card.icon} ${card.name} 召喚！`);
         G.stack.push({ name: card.name, icon: card.icon||'⚔️', owner: 1, resolve: () => {
           if (ai.field.length >= 5) { ai.graveyard.push(cid); return; }
@@ -361,6 +377,7 @@ function aiTurn() {
         payMana(1, card.cost); ai.hand.splice(i, 1);
         showAIBalloon(`${card.icon} ${card.name} 使用！`);
         log(`AI: ${card.name} をスタックに積んだ`);
+        aiThink(`${card.name}: ${aiCardPlayReason(card, aiIdx)}`);
         G.stack.push({ name: card.name, icon: card.icon||'✨', owner: 1, resolve: () => {
           ai.graveyard.push(cid); aiPlaySpellEffect(card);
         }});
@@ -667,6 +684,12 @@ function aiAttack() {
 
   if (attackerInsts.length === 0) { setTimeout(() => endTurnAfterMainPhase(), 300); return; }
 
+  // D. AI思考表示: 攻撃方針の理由
+  if (isLethal) aiThink(`このターンで倒し切れると計算（合計パワー${totalPow}）→ 総攻撃！`);
+  else if (oppOpenBoard) aiThink('相手の場が空なので全員で攻撃（ノーリスクで打点を稼ぐ）');
+  else if (attackerInsts.length < candidates.length) aiThink(`攻撃できる${candidates.length}体のうち${attackerInsts.length}体で攻撃（残りは守りに温存）`);
+  else aiThink('シミュレーションの結果、全員攻撃が最善と判断');
+
   showAIBalloon(isLethal ? '💀 総攻撃！' : '⚔️ 攻撃宣言！');
   const orderedAttackers = isLethal ? attackerInsts : mctsOrderAttackers(attackerInsts);
   G._aiAttackQueue = orderedAttackers.map(c => c.instanceId);
@@ -694,19 +717,6 @@ function continueAIAttack() {
     log('アレスティア: 全クリーチャー+1/+1（永続）');
   }
 
-  // セラシアの僧侶の「相手の攻撃時」効果：攻撃クリーチャーに3ダメージ
-  const playerSouryo = G.players[0].field.find(c => c.cardId === 'serashia_souryo');
-  if (playerSouryo) {
-    const dmg = 3;
-    atkInst.damage += dmg;
-    log(`セラシアの僧侶: 攻撃クリーチャー「${card.name}」に${dmg}ダメージ`, 'damage');
-    if (checkCreatureDeath(1, atkInstId, 0)) {
-      log(`${card.name}は破壊されました`, 'important');
-      setTimeout(() => continueAIAttack(), 300);
-      return;
-    }
-  }
-
   // 格闘
   if (card.kakutou && atkInst.entryTurn === G.turn) {
     const reachable = player.field.filter(pc => card.flying || !CARD_DB[pc.cardId].flying);
@@ -720,6 +730,7 @@ function continueAIAttack() {
     const tgt = reachable.reduce((a,b)=>getEffectivePower(0,b)>getEffectivePower(0,a)?b:a);
     const tgtId = tgt.instanceId;
     log(`AI ${card.name} 格闘 → ${CARD_DB[tgt.cardId].name}`);
+    aiThink(`格闘: いちばんパワーが高い「${CARD_DB[tgt.cardId].name}」を狙って脅威を減らす`);
     G.combatArrows = [{fromId: atkInstId, toId: tgtId, color: '#ff4444'}];
     render();
     openPriorityWindow(0, () => {

@@ -57,9 +57,9 @@ let AI_CURRENT_COLOR = null; // 現在訓練中の色
 // AIの色別学習データをlocalStorageから読み込む（デフォルト重みを優先）
 function loadAIColorWeights(colorKey) {
   try {
-    // デフォルト重みを先に適用
+    // デフォルト重みを先に適用（新キーもAI_WEIGHTS_DEFAULTから継承）
     const defaultWeights = AI_WEIGHTS_BY_COLOR[colorKey] || AI_WEIGHTS_DEFAULT;
-    AI_WEIGHTS = { ...defaultWeights };
+    AI_WEIGHTS = { ...AI_WEIGHTS_DEFAULT, ...defaultWeights };
     AI_TRAIN_STATS = { games: 500000, wins: 250000, epoch: 1000 }; // デフォルトの学習統計
     CARD_STATS = {};
     AI_DECK_COUNTS = null;
@@ -116,8 +116,27 @@ function evalBoardScore(player) {
             + w.fieldCount*(me.field.length-opp.field.length)
             + w.handAdv*(me.hand.length-opp.hand.length)
             + w.threshold*getCXValue(player);
+
+  // Phase1: 局面類型化（序中終盤戦略） - 既存の重みを活用
+  const turn = G.turn || 1;
+  if (turn <= 4) {
+    // 序盤: フィールド構築に重点
+    score += w.earlyFieldBonus * me.field.length;
+  } else if (turn <= 10) {
+    // 中盤: バランス戦略
+    score += w.earlyFieldBonus * 0.5 * me.field.length;
+    // ダメージ計算を考慮（中盤から攻撃性を高める）
+    if (myPow > 0) score += w.attackBias * myPow * 0.3;
+  } else {
+    // 終盤: ダメージ・リーサル計算重視
+    if (myPow > 0) score += w.attackBias * myPow * 0.8;
+    // あと何ターンでリーサルできるか計算
+    const turnsToKill = oppPow > 0 ? Math.ceil(opp.life / myPow) : 999;
+    const turnsToLose = myPow > 0 ? Math.ceil(me.life / oppPow) : 999;
+    if (turnsToKill < turnsToLose) score += 5.0; // リーサル見えたらスコア大幅ボーナス
+  }
+
   if (me.life < 10) score += w.lateLifeBonus*(me.life-opp.life);
-  if (G.turn <= 6) score += w.earlyFieldBonus*me.field.length;
   const unplayable = me.hand.filter(cid=>{const c=CARD_DB[cid];return c.cost&&!canAfford(player,c.cost);}).length;
   score -= w.manaEff*unplayable;
   return score;
@@ -130,6 +149,7 @@ function aiPickBestCard(handItems) {
   const player = G.players[0];
   const myLife = ai.life, oppLife = player.life;
   const myField = ai.field.length, oppField = player.field.length;
+  const turn = G.turn || 1;
 
   let best = null, bestScore = -Infinity;
   for (const item of handItems) {
@@ -140,6 +160,17 @@ function aiPickBestCard(handItems) {
     if (card.type === 'creature') {
       const pow = card.power || 0, tou = card.toughness || 0;
       score += AI_WEIGHTS.fieldPower * pow + AI_WEIGHTS.fieldToughness * tou + AI_WEIGHTS.fieldCount;
+      // Phase2: ターン数に応じたカード価値動的調整
+      if (turn <= 4) {
+        // 序盤: パワー/タフネスバランス重視
+        score += (pow + tou) * 0.2;
+      } else if (turn <= 10) {
+        // 中盤: パワー優先（攻撃準備）
+        score += pow * 0.3;
+      } else {
+        // 終盤: パワー重視（ダメージ計算）
+        score += pow * 0.6;
+      }
       // Prefer creatures when we have fewer on field
       if (myField < oppField) score += 1.5;
       // Prefer big creatures when losing on life
@@ -170,6 +201,8 @@ function aiPickBestCard(handItems) {
 function aiShouldBlock(atkInst, blkInst, atkPlayer) {
   const w = AI_WEIGHTS;
   const defender = 1-atkPlayer;
+  const me = G.players[defender];
+  const opp = G.players[atkPlayer];
   const atkPow = getEffectivePower(atkPlayer,atkInst);
   const blkPow = getEffectivePower(defender,blkInst);
   const blkTou = getEffectiveToughness(defender,blkInst);
@@ -179,6 +212,17 @@ function aiShouldBlock(atkInst, blkInst, atkPlayer) {
   let blockValue = 0;
   if (atkDies) blockValue += w.fieldPower*atkPow + w.fieldCount;
   if (!blkSurvives) blockValue -= w.fieldPower*blkPow + w.fieldCount;
+
+  // Phase3: ブロック判定強化 - 終盤ではブロック優先度を高める
+  const turn = G.turn || 1;
+  if (turn >= 11 && me.life < 15) {
+    // 終盤・低ライフ: ブロックして生き残る方が重要
+    blockValue += 3.0;
+  } else if (turn <= 4 && atkPow <= 2) {
+    // 序盤: 小さいクリーチャーへのブロック抑制
+    blockValue -= 0.5;
+  }
+
   return (blockValue + w.life*atkPow*w.blockRisk) > 0;
 }
 
@@ -2668,3 +2712,74 @@ function showDebugPanel() {
   showModal('🐛 デバッグ情報', html);
 }
 
+
+// ============================================================
+// AI透明性（学習の見える化）
+// ============================================================
+
+// ── D. 対戦中のAI思考表示（ON/OFF切替・保存）────────────────
+let AI_THINK_LOG = (function(){ try { return localStorage.getItem('dcg_ai_think_log') !== '0'; } catch(e){ return true; } })();
+function setAIThinkLog(on) {
+  AI_THINK_LOG = !!on;
+  try { localStorage.setItem('dcg_ai_think_log', on ? '1' : '0'); } catch(e){}
+}
+// AIの判断理由を対戦ログに出す（OFFなら何もしない）
+function aiThink(msg) {
+  if (!AI_THINK_LOG) return;
+  if (typeof log === 'function') log(`💭 AI: ${msg}`, 'ai-think');
+}
+
+// ── B. 性格ゲージ: 判断基準の数値を「性格」に翻訳 ─────────────
+// max はゲージが振り切れる目安（学習済み重みの実測レンジから設定）
+const AI_PERSONA_AXES = [
+  { key:'attack', label:'攻撃性',     desc:'先に殴って主導権を取りたがる',       calc:w=>(w.attackBias||0),                        max:2.0 },
+  { key:'guard',  label:'守りの意識', desc:'ブロックして被害を防ぎたがる',       calc:w=>(w.blockRisk||0),                         max:2.5 },
+  { key:'life',   label:'ライフ重視', desc:'ライフ差をどれだけ気にするか',       calc:w=>((w.life||0)+(w.lateLifeBonus||0))/2,     max:2.2 },
+  { key:'board',  label:'盤面重視',   desc:'場のクリーチャーの質と数へのこだわり', calc:w=>((w.fieldPower||0)+(w.fieldCount||0))/2,  max:2.0 },
+  { key:'hand',   label:'手札重視',   desc:'手札の枚数（選択肢）を大事にする',   calc:w=>(w.handAdv||0),                           max:1.2 },
+  { key:'tempo',  label:'マナ効率',   desc:'マナを無駄にしないよう気にする',     calc:w=>(w.manaEff||0),                           max:1.3 },
+];
+// 重み→0..100（負値は0で足切り＝「ほぼ気にしない」扱い）
+function getAIPersona(weights) {
+  return AI_PERSONA_AXES.map(ax => {
+    const raw = ax.calc(weights || {});
+    const pct = Math.max(0, Math.min(100, Math.round(raw / ax.max * 100)));
+    return { key: ax.key, label: ax.label, desc: ax.desc, pct, raw };
+  });
+}
+function personaLevelWord(pct) {
+  if (pct >= 75) return 'とても強い';
+  if (pct >= 50) return '強い';
+  if (pct >= 25) return 'ふつう';
+  return '弱い';
+}
+
+// ── A. 学習履歴ノート（localStorage永続化・最新50件）──────────
+let AI_LEARN_HISTORY = [];
+function loadAILearnHistory() {
+  try {
+    const s = localStorage.getItem('dcg_ai_learn_history');
+    AI_LEARN_HISTORY = s ? JSON.parse(s) : [];
+    if (!Array.isArray(AI_LEARN_HISTORY)) AI_LEARN_HISTORY = [];
+  } catch(e) { AI_LEARN_HISTORY = []; }
+}
+function recordAILearnEvent(entry) {
+  loadAILearnHistory();
+  AI_LEARN_HISTORY.push(entry);
+  if (AI_LEARN_HISTORY.length > 50) AI_LEARN_HISTORY = AI_LEARN_HISTORY.slice(-50);
+  try { localStorage.setItem('dcg_ai_learn_history', JSON.stringify(AI_LEARN_HISTORY)); } catch(e){}
+}
+loadAILearnHistory();
+
+// ── E. カード好みランキング用データ ──────────────────────
+function getAICardPreferences(weights) {
+  const w = weights || AI_WEIGHTS;
+  return Object.keys(w)
+    .filter(k => k.startsWith('card_'))
+    .map(k => {
+      const id = k.slice(5);
+      const cd = (typeof CARD_DB !== 'undefined') ? CARD_DB[id] : null;
+      return { id, name: cd ? cd.name : id, icon: cd ? (cd.icon || '') : '', value: w[k] || 0 };
+    })
+    .sort((a, b) => b.value - a.value);
+}

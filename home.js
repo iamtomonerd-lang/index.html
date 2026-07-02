@@ -1210,3 +1210,102 @@ async function runTestScenario(scenarioId) {
   _testBoardRunning = false;
 }
 
+
+// ============================================================
+// 🧠 AIの中身パネル（学習の透明化: 性格・カード好み・学習履歴）
+// ============================================================
+function _personaBarHTML(pct, color) {
+  return `<div style="flex:1;background:#1a1a28;border-radius:4px;height:12px;overflow:hidden;min-width:80px;">` +
+         `<div style="width:${pct}%;height:100%;background:${color};transition:width 0.5s;"></div></div>`;
+}
+
+// 性格ゲージのHTML。before(旧persona)を渡すと変化の矢印を表示する
+function renderPersonaHTML(persona, before) {
+  let html = '<div style="display:flex;flex-direction:column;gap:6px;">';
+  persona.forEach((ax, i) => {
+    const color = ax.pct >= 75 ? '#ff8855' : ax.pct >= 50 ? '#ffcc55' : ax.pct >= 25 ? '#88cc66' : '#6699cc';
+    let diff = '';
+    if (before && before[i]) {
+      const d = ax.pct - before[i].pct;
+      if (d >= 3) diff = `<span style="color:#66ff88;font-size:10px;white-space:nowrap;">▲ +${d}</span>`;
+      else if (d <= -3) diff = `<span style="color:#ff8866;font-size:10px;white-space:nowrap;">▼ ${d}</span>`;
+      else diff = `<span style="color:#777;font-size:10px;white-space:nowrap;">→</span>`;
+    }
+    html += `<div style="display:flex;align-items:center;gap:8px;" title="${ax.desc}">
+      <span style="width:72px;font-size:11px;color:#ddd;text-align:right;flex-shrink:0;white-space:nowrap;">${ax.label}</span>
+      ${_personaBarHTML(ax.pct, color)}
+      <span style="width:58px;font-size:10px;color:#aaa;flex-shrink:0;white-space:nowrap;">${personaLevelWord(ax.pct)}</span>${diff}
+    </div>`;
+  });
+  html += '</div><div style="font-size:9px;color:#666;margin-top:4px;">※ 学習で変わるAIの判断基準を「性格」として表示（項目に触れると説明）</div>';
+  return html;
+}
+
+// カード好みランキングのHTML
+function renderCardPrefsHTML() {
+  const prefs = getAICardPreferences(AI_WEIGHTS).filter(p => p.value !== 0);
+  if (!prefs.length) return '<div style="font-size:11px;color:#888;">まだカードの好みは学習されていません（学習するとここに現れます）</div>';
+  const maxAbs = Math.max(...prefs.map(p => Math.abs(p.value)), 0.01);
+  let html = '<div style="display:flex;flex-direction:column;gap:4px;">';
+  prefs.forEach(p => {
+    const pct = Math.round(Math.abs(p.value) / maxAbs * 100);
+    const positive = p.value > 0;
+    html += `<div style="display:flex;align-items:center;gap:8px;">
+      <span style="width:100px;font-size:11px;color:#ddd;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex-shrink:0;">${p.icon} ${p.name}</span>
+      ${_personaBarHTML(pct, positive ? '#66cc88' : '#cc6666')}
+      <span style="width:58px;font-size:10px;color:${positive ? '#88dd99' : '#dd8888'};flex-shrink:0;white-space:nowrap;">${positive ? '使いたがる' : '温存しがち'}</span>
+    </div>`;
+  });
+  html += '</div><div style="font-size:9px;color:#666;margin-top:4px;">※ 学習の結果、AIが好むようになったカード（緑）と避けるようになったカード（赤）</div>';
+  return html;
+}
+
+// 学習履歴のHTML
+function renderLearnHistoryHTML() {
+  loadAILearnHistory();
+  if (!AI_LEARN_HISTORY.length) {
+    return '<div style="font-size:11px;color:#888;">学習の記録はまだありません。特殊マッチ後の「学習」を実行すると、ここに記録されます。</div>';
+  }
+  let html = '<div style="display:flex;flex-direction:column;gap:4px;max-height:180px;overflow-y:auto;">';
+  [...AI_LEARN_HISTORY].reverse().forEach(e => {
+    const d = new Date(e.date);
+    const dateStr = `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+    const badge = e.adopted
+      ? '<span style="background:#1a4a2a;color:#66ff88;padding:1px 6px;border-radius:4px;font-size:10px;">採用</span>'
+      : '<span style="background:#3a2a1a;color:#ffaa66;padding:1px 6px;border-radius:4px;font-size:10px;">見送り</span>';
+    html += `<div style="display:flex;align-items:center;gap:8px;font-size:11px;color:#ccc;border-bottom:1px solid #222;padding:3px 0;">
+      <span style="color:#888;">${dateStr}</span>
+      <span>${e.games}戦 学習</span>
+      <span>新AI勝率 ${e.winRate}%</span>
+      ${badge}
+    </div>`;
+  });
+  html += '</div>';
+  const adoptedCount = AI_LEARN_HISTORY.filter(e => e.adopted).length;
+  html += `<div style="font-size:10px;color:#999;margin-top:6px;">これまでに ${AI_LEARN_HISTORY.length}回 学習し、${adoptedCount}回 強くなりました（勝率52%以上で採用）</div>`;
+  return html;
+}
+
+function _aiInsightSectionHTML(title, bodyHTML) {
+  return `<div style="background:rgba(255,255,255,0.03);border:1px solid #333;border-radius:8px;padding:10px 12px;margin-bottom:10px;text-align:left;">
+    <div style="font-size:12px;color:#aad4ff;margin-bottom:8px;font-weight:bold;">${title}</div>${bodyHTML}</div>`;
+}
+
+function showAIInsightPanel() {
+  // 現在の白AI重みを表示対象にする（特殊マッチ・ローカル対戦のAI）
+  const persona = getAIPersona(AI_WEIGHTS);
+  const games = (typeof AI_TRAIN_STATS !== 'undefined' && AI_TRAIN_STATS.games) ? AI_TRAIN_STATS.games.toLocaleString() : '0';
+  const thinkChecked = (typeof AI_THINK_LOG !== 'undefined' && AI_THINK_LOG) ? 'checked' : '';
+  const html =
+    `<div style="font-size:10px;color:#888;margin-bottom:8px;">累計学習量: 約${games}ゲーム</div>` +
+    _aiInsightSectionHTML('🎭 いまのAIの性格', renderPersonaHTML(persona)) +
+    _aiInsightSectionHTML('🃏 カードの好み', renderCardPrefsHTML()) +
+    _aiInsightSectionHTML('📓 学習の記録', renderLearnHistoryHTML()) +
+    _aiInsightSectionHTML('💭 対戦中のAI思考表示', `
+      <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:#ddd;cursor:pointer;">
+        <input type="checkbox" ${thinkChecked} onchange="setAIThinkLog(this.checked)">
+        AIが手を選んだ理由を対戦ログに表示する
+      </label>
+      <div style="font-size:9px;color:#666;margin-top:4px;">例: 「💭 AI: 相打ちでも攻撃を止める価値があると判断」</div>`);
+  showModal('🧠 AIの中身', html);
+}

@@ -172,6 +172,7 @@ body {
 #log-right p.important { color: #ffcc44; }
 #log-right p.damage { color: #ff6644; }
 #log-right p.heal { color: #44ff88; }
+#log-right p.ai-think { color: #88bbee; font-style: italic; }
 
 /* 相手の土地 (col 1-12, 行 三) */
 #ai-lands-row {
@@ -809,6 +810,7 @@ button.danger:hover { background: #6a2a2a; }
 #log p.important { color: #ffcc44; }
 #log p.damage { color: #ff6644; }
 #log p.heal { color: #44ff88; }
+#log p.ai-think { color: #88bbee; font-style: italic; }
 
 /* AI Info Strip と Player Action Bar は上部の新定義に統合済み */
 #ai-info-strip {
@@ -2647,6 +2649,7 @@ body.demo-recording #stack-empty-msg { font-size: 17px !important; padding: 16px
       <div>🤖 AI 戦績（直近20戦）: <span id="special-match-wins">0</span>勝 / <span id="special-match-loss">0</span>敗</div>
       <div>勝率: <span id="special-match-rate">0</span>% （目標: 15勝以上）</div>
     </div>
+    <button class="home-btn btn-ai-insight" onclick="showAIInsightPanel()" style="background:linear-gradient(135deg,#1a2a4a,#101a30);border:1px solid #6688cc;font-size:13px;padding:10px;">🧠 AIの中身（性格・学習の記録）</button>
     <button class="home-btn btn-hotseat" onclick="startHotseat()">👥 2人対戦（同デバイス）</button>
     <button class="home-btn btn-deck"    onclick="showDeckBuilder()">📖 デッキ構築</button>
     <button class="home-btn btn-trophy"   onclick="showTrophyPanel()">🏆 トロフィー</button>
