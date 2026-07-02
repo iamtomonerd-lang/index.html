@@ -23,6 +23,10 @@ const FX = {
     if (oppInstId == null) return false;
     const opp = 1 - caster;
     if (!G.players[opp].field.some(c => c.instanceId === oppInstId)) return false;
+    // 模倣学習D: ユーザーの大型除去(5点以上)の撃ち先の癖を記録
+    if (caster === 0 && amount >= 5 && typeof noteUserRemovalTarget === 'function') {
+      noteUserRemovalTarget(oppInstId);
+    }
     applyDamageToCreature(opp, oppInstId, amount, caster, opts || {});
     return true;
   },
@@ -113,6 +117,10 @@ const FX = {
     const opp = 1 - caster;
     const tc = G.players[opp].field.find(c => c.instanceId === oppInstId);
     if (!tc) return false;
+    // 模倣学習D: ユーザーの確定除去の撃ち先の癖を記録
+    if (caster === 0 && typeof noteUserRemovalTarget === 'function') {
+      noteUserRemovalTarget(oppInstId);
+    }
     if (!G.players[opp].graveyard) G.players[opp].graveyard = [];
     G.players[opp].field = G.players[opp].field.filter(c => c.instanceId !== oppInstId);
     G.players[opp].graveyard.push(tc.cardId);

@@ -193,6 +193,24 @@ function aiPickBestCard(handItems) {
       score += cost * 0.05; // slight preference for expensive (powerful) spells
     }
 
+    // 模倣学習C: あなたの勝ち手辞書に載っている手は優先度アップ
+    if (typeof getImitationBias === 'function') {
+      score += getImitationBias(G, 1, 'play', card.id) * 1.5;
+    }
+    // 模倣学習D: 「一番大きいのを必ず除去してくる」相手には、除去マナが立っている間は
+    // 最大の大物を出すのを少し我慢する（囮を先に出させる）
+    if (card.type === 'creature' && typeof getUserHabitProfile === 'function' &&
+        typeof AI_IMITATION_ON !== 'undefined' && AI_IMITATION_ON) {
+      const prof = getUserHabitProfile();
+      const oppOpenMana = (player.lands||[]).filter(l=>!l.tapped).length;
+      if (prof.removeBig != null && prof.removeBig >= 0.6 && oppOpenMana >= 4) {
+        const maxHandPow = Math.max(...handItems.filter(it=>it.card.type==='creature').map(it=>it.card.power||0));
+        if ((card.power||0) === maxHandPow && handItems.some(it=>it.card.type==='creature' && (it.card.power||0) < maxHandPow)) {
+          score -= 1.2;
+        }
+      }
+    }
+
     if (score > bestScore) { bestScore = score; best = item; }
   }
 
@@ -306,6 +324,7 @@ class SimGame {
     this.maxTurns = 50;
     this.tdScores = [[], []]; // #10: intermediate eval scores per player
     this.playedCards = [new Map(), new Map()]; // {cardId → {count, turns[]}} バランス統計用
+    this.imitation = [false, false]; // 模倣学習E: 勝ち手辞書バイアスのON/OFF（A/B検証用）
     // 思考バージョン（プレイヤー別）。'v2'=改良版（既定） / 'v1'=旧版（A/B検証・安全フォールバック用）。
     // SIM_BRAIN_FORCE が設定されていれば測定用にそれを優先する。
     const _db = (typeof SIM_DEFAULT_BRAIN !== 'undefined') ? SIM_DEFAULT_BRAIN : 'v2';
@@ -691,7 +710,8 @@ class SimGame {
           p.field.push(inst);
           this.simETB(ap,inst);
           this.simCheckDeath(0); this.simCheckDeath(1);
-          const gain=this.simEval(ap)-scoreBefore + (this.w[ap]['card_'+cid]||0);
+          const gain=this.simEval(ap)-scoreBefore + (this.w[ap]['card_'+cid]||0)
+            + (this.imitation && this.imitation[ap] ? getImitationBias(this.state, ap, 'play', cid) : 0);
           this.restore(snap);
           if (gain>bestGain){bestGain=gain;bestOption={type:'creature',i,cid,card};}
         }
@@ -700,7 +720,8 @@ class SimGame {
         //   「マナを残して割込む」価値がロールアウトに正しく反映される。
         const _isQuick = card.keywords && card.keywords.includes('Quick');
         if (card.type==='spell' && !_isQuick && this.canAfford(p,card.cost)) {
-          const gain=this.evalSpellGain(ap,card) + (this.w[ap]['card_'+cid]||0);
+          const gain=this.evalSpellGain(ap,card) + (this.w[ap]['card_'+cid]||0)
+            + (this.imitation && this.imitation[ap] ? getImitationBias(this.state, ap, 'play', cid) : 0);
           if (gain>bestGain){bestGain=gain;bestOption={type:'spell',i,cid,card};}
         }
       });
@@ -3212,7 +3233,12 @@ function applyUrameCare(attackers, aiIdx, isLethal) {
         !attackerIds.has(c.instanceId) || CARD_DB[c.cardId].vigilance);
       const blockable = Math.min(homeGuards.length, oppField.length);
       const sortedPow = oppField.map(c => getEffectivePower(oppIdx, c)).sort((a, b) => b - a);
-      const throughPow = sortedPow.slice(blockable).reduce((s, p) => s + p, 0);
+      let throughPow = sortedPow.slice(blockable).reduce((s, p) => s + p, 0);
+      // 模倣学習D: 全力攻撃の癖がある相手には反撃を2割増しで見積もる（強めに構える）
+      if (oppIdx === 0 && typeof getUserHabitProfile === 'function') {
+        const prof = getUserHabitProfile();
+        if (prof.allIn != null && prof.allIn > 0.7) throughPow = Math.ceil(throughPow * 1.2);
+      }
       if (throughPow >= me.life) {
         const recallable = result.filter(c => !isForced(c) && !CARD_DB[c.cardId].vigilance);
         if (recallable.length > 0) {
@@ -3280,4 +3306,168 @@ function gateMeaninglessCast(cardId, aiIdx, opts) {
     return false;
   }
   return true;
+}
+
+// ============================================================
+// 模倣学習（ユーザーの勝ち手に学び、癖は逆に突く）
+// A:勝ち手記録 B:決定打抽出 C:辞書→探索優先 D:癖の逆利用 E:強さ検証
+// ============================================================
+
+// ── 記憶（localStorage・ゲーム跨ぎ）──
+let AI_WINNING_MOVES = [];   // 勝ち手辞書 [{key, sig, kind, cardId, count, swing}]
+let AI_USER_HABITS = {};     // 癖カウンタ {blockSmallYes, blockSmallNo, attackDecl, ...}
+let AI_IMITATION_ON = true;  // E検証ゲートの採用フラグ
+function loadImitationMemory() {
+  try { AI_WINNING_MOVES = JSON.parse(localStorage.getItem('dcg_winning_moves')||'[]'); } catch(e){ AI_WINNING_MOVES=[]; }
+  if (!Array.isArray(AI_WINNING_MOVES)) AI_WINNING_MOVES = [];
+  try { AI_USER_HABITS = JSON.parse(localStorage.getItem('dcg_user_habits')||'{}'); } catch(e){ AI_USER_HABITS={}; }
+  if (!AI_USER_HABITS || typeof AI_USER_HABITS !== 'object') AI_USER_HABITS = {};
+  try { AI_IMITATION_ON = localStorage.getItem('dcg_imitation_enabled') !== '0'; } catch(e){ AI_IMITATION_ON = true; }
+}
+function saveImitationMemory() {
+  try {
+    localStorage.setItem('dcg_winning_moves', JSON.stringify(AI_WINNING_MOVES));
+    localStorage.setItem('dcg_user_habits', JSON.stringify(AI_USER_HABITS));
+    localStorage.setItem('dcg_imitation_enabled', AI_IMITATION_ON ? '1' : '0');
+  } catch(e){}
+}
+loadImitationMemory();
+
+// ── 局面シグネチャ: 「似た局面」を大づかみに束ねる指紋 ──
+// state は本物の G でも SimGame.state でも可（同じ形のフィールドを読む）
+function computeSituationSig(state, meIdx) {
+  const me = state.players[meIdx], opp = state.players[1-meIdx];
+  const t = (state.turn||1) <= 4 ? 'E' : (state.turn||1) <= 8 ? 'M' : 'L'; // 序盤/中盤/終盤
+  const lifeD = me.life - opp.life;
+  const l = lifeD > 3 ? '+' : lifeD < -3 ? '-' : '=';                      // ライフ差
+  const fieldD = (me.field||[]).length - (opp.field||[]).length;
+  const f = fieldD > 0 ? '+' : fieldD < 0 ? '-' : '=';                     // 盤面数の差
+  const mana = ((me.lands||[]).filter(x=>!x.tapped)).length;
+  const m = mana >= 5 ? '5' : String(mana);                                // 使えるマナ
+  const h = Math.min(7, (me.hand||[]).length);                             // 手札枚数
+  return `${t}${l}${f}${m}${h}`;
+}
+
+// ── B用: 軽量な形勢評価（meIdx視点、プラスほど有利）──
+function evalBoardLight(state, meIdx) {
+  const me = state.players[meIdx], opp = state.players[1-meIdx];
+  const fieldVal = p => (p.field||[]).reduce((s,c)=>{
+    const cd = CARD_DB[c.cardId]||{};
+    return s + (cd.power||0)+(c.tempPower||0) + (cd.toughness||0)+(c.tempToughness||0) - (c.damage||0);
+  }, 0);
+  return (me.life - opp.life) * 1.0
+       + (fieldVal(me) - fieldVal(opp)) * 0.8
+       + ((me.hand||[]).length - (opp.hand||[]).length) * 0.5;
+}
+
+// ── A. ユーザーの手の記録（ゲーム中のみ・勝った時だけ蒸留される）──
+function recordUserMoveForImitation(kind, detail) {
+  if (typeof NET_MODE !== 'undefined' && NET_MODE !== 'local') return;    // AI戦のみ
+  if (typeof SPECTATOR_MODE !== 'undefined' && SPECTATOR_MODE) return;    // 観戦は除外
+  if (!G._imitationLog) G._imitationLog = [];
+  if (G._imitationLog.length >= 200) return;
+  G._imitationLog.push({
+    sig: computeSituationSig(G, 0),
+    kind, detail: detail || {},
+    eval: evalBoardLight(G, 0),
+    turn: G.turn
+  });
+}
+
+// ── D. 癖カウンタ（勝敗に関係なく蓄積・ユーザーの行動だけ数える）──
+function addUserHabit(type, val) {
+  if (typeof NET_MODE !== 'undefined' && NET_MODE !== 'local') return;
+  if (typeof SPECTATOR_MODE !== 'undefined' && SPECTATOR_MODE) return;
+  AI_USER_HABITS[type] = (AI_USER_HABITS[type]||0) + (val === undefined ? 1 : val);
+  saveImitationMemory();
+}
+// 癖プロファイル（十分なサンプルがある項目だけ数値、なければnull）
+function getUserHabitProfile() {
+  const h = AI_USER_HABITS;
+  const rate = (num, den, minN) => (den >= minN ? num/den : null);
+  return {
+    blockSmall: rate(h.blockSmallYes||0, (h.blockSmallYes||0)+(h.blockSmallNo||0), 5), // 小型攻撃(パワー2以下)をブロックする率
+    blockBig:   rate(h.blockBigYes||0,   (h.blockBigYes||0)+(h.blockBigNo||0),   5),   // 大型攻撃をブロックする率
+    allIn: (h.attackDecl||0) >= 4 ? (h.attackRatioSum||0)/h.attackDecl : null,          // 攻撃宣言の全力度(0-1)
+    removeBig: rate(h.removeBigYes||0, (h.removeBigYes||0)+(h.removeBigNo||0), 3),      // 除去を最大戦力に撃つ率
+  };
+}
+// 除去の撃ち先の癖: ユーザーの除去がAIの最大パワーに当たったか記録
+function noteUserRemovalTarget(targetInstId) {
+  const aiField = G.players[1].field || [];
+  if (aiField.length === 0) return;
+  const target = aiField.find(c => c.instanceId === targetInstId);
+  if (!target) return;
+  const maxPow = Math.max(...aiField.map(c => getEffectivePower(1, c)));
+  addUserHabit(getEffectivePower(1, target) >= maxPow ? 'removeBigYes' : 'removeBigNo');
+}
+
+// ── A+B. 蒸留: ユーザーが勝った時だけ、形勢を跳ね上げた手を辞書へ ──
+function distillImitationLessons(winnerIdx) {
+  const log = G._imitationLog || [];
+  G._imitationLog = [];
+  if (winnerIdx !== 0 || log.length === 0) return 0;  // 勝者の手だけが教材（ミスの模倣を遮断）
+  let added = 0;
+  for (let i = 0; i < log.length; i++) {
+    // その手の「直後の形勢」−「直前の形勢」＝この手がどれだけ効いたか
+    const after = (i+1 < log.length) ? log[i+1].eval : log[i].eval + 5; // 最後の手は勝ちに直結したとみなす
+    const swing = after - log[i].eval;
+    if (swing < 2) continue;                          // B: 形勢を大きく良くした決定打だけ
+    const key = log[i].kind + '|' + (log[i].detail.cardId||'') + '|' + log[i].sig;
+    const hit = AI_WINNING_MOVES.find(m => m.key === key);
+    if (hit) { hit.count++; hit.swing = (hit.swing + swing) / 2; }
+    else AI_WINNING_MOVES.push({ key, sig: log[i].sig, kind: log[i].kind, cardId: log[i].detail.cardId||null, count: 1, swing });
+    added++;
+  }
+  if (AI_WINNING_MOVES.length > 200) {                // 上限: 信頼度の低いものから捨てる
+    AI_WINNING_MOVES.sort((a,b)=>(b.count-a.count) || (b.swing-a.swing));
+    AI_WINNING_MOVES = AI_WINNING_MOVES.slice(0, 200);
+  }
+  saveImitationMemory();
+  if (added > 0 && typeof aiThink === 'function') {
+    aiThink(`模倣学習: あなたの勝ち手${added}個を辞書に記録（計${AI_WINNING_MOVES.length}件）`);
+  }
+  return added;
+}
+
+// ── C. 勝ち手辞書の参照: 似た局面でその手にボーナス（2回以上見た教訓のみ信頼）──
+function getImitationBias(state, meIdx, kind, cardId) {
+  if (!AI_IMITATION_ON) return 0;
+  const sig = computeSituationSig(state, meIdx);
+  let best = 0;
+  for (const m of AI_WINNING_MOVES) {
+    if (m.kind !== kind || m.count < 2) continue;
+    if (kind === 'play' && m.cardId !== cardId) continue;
+    if (m.sig.slice(0,3) !== sig.slice(0,3)) continue; // 時期・ライフ差・盤面差が同じ＝似た局面
+    const conf = Math.min(3, m.count) * (m.sig === sig ? 1 : 0.5); // 完全一致なら満額
+    best = Math.max(best, Math.min(3, m.swing * 0.25 * conf));
+  }
+  return best;
+}
+
+// ── E. 強さ検証ゲート: 辞書あり/なしでAI自己対戦し、弱くなっていたら不採用 ──
+function verifyImitationLessons(games) {
+  games = games || 24;
+  if (AI_WINNING_MOVES.filter(m => m.count >= 2).length === 0) return null; // 検証対象なし
+  let withWins = 0, decided = 0;
+  for (let g = 0; g < games; g++) {
+    const side = g % 2;                      // 先手/後手を交互に入れ替えて公平に
+    const sim = new SimGame();
+    sim.imitation = [false, false];
+    sim.imitation[side] = true;
+    const result = sim.run();  // run()は {winner, tdScores} を返す
+    const winner = (result && typeof result === 'object') ? result.winner : result;
+    if (winner === 0 || winner === 1) { decided++; if (winner === side) withWins++; }
+  }
+  if (decided < games * 0.5) return null;    // 引き分けだらけなら判定保留
+  const rate = withWins / decided;
+  const adopted = rate >= 0.45;              // 明確に弱くなっていなければ採用（対人効果はシムでは測れない）
+  AI_IMITATION_ON = adopted;
+  saveImitationMemory();
+  const msg = `勝ち手辞書のA/B検証: 辞書あり側の勝率${Math.round(rate*100)}%（${decided}戦） → ${adopted ? '採用' : '一旦オフ（弱くなるため）'}`;
+  if (typeof recordAILearnEvent === 'function') {
+    recordAILearnEvent({ time: Date.now(), type: 'imitation_verify', note: msg });
+  }
+  if (typeof aiThink === 'function') aiThink(`模倣学習の検証: ${msg}`);
+  return { rate, adopted, decided };
 }

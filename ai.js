@@ -308,9 +308,18 @@ function aiTurn() {
 
   // 改善8: 局面に応じた時間でMCTS実行
   showAIThinking(true);
-  const mctsPlays = mctsSearch(mctsTimeBudget());
+  let mctsPlays = mctsSearch(mctsTimeBudget());
   showAIThinking(false);
   let aiPlayedCard = false;
+
+  // 模倣学習C: 今の局面が「あなたの勝ち手」の局面に似ていたら、その手を先に試す
+  if (typeof getImitationBias === 'function' && typeof AI_IMITATION_ON !== 'undefined' && AI_IMITATION_ON) {
+    const boosted = mctsPlays.filter(cid => getImitationBias(G, 1, 'play', cid) > 0);
+    if (boosted.length > 0) {
+      mctsPlays = [...boosted, ...mctsPlays.filter(cid => !boosted.includes(cid))];
+      aiThink(`あなたの勝ちパターンを参考: ${CARD_DB[boosted[0]].name} を優先検討`);
+    }
+  }
 
   // MCTSが推奨するカードを順に試みる
   // 無意義防止C: 場の数＋この後スタックで出る召喚数で上限5体を計算（あふれ召喚＝カード捨てを根絶）
@@ -692,6 +701,20 @@ function aiAttack() {
     const mctsSet = mctsPickAttackers(optional);
     showAIThinking(false);
     attackerInsts = [...mustAtk, ...optional.filter(c => mctsSet.has(c.instanceId))];
+
+    // 模倣学習D: あなたが小型の攻撃をほぼブロックしない癖 → 小型は通ると読んで参加させる
+    if (typeof getUserHabitProfile === 'function' &&
+        typeof AI_IMITATION_ON !== 'undefined' && AI_IMITATION_ON) {
+      const prof = getUserHabitProfile();
+      if (prof.blockSmall != null && prof.blockSmall < 0.25) {
+        const extras = optional.filter(c => !attackerInsts.includes(c) &&
+          getEffectivePower(1, c) > 0 && getEffectivePower(1, c) <= 2);
+        if (extras.length > 0) {
+          attackerInsts = [...attackerInsts, ...extras];
+          aiThink(`癖読み: あなたは小型の攻撃をほぼブロックしない（実測${Math.round(prof.blockSmall*100)}%）→ 小型も攻撃参加`);
+        }
+      }
+    }
   }
 
   if (attackerInsts.length === 0) { setTimeout(() => endTurnAfterMainPhase(), 300); return; }

@@ -1173,6 +1173,10 @@ function playCardFromHandForReal(player, handIndex) {
     render();
     return;
   }
+  // 模倣学習A: ユーザーの手（カードプレイ）を局面つきで記録
+  if (player === 0 && typeof recordUserMoveForImitation === 'function') {
+    recordUserMoveForImitation('play', { cardId });
+  }
   playCardFromHand(player, handIndex);
 }
 
@@ -2638,6 +2642,14 @@ function endGame(winner) {
         });
       }
     }
+
+    // 模倣学習A+B+E: 勝者の手だけを蒸留 → 新しい教訓が入ったらA/B検証（非同期）
+    if (typeof distillImitationLessons === 'function') {
+      const added = distillImitationLessons(winner);
+      if (added > 0 && typeof verifyImitationLessons === 'function') {
+        setTimeout(() => { try { verifyImitationLessons(); } catch(e) {} }, 1500);
+      }
+    }
   }
   const who = NET_MODE === 'hotseat' ? (winner === 0 ? 'P1の' : 'P2の') : winner === 0 ? 'あなたの' : 'AIの';
   log(`ゲーム終了！ ${who}勝利！`, 'important');
@@ -3117,6 +3129,12 @@ function resolveSingleCombat(atkPlayer, atkInstId, kakutouTargetId, blockerInstI
   G._battleDestroyedInstIds = new Set();
   const atkCard = CARD_DB[atkInst.cardId];
   const atkPow = getEffectivePower(atkPlayer, atkInst);
+  // 模倣学習D: AIの攻撃に対するユーザーのブロック癖を記録（小型/大型別）
+  if (atkPlayer === 1 && !kakutouTargetId && typeof addUserHabit === 'function') {
+    const small = atkPow <= 2;
+    addUserHabit(small ? (blockerInstId ? 'blockSmallYes' : 'blockSmallNo')
+                       : (blockerInstId ? 'blockBigYes' : 'blockBigNo'), 1);
+  }
   // 攻撃中ダメージ無効: ミチル(自身)・メグル(自軍全体) が場にいれば攻撃クリーチャーは戦闘ダメージを受けない
   const atkInvuln = atkCard.noDmgWhileAttacking ||
     G.players[atkPlayer].field.some(c => CARD_DB[c.cardId].alliesInvulnWhileAttacking);
@@ -3452,6 +3470,16 @@ function playerAttackConfirm() {
 
   G.playerChoosingAttackers = false;
   const p = G.players[0];
+
+  // 模倣学習A+D: 攻撃宣言を記録（タップ前に攻撃可能数を数えて全力度も計測）
+  if (G.playerSelectedAttackers.length > 0 && typeof recordUserMoveForImitation === 'function') {
+    const candN = (typeof getAttackCandidates === 'function' ? getAttackCandidates(0).length : 0) || 1;
+    recordUserMoveForImitation('attack', { n: G.playerSelectedAttackers.length });
+    if (typeof addUserHabit === 'function') {
+      addUserHabit('attackDecl', 1);
+      addUserHabit('attackRatioSum', G.playerSelectedAttackers.length / candN);
+    }
+  }
 
   // 選択されたクリーチャーをタップ
   G.playerSelectedAttackers.forEach(instId => {
