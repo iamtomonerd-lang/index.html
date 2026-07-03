@@ -57,9 +57,9 @@ let AI_CURRENT_COLOR = null; // 現在訓練中の色
 // AIの色別学習データをlocalStorageから読み込む（デフォルト重みを優先）
 function loadAIColorWeights(colorKey) {
   try {
-    // デフォルト重みを先に適用
+    // デフォルト重みを先に適用（新キーもAI_WEIGHTS_DEFAULTから継承）
     const defaultWeights = AI_WEIGHTS_BY_COLOR[colorKey] || AI_WEIGHTS_DEFAULT;
-    AI_WEIGHTS = { ...defaultWeights };
+    AI_WEIGHTS = { ...AI_WEIGHTS_DEFAULT, ...defaultWeights };
     AI_TRAIN_STATS = { games: 500000, wins: 250000, epoch: 1000 }; // デフォルトの学習統計
     CARD_STATS = {};
     AI_DECK_COUNTS = null;
@@ -116,8 +116,27 @@ function evalBoardScore(player) {
             + w.fieldCount*(me.field.length-opp.field.length)
             + w.handAdv*(me.hand.length-opp.hand.length)
             + w.threshold*getCXValue(player);
+
+  // Phase1: 局面類型化（序中終盤戦略） - 既存の重みを活用
+  const turn = G.turn || 1;
+  if (turn <= 4) {
+    // 序盤: フィールド構築に重点
+    score += w.earlyFieldBonus * me.field.length;
+  } else if (turn <= 10) {
+    // 中盤: バランス戦略
+    score += w.earlyFieldBonus * 0.5 * me.field.length;
+    // ダメージ計算を考慮（中盤から攻撃性を高める）
+    if (myPow > 0) score += w.attackBias * myPow * 0.3;
+  } else {
+    // 終盤: ダメージ・リーサル計算重視
+    if (myPow > 0) score += w.attackBias * myPow * 0.8;
+    // あと何ターンでリーサルできるか計算
+    const turnsToKill = oppPow > 0 ? Math.ceil(opp.life / myPow) : 999;
+    const turnsToLose = myPow > 0 ? Math.ceil(me.life / oppPow) : 999;
+    if (turnsToKill < turnsToLose) score += 5.0; // リーサル見えたらスコア大幅ボーナス
+  }
+
   if (me.life < 10) score += w.lateLifeBonus*(me.life-opp.life);
-  if (G.turn <= 6) score += w.earlyFieldBonus*me.field.length;
   const unplayable = me.hand.filter(cid=>{const c=CARD_DB[cid];return c.cost&&!canAfford(player,c.cost);}).length;
   score -= w.manaEff*unplayable;
   return score;
@@ -130,6 +149,7 @@ function aiPickBestCard(handItems) {
   const player = G.players[0];
   const myLife = ai.life, oppLife = player.life;
   const myField = ai.field.length, oppField = player.field.length;
+  const turn = G.turn || 1;
 
   let best = null, bestScore = -Infinity;
   for (const item of handItems) {
@@ -140,6 +160,17 @@ function aiPickBestCard(handItems) {
     if (card.type === 'creature') {
       const pow = card.power || 0, tou = card.toughness || 0;
       score += AI_WEIGHTS.fieldPower * pow + AI_WEIGHTS.fieldToughness * tou + AI_WEIGHTS.fieldCount;
+      // Phase2: ターン数に応じたカード価値動的調整
+      if (turn <= 4) {
+        // 序盤: パワー/タフネスバランス重視
+        score += (pow + tou) * 0.2;
+      } else if (turn <= 10) {
+        // 中盤: パワー優先（攻撃準備）
+        score += pow * 0.3;
+      } else {
+        // 終盤: パワー重視（ダメージ計算）
+        score += pow * 0.6;
+      }
       // Prefer creatures when we have fewer on field
       if (myField < oppField) score += 1.5;
       // Prefer big creatures when losing on life
@@ -162,24 +193,122 @@ function aiPickBestCard(handItems) {
       score += cost * 0.05; // slight preference for expensive (powerful) spells
     }
 
+    // 模倣学習C: あなたの勝ち手辞書に載っている手は優先度アップ
+    if (typeof getImitationBias === 'function') {
+      score += getImitationBias(G, 1, 'play', card.id) * 1.5;
+    }
+    // 模倣学習D: 「一番大きいのを必ず除去してくる」相手には、除去マナが立っている間は
+    // 最大の大物を出すのを少し我慢する（囮を先に出させる）
+    if (card.type === 'creature' && typeof getUserHabitProfile === 'function' &&
+        typeof AI_IMITATION_ON !== 'undefined' && AI_IMITATION_ON) {
+      const prof = getUserHabitProfile();
+      const oppOpenMana = (player.lands||[]).filter(l=>!l.tapped).length;
+      if (prof.removeBig != null && prof.removeBig >= 0.6 && oppOpenMana >= 4) {
+        const maxHandPow = Math.max(...handItems.filter(it=>it.card.type==='creature').map(it=>it.card.power||0));
+        if ((card.power||0) === maxHandPow && handItems.some(it=>it.card.type==='creature' && (it.card.power||0) < maxHandPow)) {
+          score -= 1.2;
+        }
+      }
+    }
+
     if (score > bestScore) { bestScore = score; best = item; }
   }
+
+  // Phase B: Hard Constraints（カード選択の妥当性チェック）
+  if (best) {
+    const card = best.card;
+    const cost = totalCost(card.cost || {});
+    // マナ浪費チェック: ほぼ無意味なカード使用は禁止
+    if (cost > 0 && card.type === 'creature') {
+      const pow = card.power || 0;
+      if (cost > pow * 2 && oppField === 0 && myField >= 3) {
+        // 相手の場が空で自分が有利なのに、高コストの低パワークリーチャーを使う = 無意味
+        if (typeof aiThink === 'function') aiThink(`⚠️ Hard Constraints: ${card.name} はコスト対効果が低いためパス`);
+        best = null;
+      }
+    }
+  }
+
+  // Phase C + D: Decision Audit & Context-Aware Fallback
+  if (best && typeof recordDecisionAudit === 'function' && typeof calculateSanityScore === 'function') {
+    const card = best.card;
+    const context = {
+      decision: 'play_card',
+      improvesBoard: (card.type === 'creature') ? 1 : (oppField > 0 ? 2 : 0),
+      manaEfficiency: (totalCost(card.cost || {}) > 0) ? (card.power || 1) / totalCost(card.cost) : 1
+    };
+    const score = calculateSanityScore('play_card', context);
+    recordDecisionAudit('play_card', {cardId: card.id, turn}, score);
+
+    // Phase D: 妥当性スコアが極端に低い場合、より安全な（スコア低い）カード選択に切り替え
+    if (score < 30 && handItems.length > 1) {
+      const alternatives = handItems.filter(h => h !== best);
+      const safer = alternatives[Math.floor(Math.random() * alternatives.length)];
+      if (safer && typeof aiThink === 'function') {
+        aiThink(`フォールバック: より妥当性の高い判断に切り替え（${score}→改善）`);
+      }
+      return safer || best;
+    }
+  }
+
   return best;
 }
 
 function aiShouldBlock(atkInst, blkInst, atkPlayer) {
   const w = AI_WEIGHTS;
   const defender = 1-atkPlayer;
+  const me = G.players[defender];
+  const opp = G.players[atkPlayer];
   const atkPow = getEffectivePower(atkPlayer,atkInst);
   const blkPow = getEffectivePower(defender,blkInst);
   const blkTou = getEffectiveToughness(defender,blkInst);
   const atkTou = getEffectiveToughness(atkPlayer,atkInst);
-  const blkSurvives = (blkTou-blkInst.damage) > atkPow;
-  const atkDies = (atkTou-atkInst.damage) <= blkPow;
+  const atkCard = CARD_DB[atkInst.cardId] || {};
+  const blkCard = CARD_DB[blkInst.cardId] || {};
+  // 裏目ケアA: 接死持ちの攻撃はタフネスで耐えられない／自分の接死ブロックは相手を必ず倒せる
+  const blkSurvives = !(atkCard.deathtouch && atkPow > 0) && (blkTou-blkInst.damage) > atkPow;
+  const atkDies = ((atkTou-atkInst.damage) <= blkPow) || (blkCard.deathtouch && blkPow > 0);
   let blockValue = 0;
   if (atkDies) blockValue += w.fieldPower*atkPow + w.fieldCount;
   if (!blkSurvives) blockValue -= w.fieldPower*blkPow + w.fieldCount;
-  return (blockValue + w.life*atkPow*w.blockRisk) > 0;
+
+  // Phase3: ブロック判定強化 - 終盤ではブロック優先度を高める
+  const turn = G.turn || 1;
+  if (turn >= 11 && me.life < 15) {
+    blockValue += 3.0;
+  } else if (turn <= 4 && atkPow <= 2) {
+    blockValue -= 0.5;
+  }
+
+  // 裏目ケアA: 貫通持ちを小さいクリーチャーでブロックしても超過分は通る
+  // → 「ブロックで実際に防げるダメージ」で価値を評価（無駄なチャンプブロックを避ける）
+  const preventedPow = (atkCard.trample && !blkSurvives)
+    ? Math.min(atkPow, Math.max(0, blkTou - blkInst.damage))
+    : atkPow;
+
+  const baseDecision = (blockValue + w.life*preventedPow*w.blockRisk) > 0;
+
+  // Phase A: Sanity Check（妥当性再確認）
+  if (baseDecision && typeof sanitizeBlockDecision === 'function') {
+    if (!sanitizeBlockDecision(atkInst, blkInst, atkPlayer)) return false;
+  }
+
+  // Phase E: Pattern Blocker（過去に負けたパターンの回避）
+  if (baseDecision && typeof shouldBlockPattern === 'function') {
+    const situation = {turn, atkPow, blkTou, atkTou, blkSurvives, atkDies, atkPlayer, defPlayer: defender};
+    if (shouldBlockPattern(situation)) {
+      if (typeof aiThink === 'function') aiThink('パターンマッチ: 過去に失敗したブロック方法は回避');
+      return false;
+    }
+  }
+
+  // Phase C: Decision Audit Log（監査記録）
+  if (typeof recordDecisionAudit === 'function' && typeof calculateSanityScore === 'function') {
+    const score = calculateSanityScore('block', {atkPow, blkTou, blkSurvives, atkDies, lifeGap: me.life - opp.life});
+    recordDecisionAudit('block', {atkPow, blkTou, turn}, score);
+  }
+
+  return baseDecision;
 }
 
 // ============================================================
@@ -195,6 +324,7 @@ class SimGame {
     this.maxTurns = 50;
     this.tdScores = [[], []]; // #10: intermediate eval scores per player
     this.playedCards = [new Map(), new Map()]; // {cardId → {count, turns[]}} バランス統計用
+    this.imitation = [false, false]; // 模倣学習E: 勝ち手辞書バイアスのON/OFF（A/B検証用）
     // 思考バージョン（プレイヤー別）。'v2'=改良版（既定） / 'v1'=旧版（A/B検証・安全フォールバック用）。
     // SIM_BRAIN_FORCE が設定されていれば測定用にそれを優先する。
     const _db = (typeof SIM_DEFAULT_BRAIN !== 'undefined') ? SIM_DEFAULT_BRAIN : 'v2';
@@ -576,7 +706,7 @@ class SimGame {
         if (land.tapped) continue;
         land.tapped=true;
         const whites=p.field.filter(c=>CARD_DB[c.cardId].color==='W');
-        if (whites.length) { const tgt=whites.reduce((a,b)=>this.hp(a)<this.hp(b)?a:b); tgt.tempToughness=(tgt.tempToughness||0)+1; }
+        if (whites.length) { const tgt=whites.reduce((a,b)=>this.hp(a)<this.hp(b)?a:b); tgt.tempToughness=(tgt.tempToughness||0)+3; }
       }
     }
   }
@@ -598,6 +728,7 @@ class SimGame {
           // 剥離し「activePlayerが切替わらない・プレイが巻き戻る」重大バグだった。
           const trial = SimGame.lite();
           trial.w = this.w; trial.brain = this.brain;
+          trial.imitation = this.imitation;
           trial.state = JSON.parse(JSON.stringify(s));
           trial.nid = this.nid;
           const tp = trial.state.players[ap];
@@ -607,7 +738,8 @@ class SimGame {
           tp.field.push(inst);
           trial.simETB(ap,inst);
           trial.simCheckDeath(0); trial.simCheckDeath(1);
-          let gain=trial.simEval(ap)-scoreBefore + (this.w[ap]['card_'+cid]||0);
+          let gain=trial.simEval(ap)-scoreBefore + (this.w[ap]['card_'+cid]||0)
+            + (this.imitation && this.imitation[ap] ? getImitationBias(s, ap, 'play', cid) : 0);
           // 案1: 自己対戦で獲得した「文脈付きカード知識」を事前分布として加算
           if (typeof cardKnowledgeBonus==='function') gain += cardKnowledgeBonus(this, ap, cid);
           // カードカルテ: 相棒(シナジー)・対面(対抗)・旬(タイミング)の知識を加算
@@ -619,7 +751,8 @@ class SimGame {
         //   「マナを残して割込む」価値がロールアウトに正しく反映される。
         const _isQuick = card.keywords && card.keywords.includes('Quick');
         if (card.type==='spell' && !_isQuick && this.canAfford(p,card.cost)) {
-          let gain=this.evalSpellGain(ap,card) + (this.w[ap]['card_'+cid]||0);
+          let gain=this.evalSpellGain(ap,card) + (this.w[ap]['card_'+cid]||0)
+            + (this.imitation && this.imitation[ap] ? getImitationBias(this.state, ap, 'play', cid) : 0);
           // 案1: 文脈付きカード知識を事前分布として加算
           if (typeof cardKnowledgeBonus==='function') gain += cardKnowledgeBonus(this, ap, cid);
           // カードカルテ: 相棒・対面・旬の知識を加算
@@ -1068,15 +1201,39 @@ class SimGame {
   }
   payMana(p,cost) { for (const [k,v] of Object.entries(cost)) p.mana[k]=(p.mana[k]||0)-v; }
 
-  snapshot() { return JSON.parse(JSON.stringify(this.state)); }
-  restore(snap) { this.state=JSON.parse(JSON.stringify(snap)); }
+  snapshot() { return fastCloneState(this.state); }
+  restore(snap) { this.state = fastCloneState(snap); }
+}
+
+// ── 純スペックA: 状態クローンの一元化と削減 ─────────────────────────
+// 実測の結果（test/bench-mcts.js）、V8ではJSON方式（C++実装）の方が
+// JS再帰コピーより速かったため、既定はJSON方式のまま。
+// 本当の高速化は「クローンの回数を減らす」こと：
+//   ・mctsEnumerateActions: 読むだけなのでクローン廃止
+//   ・mctsApplyAction: 入口で複製した状態をそのまま返す（出口の再複製を廃止）
+// フラグはベンチでの再検証用に残す（環境が変われば逆転もありうる）。
+let USE_FAST_CLONE = false; // true=JS再帰コピー / false=JSON方式（実測で高速）
+function _fastCloneAny(v) {
+  if (v === null || typeof v !== 'object') return v;
+  if (Array.isArray(v)) {
+    const n = v.length, out = new Array(n);
+    for (let i = 0; i < n; i++) out[i] = _fastCloneAny(v[i]);
+    return out;
+  }
+  const out = {};
+  for (const k in v) out[k] = _fastCloneAny(v[k]);
+  return out;
+}
+function fastCloneState(state) {
+  return USE_FAST_CLONE ? _fastCloneAny(state) : JSON.parse(JSON.stringify(state));
 }
 
 // ── MCTS (Monte Carlo Tree Search) ──────────────────────────────────
 const MCTS_EXPLORATION = 1.414; // UCB1 exploration constant
 const MCTS_ROLLOUT_DEPTH = 22;  // max turns per rollout
-// 反復上限。生成高速化により同一時間で多数探索できるため、実質「時間予算」を律速にする。
-const MCTS_MAX_ITERS = 6000;
+// 反復上限。純スペックD: クローン高速化で時間内の反復数が跳ね上がるため、
+// 上限で頭打ちしないよう大きく引き上げ（実質の律速は時間予算のまま）。
+const MCTS_MAX_ITERS = 60000;
 let MCTS_LAST_ITERS = 0; // 診断用: 直近 mctsSearch の反復数
 // 改善8: 局面に応じた時間予算（通常/終盤/クリティカル）。探索の質を上げるため引き上げ。
 const MCTS_TIME_NORMAL    = 500; // ms - 通常
@@ -1158,7 +1315,7 @@ function mctsStateFromG() {
 // Determinization: replace opponent (p0) hand with random sample from their deck
 // This models hidden-information MCTS (single-observer determinization)
 function deterministicState(baseState) {
-  const s = JSON.parse(JSON.stringify(baseState));
+  const s = fastCloneState(baseState);
   const p0 = s.players[0];
   const handSize = p0.hand.length;
   if (handSize === 0 || p0.deck.length === 0) return s;
@@ -1179,7 +1336,8 @@ function deterministicState(baseState) {
 // Enumerate possible actions from an AI-turn SimGame state (player=1, main phase)
 function mctsEnumerateActions(simState, nid) {
   const sim = SimGame.lite();
-  sim.state = JSON.parse(JSON.stringify(simState));
+  // 純スペックA: この関数は状態を読むだけで書き換えない → クローン不要（1回分の複製を節約）
+  sim.state = simState;
   sim.nid = nid;
   const p1 = sim.state.players[1];
   const actions = [];
@@ -1201,7 +1359,7 @@ function mctsEnumerateActions(simState, nid) {
 // Apply an action to a SimGame state, return new state snapshot + new nid
 function mctsApplyAction(simState, action, nid) {
   const sim = SimGame.lite();
-  sim.state = JSON.parse(JSON.stringify(simState));
+  sim.state = fastCloneState(simState);
   sim.nid = nid;
   const ap = 1; // AI is always player 1
   const p = sim.state.players[ap];
@@ -1209,7 +1367,7 @@ function mctsApplyAction(simState, action, nid) {
   if (action.type === 'play') {
     // Re-find the card by cardId (index may shift after previous plays)
     const idx = p.hand.indexOf(action.cardId);
-    if (idx === -1) return { state: sim.snapshot(), nid: sim.nid };
+    if (idx === -1) return { state: sim.state, nid: sim.nid };
     const card = CARD_DB[action.cardId];
     if (card && card.type === 'creature' && p.field.length < 5 && sim.canAfford(p, card.cost)) {
       sim.payMana(p, card.cost);
@@ -1227,15 +1385,16 @@ function mctsApplyAction(simState, action, nid) {
       p.graveyard.push(action.cardId);
     }
   }
+  // 純スペックA: 冒頭で複製済みの状態をそのまま返す（snapshotでの再複製は無駄）
   // 'pass': no state change, just ends main phase
-  return { state: sim.snapshot(), nid: sim.nid };
+  return { state: sim.state, nid: sim.nid };
 }
 
 // Rollout: play game to completion from simState, return 1 if P1 wins, 0 otherwise
 // 改善7: P0もheuristic（SimGame.simPlayCards＋simAttack）でプレイ → ランダムより精度高
 function mctsRollout(simState, nid) {
   const sim = SimGame.lite();
-  sim.state = JSON.parse(JSON.stringify(simState));
+  sim.state = fastCloneState(simState);
   sim.nid = nid;
   sim.maxTurns = MCTS_ROLLOUT_DEPTH;
   // both players use SimGame's heuristic (not random)
@@ -1257,34 +1416,65 @@ function mctsRollout(simState, nid) {
 
 // MCTS search: find best sequence of card plays for AI (player 1)
 // Returns array of cardIds to play in order
-function mctsSearch(timeMs) {
+// 純スペックC: 時間バンク。自明な局面で浮いた思考時間を貯金し、
+// 判断が割れる難しい局面で追加消費する（合計は増やさず配分を最適化）。
+let MCTS_TIME_BANK = 0;
+const MCTS_BANK_MAX = 4000; // 貯金の上限(ms)
+
+function mctsSearch(timeMs, rootBundle) {
   try {
-    const _budget = (timeMs || mctsTimeBudget());
-    const _start = Date.now();
-    let deadline = _start + _budget;
-    let _extended = false;
-    const rootState = mctsStateFromG();
+    const budget = timeMs || mctsTimeBudget();
+    const start = Date.now();
+    let deadline = start + budget;
+    let extended = false; // バンク延長／メタ延長は合わせて1回だけ
+    const rootState = rootBundle || mctsStateFromG();
     const root = new MCTSNode(rootState, null, null, 1);
     root.untriedActions = mctsEnumerateActions(rootState, 1);
 
+    // C: 選択肢が実質1つ（passのみ等）なら探索不要 → 全額貯金して即決
+    if (root.untriedActions.length <= 1) {
+      MCTS_TIME_BANK = Math.min(MCTS_BANK_MAX, MCTS_TIME_BANK + budget);
+      MCTS_LAST_ITERS = 0;
+      const only = root.untriedActions[0];
+      return (only && only.type === 'play') ? [only.cardId] : [];
+    }
+
     let iterations = 0;
-    // 反復上限を引き上げ、実質的に「時間予算」を律速にする。
-    // 無引数SimGame生成の高速化(約56倍)で同じ時間でも遥かに多く探索できるようになった。
     while (Date.now() < deadline && iterations < MCTS_MAX_ITERS) {
       iterations++;
       // 案5: メタ推論 — 探索の途中経過から「もう明確」なら早期終了し、
       // 締切間際でも拮抗しているなら1回だけ予算を延長して考え続ける。
+      // （ai-meta.js 未ロード時＝Workerスレッド等では typeof ガードでスキップ）
       if (typeof metaSearchDecide === 'function' && (iterations & 63) === 0 && root.children.length >= 2) {
-        const d = metaSearchDecide(root.children, Date.now() - _start, _budget, _extended);
+        const d = metaSearchDecide(root.children, Date.now() - start, budget, extended);
         if (d === 'stop') {
           if (typeof META_SEARCH_LAST !== 'undefined') { META_SEARCH_LAST.earlyStops++; META_SEARCH_LAST.savedMs += Math.max(0, deadline - Date.now()); }
           break;
         }
-        if (d === 'extend') {
-          _extended = true;
-          const extra = Math.round(_budget * 0.6);
+        if (d === 'extend' && !extended) {
+          extended = true;
+          const extra = Math.round(budget * 0.6);
           deadline += extra;
           if (typeof META_SEARCH_LAST !== 'undefined') { META_SEARCH_LAST.extends++; META_SEARCH_LAST.spentExtraMs += extra; }
+        }
+      }
+
+      // C: 定期チェック（256回ごと）— 圧勝の手が確定したら早期終了して貯金、
+      //    逆に締切間際でも判断が割れていたら貯金から延長して読み切る
+      if ((iterations & 255) === 0 && root.children.length >= 2) {
+        const kids = [...root.children].sort((a, b) => b.visits - a.visits);
+        const now = Date.now();
+        if (now - start > budget * 0.35 &&
+            kids[0].visits > root.visits * 0.6 && kids[0].visits > kids[1].visits * 4) {
+          MCTS_TIME_BANK = Math.min(MCTS_BANK_MAX, MCTS_TIME_BANK + (deadline - now));
+          break; // 圧倒的一位 → 残り時間を貯金して確定
+        }
+        if (!extended && MCTS_TIME_BANK > 100 && deadline - now < 60 &&
+            kids[1].visits > kids[0].visits * 0.8) {
+          const extra = Math.min(MCTS_TIME_BANK, budget); // 接戦 → 貯金で延長
+          MCTS_TIME_BANK -= extra;
+          deadline += extra;
+          extended = true;
         }
       }
       try {
@@ -2811,3 +3001,749 @@ function showDebugPanel() {
   showModal('🐛 デバッグ情報', html);
 }
 
+
+// ============================================================
+// AI透明性（学習の見える化）
+// ============================================================
+
+// ── D. 対戦中のAI思考表示（ON/OFF切替・保存）────────────────
+let AI_THINK_LOG = (function(){ try { return localStorage.getItem('dcg_ai_think_log') !== '0'; } catch(e){ return true; } })();
+function setAIThinkLog(on) {
+  AI_THINK_LOG = !!on;
+  try { localStorage.setItem('dcg_ai_think_log', on ? '1' : '0'); } catch(e){}
+}
+// AIの判断理由を対戦ログに出す（OFFなら何もしない）
+function aiThink(msg) {
+  if (!AI_THINK_LOG) return;
+  if (typeof log === 'function') log(`💭 AI: ${msg}`, 'ai-think');
+}
+
+// ── B. 性格ゲージ: 判断基準の数値を「性格」に翻訳 ─────────────
+// max はゲージが振り切れる目安（学習済み重みの実測レンジから設定）
+const AI_PERSONA_AXES = [
+  { key:'attack', label:'攻撃性',     desc:'先に殴って主導権を取りたがる',       calc:w=>(w.attackBias||0),                        max:2.0 },
+  { key:'guard',  label:'守りの意識', desc:'ブロックして被害を防ぎたがる',       calc:w=>(w.blockRisk||0),                         max:2.5 },
+  { key:'life',   label:'ライフ重視', desc:'ライフ差をどれだけ気にするか',       calc:w=>((w.life||0)+(w.lateLifeBonus||0))/2,     max:2.2 },
+  { key:'board',  label:'盤面重視',   desc:'場のクリーチャーの質と数へのこだわり', calc:w=>((w.fieldPower||0)+(w.fieldCount||0))/2,  max:2.0 },
+  { key:'hand',   label:'手札重視',   desc:'手札の枚数（選択肢）を大事にする',   calc:w=>(w.handAdv||0),                           max:1.2 },
+  { key:'tempo',  label:'マナ効率',   desc:'マナを無駄にしないよう気にする',     calc:w=>(w.manaEff||0),                           max:1.3 },
+];
+// 重み→0..100（負値は0で足切り＝「ほぼ気にしない」扱い）
+function getAIPersona(weights) {
+  return AI_PERSONA_AXES.map(ax => {
+    const raw = ax.calc(weights || {});
+    const pct = Math.max(0, Math.min(100, Math.round(raw / ax.max * 100)));
+    return { key: ax.key, label: ax.label, desc: ax.desc, pct, raw };
+  });
+}
+function personaLevelWord(pct) {
+  if (pct >= 75) return 'とても強い';
+  if (pct >= 50) return '強い';
+  if (pct >= 25) return 'ふつう';
+  return '弱い';
+}
+
+// ── A. 学習履歴ノート（localStorage永続化・最新50件）──────────
+let AI_LEARN_HISTORY = [];
+function loadAILearnHistory() {
+  try {
+    const s = localStorage.getItem('dcg_ai_learn_history');
+    AI_LEARN_HISTORY = s ? JSON.parse(s) : [];
+    if (!Array.isArray(AI_LEARN_HISTORY)) AI_LEARN_HISTORY = [];
+  } catch(e) { AI_LEARN_HISTORY = []; }
+}
+function recordAILearnEvent(entry) {
+  loadAILearnHistory();
+  AI_LEARN_HISTORY.push(entry);
+  if (AI_LEARN_HISTORY.length > 50) AI_LEARN_HISTORY = AI_LEARN_HISTORY.slice(-50);
+  try { localStorage.setItem('dcg_ai_learn_history', JSON.stringify(AI_LEARN_HISTORY)); } catch(e){}
+}
+loadAILearnHistory();
+
+// ── E. カード好みランキング用データ ──────────────────────
+function getAICardPreferences(weights) {
+  const w = weights || AI_WEIGHTS;
+  return Object.keys(w)
+    .filter(k => k.startsWith('card_'))
+    .map(k => {
+      const id = k.slice(5);
+      const cd = (typeof CARD_DB !== 'undefined') ? CARD_DB[id] : null;
+      return { id, name: cd ? cd.name : id, icon: cd ? (cd.icon || '') : '', value: w[k] || 0 };
+    })
+    .sort((a, b) => b.value - a.value);
+}
+
+// ============================================================
+// AI意味不明な行動の防止（5施策: B→A→C→D→E）
+// ============================================================
+
+// グローバル状態: 監査ログ＆パターン記憶
+let AI_DECISION_AUDIT = [];       // C案: 各判断の sanity_score
+let AI_PATTERN_BLOCKS = [];       // E案: 「この状況この行動は負けた」パターン
+let AI_SANITY_ENABLED = true;     // 妥当性チェックのON/OFF
+
+// ────────────────────────────────────────────────────────────
+// Phase B: Hard Constraints（硬い制約・明らかにおかしい行動を禁止）
+// ────────────────────────────────────────────────────────────
+
+function validateBlockingDecision(atkInst, blkInst, atkPlayer) {
+  const defender = 1 - atkPlayer;
+  const atkPow = getEffectivePower(atkPlayer, atkInst);
+  const blkPow = getEffectivePower(defender, blkInst);
+  const blkTou = getEffectiveToughness(defender, blkInst);
+  const atkTou = getEffectiveToughness(atkPlayer, atkInst);
+  const blkSurvives = (blkTou - blkInst.damage) > atkPow;
+  const atkDies = (atkTou - atkInst.damage) <= blkPow;
+  
+  // B案: Hard Constraints
+  // 1) 相打ちで負ける場合：ライフ差が極大でない限りブロック禁止
+  if (!blkSurvives && !atkDies) {
+    const me = G.players[defender];
+    const opp = G.players[atkPlayer];
+    // 相打ちで我が方クリーチャーが破壊されるのに、ライフ優位でない場合は禁止
+    if (me.life <= opp.life + 5) {
+      return false; // ブロック禁止
+    }
+  }
+  // 2) ブロッカーが死に、攻撃も通る場合：禁止
+  if (!blkSurvives && !atkDies) {
+    return false;
+  }
+  return true; // ブロック許可
+}
+
+function validateAttackDecision(candidates, player) {
+  const me = G.players[player];
+  const opp = G.players[1 - player];
+  const totalPow = candidates.reduce((s, c) => s + getEffectivePower(player, c), 0);
+  
+  // B案: Hard Constraints
+  // リーサル計算の合理性チェック
+  const untappedBlockers = opp.field.filter(c => !c.tapped).length;
+  const sorted = [...candidates].sort((a, b) => getEffectivePower(player, a) - getEffectivePower(player, b));
+  const blockedPow = sorted.slice(0, untappedBlockers).reduce((s, c) => s + getEffectivePower(player, c), 0);
+  const damageThrough = totalPow - blockedPow;
+  
+  // 攻撃してもダメージが10未満で、相手ライフが10以上の場合「無意味な攻撃」と判定
+  if (damageThrough < 10 && opp.life > 10 && G.turn > 8) {
+    return false; // 攻撃禁止（ターン8以降で無意味な攻撃は避ける）
+  }
+  return true; // 攻撃許可
+}
+
+// ────────────────────────────────────────────────────────────
+// Phase A: Sanity Check（妥当性の再確認＝ブロック判定の二重チェック）
+// ────────────────────────────────────────────────────────────
+
+function sanitizeBlockDecision(atkInst, blkInst, atkPlayer) {
+  if (!AI_SANITY_ENABLED) return true; // チェック無効時はスキップ
+  
+  // Hard Constraintsを確認
+  if (!validateBlockingDecision(atkInst, blkInst, atkPlayer)) {
+    if (typeof aiThink === 'function') aiThink('ブロック禁止: Hard Constraints違反（損失が大きすぎる）');
+    return false;
+  }
+  
+  // 追加チェック: 本当にブロック価値があるか再計算
+  const defender = 1 - atkPlayer;
+  const atkPow = getEffectivePower(atkPlayer, atkInst);
+  const blkPow = getEffectivePower(defender, blkInst);
+  const blkTou = getEffectiveToughness(defender, blkInst);
+  const atkTou = getEffectiveToughness(atkPlayer, atkInst);
+  const blkSurvives = (blkTou - blkInst.damage) > atkPow;
+  const atkDies = (atkTou - atkInst.damage) <= blkPow;
+  
+  // 最悪の場合（両方死ぬ）でも、ライフ余裕がない場合はOK
+  if (!blkSurvives && !atkDies) {
+    const me = G.players[defender];
+    if (me.life < atkPow * 2) return true; // ライフが危ないなら相打ちもOK
+  }
+  
+  return true;
+}
+
+// ────────────────────────────────────────────────────────────
+// Phase C: Decision Audit Log（判断の監査）
+// ────────────────────────────────────────────────────────────
+
+function recordDecisionAudit(decision, context, sanity_score) {
+  // sanity_score: 0-100（100=最も合理的）
+  AI_DECISION_AUDIT.push({
+    time: Date.now(),
+    decision, context, sanity_score
+  });
+  if (AI_DECISION_AUDIT.length > 500) AI_DECISION_AUDIT = AI_DECISION_AUDIT.slice(-500);
+  
+  // スコアが30未満なら警告ログ
+  if (sanity_score < 30) {
+    if (typeof aiThink === 'function') {
+      aiThink(`⚠️ 妥当性低い判断: ${decision} (score=${sanity_score})`);
+    }
+  }
+}
+
+function calculateSanityScore(decision, context) {
+  // 決定の妥当性スコア（0-100）を計算
+  // decision: 'block' | 'attack' | 'play_card' etc
+  // context: {atkPow, blkTou, lifeGap, boardState, ...}
+  
+  let score = 50; // ニュートラル
+  
+  if (decision === 'block') {
+    // ブロック妥当性: 一方的に勝てる場合は高スコア
+    if (context.atkDies && context.blkSurvives) score = 95;
+    else if (context.atkDies) score = 85;
+    else if (context.blkSurvives) score = 75;
+    else if (Math.abs(context.lifeGap) < 5) score = 65; // ライフが拮抗してる場合のみ相打ちOK
+    else score = 20; // 損な相打ちは低スコア
+  } else if (decision === 'attack') {
+    // 攻撃妥当性: リーサル見えてるか、有意なダメージを見込めるか
+    if (context.isLethal) score = 98;
+    else if (context.damageThrough >= 10) score = 75;
+    else if (context.damageThrough >= 5) score = 50;
+    else score = 20;
+  } else if (decision === 'play_card') {
+    // カード妥当性: 盤面改善できるか、マナ効率は良いか
+    if (context.improvesBoard > 2) score = 80;
+    else if (context.improvesBoard > 0) score = 60;
+    else if (context.manaEfficiency > 0.8) score = 55;
+    else score = 25;
+  }
+  
+  return Math.max(0, Math.min(100, score));
+}
+
+// ────────────────────────────────────────────────────────────
+// Phase D: Context-Aware Fallback（文脈認識フォールバック）
+// ────────────────────────────────────────────────────────────
+
+function applyContextFallback(bestOption, allOptions, context) {
+  // bestOption: 最適候補（MCTS/Greedy選択）
+  // allOptions: 全候補
+  // sanity_scoreが異常に低い場合、より安全な代替案に切り替える
+  
+  if (!bestOption) return null;
+  
+  const bestScore = (typeof calculateSanityScore === 'function')
+    ? calculateSanityScore(context.decision, {...context, option: bestOption})
+    : 50;
+  
+  // スコアが30未満で、より安全な代替案がある場合は切り替え
+  if (bestScore < 30) {
+    const saferOption = allOptions.find(opt => {
+      const optScore = (typeof calculateSanityScore === 'function')
+        ? calculateSanityScore(context.decision, {...context, option: opt})
+        : 50;
+      return optScore > bestScore + 20; // 20ポイント以上改善
+    });
+    
+    if (saferOption && typeof aiThink === 'function') {
+      aiThink(`フォールバック: 妥当性の高い判断に切り替え（${bestScore}→より高）`);
+    }
+    return saferOption || bestOption;
+  }
+  
+  return bestOption;
+}
+
+// ────────────────────────────────────────────────────────────
+// Phase E: Pattern Blocker（パターン記憶＆回避）
+// ────────────────────────────────────────────────────────────
+
+function recordLossPattern(situation) {
+  // 負けた試合のパターンを記録
+  // situation: {turn, atkPow, blkTou, atkTou, blkSurvives, atkDies, outcome:'loss'}
+  AI_PATTERN_BLOCKS.push({
+    time: Date.now(),
+    pattern: situation,
+    blocked: false
+  });
+  if (AI_PATTERN_BLOCKS.length > 200) AI_PATTERN_BLOCKS = AI_PATTERN_BLOCKS.slice(-200);
+  try {
+    localStorage.setItem('dcg_ai_pattern_blocks', JSON.stringify(AI_PATTERN_BLOCKS));
+  } catch(e) {}
+}
+
+function shouldBlockPattern(situation) {
+  // 現在の状況が「過去に負けたパターン」に合致するかチェック
+  return AI_PATTERN_BLOCKS.some(block => {
+    const p = block.pattern;
+    // パターン照合: ターン、パワー差、タフネス差が近い場合は回避
+    const turnMatch = Math.abs((G.turn || 1) - p.turn) <= 2;
+    const powMatch = Math.abs(getEffectivePower(p.atkPlayer, p.atkInst) - p.atkPow) <= 1;
+    const touMatch = Math.abs(getEffectiveToughness(p.defPlayer, p.blkInst) - p.blkTou) <= 1;
+    
+    if (turnMatch && powMatch && touMatch && !block.blocked) {
+      block.blocked = true; // 一度ブロックしたら記憶
+      return true;
+    }
+    return false;
+  });
+}
+
+function loadPatternBlocks() {
+  try {
+    const s = localStorage.getItem('dcg_ai_pattern_blocks');
+    AI_PATTERN_BLOCKS = s ? JSON.parse(s) : [];
+  } catch(e) { AI_PATTERN_BLOCKS = []; }
+}
+
+loadPatternBlocks();
+
+
+// ============================================================
+// 裏目ケア（相手の返し札を読む思考: A見える危険/B構え読み/C最悪想定/Dリスク分散/E裏目学習）
+// ============================================================
+
+// ── E. 裏目の学習: 食らった裏目カードの記憶（localStorage永続化・ゲームをまたいで保持）──
+let AI_URAME_MEMORY = {};   // {cardId: 食らった回数}
+function loadUrameMemory() {
+  try {
+    const s = localStorage.getItem('dcg_ai_urame');
+    AI_URAME_MEMORY = s ? JSON.parse(s) : {};
+    if (!AI_URAME_MEMORY || typeof AI_URAME_MEMORY !== 'object') AI_URAME_MEMORY = {};
+  } catch(e) { AI_URAME_MEMORY = {}; }
+}
+function recordUrameEvent(cardId, kind) {
+  AI_URAME_MEMORY[cardId] = (AI_URAME_MEMORY[cardId] || 0) + 1;
+  try { localStorage.setItem('dcg_ai_urame', JSON.stringify(AI_URAME_MEMORY)); } catch(e) {}
+  const cd = (typeof CARD_DB !== 'undefined') ? CARD_DB[cardId] : null;
+  if (typeof aiThink === 'function' && cd) {
+    aiThink(`裏目を記憶: 「${cd.name}」は次から警戒する（通算${AI_URAME_MEMORY[cardId]}回目）`);
+  }
+}
+// 警戒度 0〜3（食らった回数が多いほど強く警戒）
+function getUrameWariness(cardId) {
+  return Math.min(3, AI_URAME_MEMORY[cardId] || 0);
+}
+loadUrameMemory();
+
+// ── B. 枚数勘定: 相手の公開ゾーン（墓地・場）から「もう使った枚数」を数える ──
+function countOppSeenCard(oppIdx, cardId) {
+  const o = G.players[oppIdx];
+  let n = 0;
+  (o.graveyard || []).forEach(id => { if (id === cardId) n++; });
+  (o.field || []).forEach(c => { if (c.cardId === cardId) n++; });
+  (o.exile || []).forEach(id => { if (id === cardId) n++; });
+  return n;
+}
+// 相手の山＋手札にまだ残っていそうな枚数（4枚積み前提の引き算）
+function estimateOppRemaining(oppIdx, cardId) {
+  const seen = countOppSeenCard(oppIdx, cardId);
+  // 「相手がそのカードを使うデッキか」の判断:
+  //  特殊マッチ=デッキ固定で確実に入っている / それ以外=見せた or 過去に裏目を食らったカードのみ警戒
+  const knownDeck = (typeof SPECIAL_MATCH_MODE !== 'undefined' && SPECIAL_MATCH_MODE);
+  const playsIt = knownDeck || seen > 0 || getUrameWariness(cardId) > 0;
+  if (!playsIt) return 0;
+  return Math.max(0, 4 - seen);
+}
+
+// ── B. クイック警戒: 相手が「構えている」かを読む ──
+// 構えマナ＋残り枚数＋裏目記憶から、警戒レベル0〜1と脅威リストを返す
+function assessQuickRisk(oppIdx) {
+  const o = G.players[oppIdx];
+  if (!o.hand || o.hand.length === 0) return { level: 0, threats: [] };
+  const untappedMana = (o.lands || []).filter(l => !l.tapped).length;
+  if (untappedMana === 0) return { level: 0, threats: [] };
+  const threats = [];
+  Object.keys(CARD_DB).forEach(cid => {
+    const cd = CARD_DB[cid];
+    if (!cd || cd.type !== 'spell') return;
+    const isQuick = (cd.keywords && cd.keywords.includes('Quick')) || cd.quick;
+    if (!isQuick) return;
+    if (totalCost(cd.cost || {}) > untappedMana) return; // 構えマナ不足＝撃てない
+    const remaining = estimateOppRemaining(oppIdx, cid);
+    if (remaining <= 0) return; // 使い切った（枚数勘定）
+    threats.push({ cardId: cid, name: cd.name, remaining, wary: getUrameWariness(cid) });
+  });
+  if (threats.length === 0) return { level: 0, threats: [] };
+  const maxWary = Math.max(...threats.map(t => t.wary));
+  // 基本0.4、裏目経験1回ごとに+0.2（最大1.0）
+  return { level: Math.min(1, 0.4 + 0.2 * maxWary), threats };
+}
+
+// ── A. 見える裏目: 相手の場（公開情報）の危険を数値化 ──
+function assessOpponentDangers(aiIdx) {
+  const oppIdx = 1 - aiIdx;
+  const dangers = { attackPing: 0, pingSources: [], blockPunishers: [], deathtouchBlockers: [] };
+  (G.players[oppIdx].field || []).forEach(c => {
+    const cd = CARD_DB[c.cardId];
+    if (!cd) return;
+    // 僧侶タイプ: こちらの攻撃宣言のたびに2ダメージ飛んでくる
+    if (cd.onOpponentAttack === 'damage2opponent') {
+      dangers.attackPing += 2;
+      dangers.pingSources.push(cd.name);
+    }
+    const canBlock = !c.tapped || (cd.ocBlockWhileTapped && isOCActive(oppIdx));
+    if (canBlock && cd.onBlock) dangers.blockPunishers.push({ name: cd.name, effect: cd.onBlock });
+    if (canBlock && cd.deathtouch) dangers.deathtouchBlockers.push(cd.name);
+  });
+  return dangers;
+}
+
+// ── A+C+D. 攻撃前の裏目ケア本体 ──
+// attackers: 攻撃予定リスト → 裏目を織り込んで絞ったリストと説明文を返す
+function applyUrameCare(attackers, aiIdx, isLethal) {
+  const notes = [];
+  if (isLethal || !attackers || attackers.length === 0) return { attackers, notes }; // リーサル時は全力（ケア不要）
+  const oppIdx = 1 - aiIdx;
+  const isForced = c => c.mustAttack ||
+    (c.sick && CARD_DB[c.cardId].kakutou && c.entryTurn === G.turn);
+  let result = attackers.slice();
+
+  const dangers = assessOpponentDangers(aiIdx);
+  const quick = assessQuickRisk(oppIdx);
+
+  // A: 攻撃時ping（僧侶など）ケア — 宣言しただけで死ぬ攻撃者は見送り
+  if (dangers.attackPing > 0) {
+    const fragile = result.filter(c => !isForced(c) &&
+      (getEffectiveToughness(aiIdx, c) - (c.damage || 0)) <= dangers.attackPing);
+    if (fragile.length > 0) {
+      result = result.filter(c => !fragile.includes(c));
+      const names = fragile.map(c => CARD_DB[c.cardId].name).join('・');
+      notes.push(`${dangers.pingSources.join('・')}の「攻撃時2ダメージ」をケア: ${names}は攻撃を見送り`);
+    }
+  }
+
+  // B→C: クイック警戒 — 裏目経験があるほど慎重に（D: 脆い攻撃者を1体温存）
+  if (quick.level > 0 && result.length > 0) {
+    const quickDmg = 2; // 盾撃(2ダメージ)が代表的な脅威
+    const vulnerable = result.filter(c => !isForced(c) &&
+      (getEffectiveToughness(aiIdx, c) - (c.damage || 0)) <= quickDmg);
+    const threatNames = quick.threats.map(t => t.name).join('・');
+    if (quick.level >= 0.6 && vulnerable.length > 0 && result.length > 1) {
+      // 裏目経験あり: 脆い攻撃者のうち1体を温存（全滅リスクの分散）
+      const spare = vulnerable.reduce((a, b) =>
+        getEffectivePower(aiIdx, b) > getEffectivePower(aiIdx, a) ? b : a); // 一番価値の高い脆い子を守る
+      result = result.filter(c => c !== spare);
+      notes.push(`${threatNames}を警戒（相手が構えマナあり・過去に裏目経験）: ${CARD_DB[spare.cardId].name}は温存`);
+    } else if (vulnerable.length > 0) {
+      const restCount = quick.threats.reduce((s, t) => s + t.remaining, 0);
+      notes.push(`${threatNames}の可能性に注意して攻撃（残り${restCount}枚と推定）`);
+    }
+  }
+
+  // C+D: 反撃ワーストケース — 攻撃後、返しの総攻撃で負けるなら1体防御に残す
+  if (result.length > 0) {
+    const me = G.players[aiIdx];
+    const oppField = G.players[oppIdx].field || [];
+    if (oppField.length > 0) {
+      const attackerIds = new Set(result.map(c => c.instanceId));
+      // 攻撃に出すとタップ（警戒持ちは残る）→ 残る防御要員
+      const homeGuards = me.field.filter(c =>
+        !attackerIds.has(c.instanceId) || CARD_DB[c.cardId].vigilance);
+      const blockable = Math.min(homeGuards.length, oppField.length);
+      const sortedPow = oppField.map(c => getEffectivePower(oppIdx, c)).sort((a, b) => b - a);
+      let throughPow = sortedPow.slice(blockable).reduce((s, p) => s + p, 0);
+      // 模倣学習D: 全力攻撃の癖がある相手には反撃を2割増しで見積もる（強めに構える）
+      if (oppIdx === 0 && typeof getUserHabitProfile === 'function') {
+        const prof = getUserHabitProfile();
+        if (prof.allIn != null && prof.allIn > 0.7) throughPow = Math.ceil(throughPow * 1.2);
+      }
+      if (throughPow >= me.life) {
+        const recallable = result.filter(c => !isForced(c) && !CARD_DB[c.cardId].vigilance);
+        if (recallable.length > 0) {
+          const weakest = recallable.reduce((a, b) =>
+            getEffectivePower(aiIdx, b) < getEffectivePower(aiIdx, a) ? b : a);
+          result = result.filter(c => c !== weakest);
+          notes.push(`返しの総攻撃で負ける恐れ: ${CARD_DB[weakest.cardId].name}を防御に残す`);
+        }
+      }
+    }
+  }
+
+  return { attackers: result, notes };
+}
+
+// ============================================================
+// 無意義行動の撲滅（空振り・無駄撃ち・自滅を実行前に止める）
+// ============================================================
+
+// A+B. 呪文の「今使う意味」を採点（0-100）。30未満なら見送り推奨。
+function spellMeaningScore(cardId, aiIdx) {
+  const cd = CARD_DB[cardId];
+  if (!cd || cd.type !== 'spell') return { score: 60, reason: '' };
+  const oppIdx = 1 - aiIdx;
+  const oppField = G.players[oppIdx].field || [];
+  const me = G.players[aiIdx];
+
+  if (cd.effect === 'kaizen') {
+    // OC時は手札からのクリーチャー展開があるため空振りではない
+    const ocDeploy = isOCActive(aiIdx) && me.hand.some(id => {
+      const k = CARD_DB[id];
+      return k && k.type === 'creature' && totalCost(k.cost || {}) <= 8;
+    });
+    if (oppField.length === 0) {
+      return ocDeploy ? { score: 60, reason: '' }
+                      : { score: 0, reason: '対象がいない（完全に空振り）' };
+    }
+    // 過剰撃ち防止: 大物(パワー3以上)がいなければ温存（劣勢時は例外で使用OK）
+    const biggestPow = Math.max(...oppField.map(c => getEffectivePower(oppIdx, c)));
+    const losing = me.life < G.players[oppIdx].life - 3 ||
+                   me.field.length + 1 < oppField.length;
+    if (biggestPow >= 3 || ocDeploy || losing) return { score: 80, reason: '' };
+    return { score: 20, reason: `大物がいない（最大パワー${biggestPow}）ので大事に温存` };
+  }
+  if (cd.effect === 'junigeki') {
+    if (oppField.length === 0) return { score: 10, reason: '相手クリーチャーがいない（2ダメージ側が空振り）' };
+    return { score: 70, reason: '' };
+  }
+  return { score: 60, reason: '' }; // その他の呪文は通常判定に任せる
+}
+
+// E. 実行前の最終関門: 意味がなければfalse（監査記録＋💭思考表示つき）
+function gateMeaninglessCast(cardId, aiIdx, opts) {
+  const cd = CARD_DB[cardId];
+  if (!cd || cd.type !== 'spell') return true;
+  const m = spellMeaningScore(cardId, aiIdx);
+  const quiet = opts && opts.quiet;
+  if (!quiet && typeof recordDecisionAudit === 'function') {
+    recordDecisionAudit('cast_' + cardId, { turn: G.turn }, m.score);
+  }
+  if (m.score < 30) {
+    if (!quiet && typeof aiThink === 'function') {
+      aiThink(`${cd.name}は使わない: ${m.reason}（マナは構えに回す）`);
+    }
+    return false;
+  }
+  return true;
+}
+
+// ============================================================
+// 模倣学習（ユーザーの勝ち手に学び、癖は逆に突く）
+// A:勝ち手記録 B:決定打抽出 C:辞書→探索優先 D:癖の逆利用 E:強さ検証
+// ============================================================
+
+// ── 記憶（localStorage・ゲーム跨ぎ）──
+let AI_WINNING_MOVES = [];   // 勝ち手辞書 [{key, sig, kind, cardId, count, swing}]
+let AI_USER_HABITS = {};     // 癖カウンタ {blockSmallYes, blockSmallNo, attackDecl, ...}
+let AI_IMITATION_ON = true;  // E検証ゲートの採用フラグ
+function loadImitationMemory() {
+  try { AI_WINNING_MOVES = JSON.parse(localStorage.getItem('dcg_winning_moves')||'[]'); } catch(e){ AI_WINNING_MOVES=[]; }
+  if (!Array.isArray(AI_WINNING_MOVES)) AI_WINNING_MOVES = [];
+  try { AI_USER_HABITS = JSON.parse(localStorage.getItem('dcg_user_habits')||'{}'); } catch(e){ AI_USER_HABITS={}; }
+  if (!AI_USER_HABITS || typeof AI_USER_HABITS !== 'object') AI_USER_HABITS = {};
+  try { AI_IMITATION_ON = localStorage.getItem('dcg_imitation_enabled') !== '0'; } catch(e){ AI_IMITATION_ON = true; }
+}
+function saveImitationMemory() {
+  try {
+    localStorage.setItem('dcg_winning_moves', JSON.stringify(AI_WINNING_MOVES));
+    localStorage.setItem('dcg_user_habits', JSON.stringify(AI_USER_HABITS));
+    localStorage.setItem('dcg_imitation_enabled', AI_IMITATION_ON ? '1' : '0');
+  } catch(e){}
+}
+loadImitationMemory();
+
+// ── 局面シグネチャ: 「似た局面」を大づかみに束ねる指紋 ──
+// state は本物の G でも SimGame.state でも可（同じ形のフィールドを読む）
+function computeSituationSig(state, meIdx) {
+  const me = state.players[meIdx], opp = state.players[1-meIdx];
+  const t = (state.turn||1) <= 4 ? 'E' : (state.turn||1) <= 8 ? 'M' : 'L'; // 序盤/中盤/終盤
+  const lifeD = me.life - opp.life;
+  const l = lifeD > 3 ? '+' : lifeD < -3 ? '-' : '=';                      // ライフ差
+  const fieldD = (me.field||[]).length - (opp.field||[]).length;
+  const f = fieldD > 0 ? '+' : fieldD < 0 ? '-' : '=';                     // 盤面数の差
+  const mana = ((me.lands||[]).filter(x=>!x.tapped)).length;
+  const m = mana >= 5 ? '5' : String(mana);                                // 使えるマナ
+  const h = Math.min(7, (me.hand||[]).length);                             // 手札枚数
+  return `${t}${l}${f}${m}${h}`;
+}
+
+// ── B用: 軽量な形勢評価（meIdx視点、プラスほど有利）──
+function evalBoardLight(state, meIdx) {
+  const me = state.players[meIdx], opp = state.players[1-meIdx];
+  const fieldVal = p => (p.field||[]).reduce((s,c)=>{
+    const cd = CARD_DB[c.cardId]||{};
+    return s + (cd.power||0)+(c.tempPower||0) + (cd.toughness||0)+(c.tempToughness||0) - (c.damage||0);
+  }, 0);
+  return (me.life - opp.life) * 1.0
+       + (fieldVal(me) - fieldVal(opp)) * 0.8
+       + ((me.hand||[]).length - (opp.hand||[]).length) * 0.5;
+}
+
+// ── A. ユーザーの手の記録（ゲーム中のみ・勝った時だけ蒸留される）──
+function recordUserMoveForImitation(kind, detail) {
+  if (typeof NET_MODE !== 'undefined' && NET_MODE !== 'local') return;    // AI戦のみ
+  if (typeof SPECTATOR_MODE !== 'undefined' && SPECTATOR_MODE) return;    // 観戦は除外
+  if (!G._imitationLog) G._imitationLog = [];
+  if (G._imitationLog.length >= 200) return;
+  G._imitationLog.push({
+    sig: computeSituationSig(G, 0),
+    kind, detail: detail || {},
+    eval: evalBoardLight(G, 0),
+    turn: G.turn
+  });
+}
+
+// ── D. 癖カウンタ（勝敗に関係なく蓄積・ユーザーの行動だけ数える）──
+function addUserHabit(type, val) {
+  if (typeof NET_MODE !== 'undefined' && NET_MODE !== 'local') return;
+  if (typeof SPECTATOR_MODE !== 'undefined' && SPECTATOR_MODE) return;
+  AI_USER_HABITS[type] = (AI_USER_HABITS[type]||0) + (val === undefined ? 1 : val);
+  saveImitationMemory();
+}
+// 癖プロファイル（十分なサンプルがある項目だけ数値、なければnull）
+function getUserHabitProfile() {
+  const h = AI_USER_HABITS;
+  const rate = (num, den, minN) => (den >= minN ? num/den : null);
+  return {
+    blockSmall: rate(h.blockSmallYes||0, (h.blockSmallYes||0)+(h.blockSmallNo||0), 5), // 小型攻撃(パワー2以下)をブロックする率
+    blockBig:   rate(h.blockBigYes||0,   (h.blockBigYes||0)+(h.blockBigNo||0),   5),   // 大型攻撃をブロックする率
+    allIn: (h.attackDecl||0) >= 4 ? (h.attackRatioSum||0)/h.attackDecl : null,          // 攻撃宣言の全力度(0-1)
+    removeBig: rate(h.removeBigYes||0, (h.removeBigYes||0)+(h.removeBigNo||0), 3),      // 除去を最大戦力に撃つ率
+  };
+}
+// 除去の撃ち先の癖: ユーザーの除去がAIの最大パワーに当たったか記録
+function noteUserRemovalTarget(targetInstId) {
+  const aiField = G.players[1].field || [];
+  if (aiField.length === 0) return;
+  const target = aiField.find(c => c.instanceId === targetInstId);
+  if (!target) return;
+  const maxPow = Math.max(...aiField.map(c => getEffectivePower(1, c)));
+  addUserHabit(getEffectivePower(1, target) >= maxPow ? 'removeBigYes' : 'removeBigNo');
+}
+
+// ── A+B. 蒸留: ユーザーが勝った時だけ、形勢を跳ね上げた手を辞書へ ──
+function distillImitationLessons(winnerIdx) {
+  const log = G._imitationLog || [];
+  G._imitationLog = [];
+  if (winnerIdx !== 0 || log.length === 0) return 0;  // 勝者の手だけが教材（ミスの模倣を遮断）
+  let added = 0;
+  for (let i = 0; i < log.length; i++) {
+    // その手の「直後の形勢」−「直前の形勢」＝この手がどれだけ効いたか
+    const after = (i+1 < log.length) ? log[i+1].eval : log[i].eval + 5; // 最後の手は勝ちに直結したとみなす
+    const swing = after - log[i].eval;
+    if (swing < 2) continue;                          // B: 形勢を大きく良くした決定打だけ
+    const key = log[i].kind + '|' + (log[i].detail.cardId||'') + '|' + log[i].sig;
+    const hit = AI_WINNING_MOVES.find(m => m.key === key);
+    if (hit) { hit.count++; hit.swing = (hit.swing + swing) / 2; }
+    else AI_WINNING_MOVES.push({ key, sig: log[i].sig, kind: log[i].kind, cardId: log[i].detail.cardId||null, count: 1, swing });
+    added++;
+  }
+  if (AI_WINNING_MOVES.length > 200) {                // 上限: 信頼度の低いものから捨てる
+    AI_WINNING_MOVES.sort((a,b)=>(b.count-a.count) || (b.swing-a.swing));
+    AI_WINNING_MOVES = AI_WINNING_MOVES.slice(0, 200);
+  }
+  saveImitationMemory();
+  if (added > 0 && typeof aiThink === 'function') {
+    aiThink(`模倣学習: あなたの勝ち手${added}個を辞書に記録（計${AI_WINNING_MOVES.length}件）`);
+  }
+  return added;
+}
+
+// ── C. 勝ち手辞書の参照: 似た局面でその手にボーナス（2回以上見た教訓のみ信頼）──
+function getImitationBias(state, meIdx, kind, cardId) {
+  if (!AI_IMITATION_ON) return 0;
+  const sig = computeSituationSig(state, meIdx);
+  let best = 0;
+  for (const m of AI_WINNING_MOVES) {
+    if (m.kind !== kind || m.count < 2) continue;
+    if (kind === 'play' && m.cardId !== cardId) continue;
+    if (m.sig.slice(0,3) !== sig.slice(0,3)) continue; // 時期・ライフ差・盤面差が同じ＝似た局面
+    const conf = Math.min(3, m.count) * (m.sig === sig ? 1 : 0.5); // 完全一致なら満額
+    best = Math.max(best, Math.min(3, m.swing * 0.25 * conf));
+  }
+  return best;
+}
+
+// ── E. 強さ検証ゲート: 辞書あり/なしでAI自己対戦し、弱くなっていたら不採用 ──
+function verifyImitationLessons(games) {
+  games = games || 24;
+  if (AI_WINNING_MOVES.filter(m => m.count >= 2).length === 0) return null; // 検証対象なし
+  let withWins = 0, decided = 0;
+  for (let g = 0; g < games; g++) {
+    const side = g % 2;                      // 先手/後手を交互に入れ替えて公平に
+    const sim = new SimGame();
+    sim.imitation = [false, false];
+    sim.imitation[side] = true;
+    const result = sim.run();  // run()は {winner, tdScores} を返す
+    const winner = (result && typeof result === 'object') ? result.winner : result;
+    if (winner === 0 || winner === 1) { decided++; if (winner === side) withWins++; }
+  }
+  if (decided < games * 0.5) return null;    // 引き分けだらけなら判定保留
+  const rate = withWins / decided;
+  const adopted = rate >= 0.45;              // 明確に弱くなっていなければ採用（対人効果はシムでは測れない）
+  AI_IMITATION_ON = adopted;
+  saveImitationMemory();
+  const msg = `勝ち手辞書のA/B検証: 辞書あり側の勝率${Math.round(rate*100)}%（${decided}戦） → ${adopted ? '採用' : '一旦オフ（弱くなるため）'}`;
+  if (typeof recordAILearnEvent === 'function') {
+    recordAILearnEvent({ time: Date.now(), type: 'imitation_verify', note: msg });
+  }
+  if (typeof aiThink === 'function') aiThink(`模倣学習の検証: ${msg}`);
+  return { rate, adopted, decided };
+}
+
+// ============================================================
+// 純スペックB: Web Worker思考（UIを止めずに長考）
+// 思考を裏スレッドに逃がすことで、画面を固めずに時間予算を2.5倍に拡大。
+// Workerが使えない環境（file://直開き等）では従来の同期探索に自動フォールバック。
+// ============================================================
+let MCTS_WORKER = null;
+let MCTS_WORKER_READY = false;
+let _mctsWorkerReqId = 0;
+const _mctsWorkerPending = {};
+const MCTS_WORKER_BUDGET_SCALE = 2.5;
+
+function initMctsWorker() {
+  try {
+    if (typeof Worker === 'undefined') return;                 // Worker非対応環境
+    if (typeof importScripts === 'function') return;           // 自分がWorker内なら何もしない
+    MCTS_WORKER = new Worker('mcts-worker.js');
+    MCTS_WORKER.onmessage = (e) => {
+      const msg = e.data || {};
+      if (msg.type === 'ready') {
+        MCTS_WORKER_READY = true;
+        console.log('[MCTS] Worker起動 — 思考を裏スレッド化（予算2.5倍）');
+        return;
+      }
+      if (msg.type === 'result' && _mctsWorkerPending[msg.id]) {
+        const cb = _mctsWorkerPending[msg.id];
+        delete _mctsWorkerPending[msg.id];
+        cb(msg);
+      }
+    };
+    MCTS_WORKER.onerror = (err) => {
+      console.warn('[MCTS] Worker失敗 → 同期探索にフォールバック:', err && err.message);
+      MCTS_WORKER_READY = false;
+      try { MCTS_WORKER.terminate(); } catch(e2) {}
+      MCTS_WORKER = null;
+    };
+  } catch (e) { MCTS_WORKER = null; MCTS_WORKER_READY = false; }
+}
+
+// aiTurn用: Workerがあれば裏スレッドで長考、なければ従来の同期探索（Promiseを返す）
+function mctsSearchSmart() {
+  const base = mctsTimeBudget();
+  if (!MCTS_WORKER_READY || !MCTS_WORKER) {
+    return Promise.resolve(mctsSearch(base));
+  }
+  return new Promise((resolve) => {
+    const id = ++_mctsWorkerReqId;
+    const budget = Math.round(base * MCTS_WORKER_BUDGET_SCALE);
+    let settled = false;
+    const timer = setTimeout(() => {          // Workerが黙ったら同期にフォールバック
+      if (settled) return; settled = true;
+      delete _mctsWorkerPending[id];
+      resolve(mctsSearch(base));
+    }, budget + 2500);
+    _mctsWorkerPending[id] = (msg) => {
+      if (settled) return; settled = true;
+      clearTimeout(timer);
+      if (msg.plays) { MCTS_LAST_ITERS = msg.iters || 0; resolve(msg.plays); }
+      else resolve(mctsSearch(base));         // Worker内エラー → 同期で再探索
+    };
+    try {
+      MCTS_WORKER.postMessage({
+        type: 'search', id, budget,
+        bundle: mctsStateFromG(),             // 局面はメイン側で確定してから渡す
+        weights: AI_WEIGHTS,                  // 学習済みの重み・辞書を同期
+        winningMoves: AI_WINNING_MOVES,
+        imitationOn: AI_IMITATION_ON
+      });
+    } catch (e) {
+      settled = true; clearTimeout(timer); delete _mctsWorkerPending[id];
+      resolve(mctsSearch(base));
+    }
+  });
+}
+initMctsWorker();

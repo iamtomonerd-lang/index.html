@@ -439,6 +439,7 @@ function handleFieldClick(player, instId) {
         log('格闘: クリーチャーが破壊されたため攻撃中止');
         G.combatArrows = [];
         render(); updateHints();
+        if (typeof resumeAttackQueueAfterKakutou === 'function') resumeAttackQueueAfterKakutou();
         return;
       }
       // 格闘対象以外のクリーチャーはブロック可能
@@ -470,9 +471,15 @@ function handleFieldClick(player, instId) {
         G.combatArrows = [{fromId: atkInstId, toId: aiBlocker.instanceId, color: '#ff4444'}];
         log(`AI: ${CARD_DB[aiBlocker.cardId].name} が格闘をブロック（対象以外はブロック可能）`, 'important');
         render();
-        setTimeout(() => resolveSingleCombat(kkAtkP, atkInstId, null, aiBlocker.instanceId), 400);
+        setTimeout(() => {
+          resolveSingleCombat(kkAtkP, atkInstId, null, aiBlocker.instanceId);
+          resumeAttackQueueAfterKakutou();
+        }, 400);
       } else {
-        setTimeout(() => resolveSingleCombat(kkAtkP, atkInstId, kakutouTgtId, null), 300);
+        setTimeout(() => {
+          resolveSingleCombat(kkAtkP, atkInstId, kakutouTgtId, null);
+          resumeAttackQueueAfterKakutou();
+        }, 300);
       }
     }, '格闘宣言に対応');
     return;

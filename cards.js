@@ -18,7 +18,7 @@ const CARD_DB = {
     id:'eiyuu_kouho', name:'英雄候補', type:'creature', color:'W',
     cost:{W:1,C:3}, power:3, toughness:5, subtype:'人間(戦士)', icon:'⚔️',
     keywords:['格闘'], text:'■格闘\n■出た時、5ルック1(白)',
-    kakutou:true, etb:'lookKeepWhite', lookCount:5
+    kakutou:true, etb:'lookKeepWhite', lookCount:5, lookKeep:1, cardNumber:'SD1-06'
   },
   'serashia_heishi': {
     id:'serashia_heishi', name:'セラシアの兵士', type:'creature', color:'W',
