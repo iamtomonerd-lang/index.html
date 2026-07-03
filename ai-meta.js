@@ -326,6 +326,8 @@ function cardKnowledgeRecord(sim, ap, cid) {
   if (!CARD_KNOWLEDGE_COLLECT) return;
   if (!sim._ckLog) sim._ckLog = [[], []];
   sim._ckLog[ap].push(cid + '|' + ckContext(sim, ap));
+  // カードカルテ（ai-dossier.js）: 相棒・対面・旬・対象方針も同時収集
+  if (typeof dossierRecord === 'function') dossierRecord(sim, ap, cid);
 }
 
 // sim.js SimGame.run 終了時に呼ばれる: 勝敗を知識に反映
@@ -335,6 +337,8 @@ function cardKnowledgeFinish(sim, winner) {
   // カード選択と無関係に決まっており「知識」を含まないため学習から除外。
   // これが無いと「プレイできた側が勝つ」だけの無情報な統計に汚染される。
   if (sim._ckLog[0].length < 3 || sim._ckLog[1].length < 3) return;
+  // カードカルテ: 同じフィルタを通過した試合だけを知識化する
+  if (typeof dossierFinish === 'function') dossierFinish(sim, winner);
   for (let p = 0; p < 2; p++) {
     const won = p === winner ? 1 : 0;
     const seen = new Set(); // 同一ゲーム内の同カード同文脈は1回と数える
@@ -374,7 +378,12 @@ async function trainCardKnowledge(nGames, onProgress) {
   try {
     for (let i = 0; i < nGames; i += BATCH) {
       for (let j = 0; j < BATCH && i + j < nGames; j++) {
-        try { new SimGame(AI_WEIGHTS, AI_WEIGHTS, main, main, land, land).run(); } catch (e) {}
+        try {
+          const g = new SimGame(AI_WEIGHTS, AI_WEIGHTS, main, main, land, land);
+          // カードカルテ(案D): ゲームごとに対象選択方針を変えて優劣を測定
+          if (typeof dossierRandomPolicy === 'function') g._tgtPolicy = dossierRandomPolicy();
+          g.run();
+        } catch (e) {}
       }
       if (onProgress) onProgress(Math.min(i + BATCH, nGames), nGames);
       await new Promise(r => setTimeout(r, 0));
@@ -383,6 +392,7 @@ async function trainCardKnowledge(nGames, onProgress) {
     CARD_KNOWLEDGE_COLLECT = false;
   }
   saveCardKnowledge();
+  if (typeof saveCardDossier === 'function') saveCardDossier();
   return cardKnowledgeSummary();
 }
 
@@ -698,6 +708,8 @@ function showMetaAIPanel() {
         <button onclick="uiRunWeakness()" style="padding:6px 10px;background:#3a2a1a;border:1px solid #aa7744;color:#ffddaa;border-radius:4px;cursor:pointer;">🔍 弱点分析(300戦)</button>
         <button onclick="uiAfReport()" style="padding:6px 10px;background:#2a1a3a;border:1px solid #7744aa;color:#ddaaff;border-radius:4px;cursor:pointer;">🧬 特徴量レポート</button>
         <button onclick="uiAutoImprove()" style="padding:6px 10px;background:#3a1a2a;border:1px solid #aa4477;color:#ffaadd;border-radius:4px;cursor:pointer;font-weight:bold;">🚀 自律強化1サイクル</button>
+        <button onclick="closeModal();showCardDossierPanel()" style="padding:6px 10px;background:#1a3a3a;border:1px solid #44aaaa;color:#aaffff;border-radius:4px;cursor:pointer;">📇 カード百科</button>
+        <button onclick="uiOnboardNewCards()" style="padding:6px 10px;background:#3a3a1a;border:1px solid #aaaa44;color:#ffffaa;border-radius:4px;cursor:pointer;">🚼 新カード自習</button>
       </div>
       <div id="meta-ai-status" style="color:#88cc88;min-height:18px;">待機中</div>
       <div style="color:#666;font-size:10px;">対象色: ${AI_CURRENT_COLOR || 'デフォルト'} | 探索メタ判断: 早期終了${META_SEARCH_LAST.earlyStops}回 / 延長${META_SEARCH_LAST.extends}回</div>

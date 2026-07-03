@@ -519,7 +519,12 @@ function aiPlaySpellEffect(card) {
     const key = (card.effect && CARD_EFFECTS[card.effect] && CARD_EFFECTS[card.effect].apply) ? card.effect : card.id;
     let oppTargetId = null, allyTargetId = null;
     if (player.field.length > 0) {
-      const t = aiBestKillableTarget(0, 999) || player.field.reduce((a,b)=>getEffectivePower(0,b)>getEffectivePower(0,a)?b:a);
+      // カードカルテ(案D): 学習済みの最良対象方針があればそれに従う
+      const pol = (typeof dossierBestPolicy === 'function') ? dossierBestPolicy(card.id) : 'killmax';
+      let t;
+      if (pol === 'maxpow') t = player.field.reduce((a,b)=>getEffectivePower(0,b)>getEffectivePower(0,a)?b:a);
+      else if (pol === 'minhp') t = player.field.reduce((a,b)=>(getEffectiveToughness(0,b)-(b.damage||0))<(getEffectiveToughness(0,a)-(a.damage||0))?b:a);
+      else t = aiBestKillableTarget(0, 999) || player.field.reduce((a,b)=>getEffectivePower(0,b)>getEffectivePower(0,a)?b:a);
       oppTargetId = t.instanceId;
     }
     if (ai.field.length > 0) {

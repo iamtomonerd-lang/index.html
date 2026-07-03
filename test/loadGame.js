@@ -11,7 +11,7 @@ const vm = require('vm');
 const ROOT = path.join(__dirname, '..');
 
 // 読み込み順（index.html の <script src> と同じ順序）。分割が進んだらここに追記する。
-const GAME_FILES = ['cards.js', 'engine.js', 'card-effects.js', 'ai.js', 'render.js', 'sim.js', 'ai-meta.js', 'test-cards.js', 'home.js', 'demo.js', 'game.js'];
+const GAME_FILES = ['cards.js', 'engine.js', 'card-effects.js', 'ai.js', 'render.js', 'sim.js', 'ai-meta.js', 'ai-dossier.js', 'test-cards.js', 'home.js', 'demo.js', 'game.js'];
 
 // ゲーム本体JSの結合ソースを返す。
 function gameSource() {

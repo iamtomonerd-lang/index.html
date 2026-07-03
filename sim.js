@@ -592,17 +592,26 @@ class SimGame {
       p.hand.forEach((cid,i)=>{
         const card=CARD_DB[cid];
         if (card.type==='creature' && p.field.length<5 && this.canAfford(p,card.cost)) {
-          const snap=this.snapshot();
-          this.payMana(p,card.cost);
-          p.hand.splice(i,1);
-          const inst={id:this.nid++,cardId:cid,tapped:false,damage:0,sick:true,tempPower:0,tempToughness:0,entryTurn:s.turn};
-          p.field.push(inst);
-          this.simETB(ap,inst);
-          this.simCheckDeath(0); this.simCheckDeath(1);
-          let gain=this.simEval(ap)-scoreBefore + (this.w[ap]['card_'+cid]||0);
+          // 試行は本体状態を触らずクローン上で行う。
+          // 旧実装の snapshot→変異→restore は this.state を別オブジェクトに
+          // 置換するため、simTurn/simPlayCards のローカル参照(s/p)が本体から
+          // 剥離し「activePlayerが切替わらない・プレイが巻き戻る」重大バグだった。
+          const trial = SimGame.lite();
+          trial.w = this.w; trial.brain = this.brain;
+          trial.state = JSON.parse(JSON.stringify(s));
+          trial.nid = this.nid;
+          const tp = trial.state.players[ap];
+          trial.payMana(tp,card.cost);
+          tp.hand.splice(i,1);
+          const inst={id:trial.nid++,cardId:cid,tapped:false,damage:0,sick:true,tempPower:0,tempToughness:0,entryTurn:s.turn};
+          tp.field.push(inst);
+          trial.simETB(ap,inst);
+          trial.simCheckDeath(0); trial.simCheckDeath(1);
+          let gain=trial.simEval(ap)-scoreBefore + (this.w[ap]['card_'+cid]||0);
           // 案1: 自己対戦で獲得した「文脈付きカード知識」を事前分布として加算
           if (typeof cardKnowledgeBonus==='function') gain += cardKnowledgeBonus(this, ap, cid);
-          this.restore(snap);
+          // カードカルテ: 相棒(シナジー)・対面(対抗)・旬(タイミング)の知識を加算
+          if (typeof dossierBonus==='function') gain += dossierBonus(this, ap, cid);
           if (gain>bestGain){bestGain=gain;bestOption={type:'creature',i,cid,card};}
         }
         // クイック(盾撃など)は自分ターンに前のめりに使わず手札に温存する。
@@ -613,6 +622,8 @@ class SimGame {
           let gain=this.evalSpellGain(ap,card) + (this.w[ap]['card_'+cid]||0);
           // 案1: 文脈付きカード知識を事前分布として加算
           if (typeof cardKnowledgeBonus==='function') gain += cardKnowledgeBonus(this, ap, cid);
+          // カードカルテ: 相棒・対面・旬の知識を加算
+          if (typeof dossierBonus==='function') gain += dossierBonus(this, ap, cid);
           if (gain>bestGain){bestGain=gain;bestOption={type:'spell',i,cid,card};}
         }
       });
@@ -1037,6 +1048,11 @@ class SimGame {
   // 実AI(aiBestKillableTarget)と同じ「倒せる最大の脅威を除去」方針に揃える。
   simPickDamageTarget(field, damage) {
     if (!field.length) return null;
+    // カードカルテ(案D): 学習中は対象選択方針を試行し、カード別の最適方針を測定する
+    if (this._tgtPolicy && typeof dossierPickTarget === 'function') {
+      const t = dossierPickTarget(this, field, damage, this._tgtPolicy);
+      if (t) return t;
+    }
     const killable = field.filter(c => this.hp(c) <= damage);
     if (killable.length) return killable.reduce((a,b)=> this.pow(b) > this.pow(a) ? b : a);
     return field.reduce((a,b)=> this.hp(b) < this.hp(a) ? b : a);
@@ -1871,6 +1887,12 @@ function defaultDeckCounts() {
   return d;
 }
 function mutateDeckCounts(d) {
+  // カードカルテ(案A): シナジー行列があれば「相性の悪い1枚→良い1枚」の
+  // 誘導入替えを試す（確率的にランダム進化と併用し、多様性は維持）
+  if (typeof dossierGuidedDeckMutation === 'function') {
+    const g = dossierGuidedDeckMutation(d);
+    if (g) return g;
+  }
   // 1枚抜いて別カードを1枚足す（各カード0〜4枚、合計40枚を維持）
   const m = {...d};
   for (let tries=0; tries<30; tries++) {
