@@ -79,9 +79,9 @@ const PersistenceManager = {
       }
     }
 
-    // フォールバック: localStorage
+    // フォールバック: localStorage（オーバーライド前の実体を使用し無限再帰を回避）
     try {
-      localStorage.setItem(key, value);
+      _originalLocalStorage.setItem(key, value);
       return true;
     } catch (e) {
       console.error(`All persist methods failed for ${key}`, e);
@@ -114,8 +114,8 @@ const PersistenceManager = {
       }
     }
 
-    // フォールバック: localStorage
-    const stored = localStorage.getItem(key);
+    // フォールバック: localStorage（オーバーライド前の実体を使用し無限再帰を回避）
+    const stored = _originalLocalStorage.getItem(key);
     if (stored) {
       try {
         return JSON.parse(stored);
@@ -161,7 +161,7 @@ const PersistenceManager = {
         console.warn(`IndexedDB delete failed for ${key}`, e);
       }
     }
-    localStorage.removeItem(key);
+    _originalLocalStorage.removeItem(key);
   },
 
   // 全削除
@@ -179,7 +179,7 @@ const PersistenceManager = {
         console.warn('IndexedDB clear failed', e);
       }
     }
-    PERSIST_KEYS.forEach(key => localStorage.removeItem(key));
+    PERSIST_KEYS.forEach(key => _originalLocalStorage.removeItem(key));
   },
 
   // ストレージ状態確認
