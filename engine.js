@@ -5043,9 +5043,12 @@ function updateSpecialMatchDisplay() {
   const stats = getSpecialMatchStats();
   const statsDiv = document.getElementById('special-match-stats');
   if (statsDiv) {
-    document.getElementById('special-match-wins').textContent = stats.aiWins;
-    document.getElementById('special-match-loss').textContent = stats.aiLoss;
-    document.getElementById('special-match-rate').textContent = stats.rate;
+    const winsEl = document.getElementById('special-match-wins');
+    const lossEl = document.getElementById('special-match-loss');
+    const rateEl = document.getElementById('special-match-rate');
+    if (winsEl) winsEl.textContent = stats.aiWins;
+    if (lossEl) lossEl.textContent = stats.aiLoss;
+    if (rateEl) rateEl.textContent = stats.rate;
     statsDiv.style.display = stats.total > 0 ? 'block' : 'none';
   }
 }
