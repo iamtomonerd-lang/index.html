@@ -2656,6 +2656,13 @@ body.demo-recording #stack-empty-msg { font-size: 17px !important; padding: 16px
   <div id="home-record"></div>
   <div id="home-elo" style="font-size:13px;margin-top:4px;cursor:pointer;" onclick="showTrophyPanel()"></div>
   <div class="home-version">v2.1.3</div>
+  <div style="margin-top:20px;display:flex;gap:8px;flex-wrap:wrap;justify-content:center;">
+    <button onclick="exportGameData()" style="padding:8px 12px;background:#1a1a3a;border:1px solid #4466aa;color:#aaccff;border-radius:6px;font-size:12px;cursor:pointer;">💾 データを保存</button>
+    <label style="padding:8px 12px;background:#1a2a1a;border:1px solid #447744;color:#88ff88;border-radius:6px;font-size:12px;cursor:pointer;">
+      <input type="file" accept=".json" onchange="importGameData(this.files[0]);this.value='';" style="display:none">
+      📂 データを復元
+    </label>
+  </div>
 </div>
 
 <!-- Tutorial Overlay -->
@@ -2773,6 +2780,7 @@ body.demo-recording #stack-empty-msg { font-size: 17px !important; padding: 16px
   </div>
 </div>
 
+<script src="persistence.js"></script>
 <script src="cards.js"></script>
 <script src="engine.js"></script>
 <script src="card-effects.js"></script>
