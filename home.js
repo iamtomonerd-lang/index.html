@@ -656,6 +656,9 @@ if (typeof globalThis !== 'undefined') { globalThis.__runGolemVerify = (typeof r
 
 // ── PWA: Service Worker登録 ──
 if ('serviceWorker' in navigator) {
+  // ページ読込時点で既存の SW が制御中だったか（＝更新シナリオか）を記録。
+  // 初回インストール時は controller が無いため、この値で不要なリロードを防ぐ。
+  const _swHadControllerAtStart = !!navigator.serviceWorker.controller;
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' })
       .then(reg => {
@@ -663,8 +666,9 @@ if ('serviceWorker' in navigator) {
         reg.addEventListener('updatefound', () => {
           const newWorker = reg.installing;
           newWorker.addEventListener('statechange', () => {
-            // 新 SW がアクティベートされ、かつ古い SW が動作中なら自動リロード
-            if (newWorker.state === 'activated' && reg.controller) {
+            // 更新（既存SWが制御中だった）で新SWがアクティベートされた時のみ
+            // 自動リロードして最新コードを反映。初回インストールではリロードしない。
+            if (newWorker.state === 'activated' && _swHadControllerAtStart) {
               window.location.reload();
             }
           });
