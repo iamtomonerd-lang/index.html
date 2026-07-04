@@ -3210,7 +3210,7 @@ function resolveSingleCombat(atkPlayer, atkInstId, kakutouTargetId, blockerInstI
         triggerEffect(`${blkCard.name} ブロック誘発`, blkCard.icon||'✨', opp, () => {
           G.players[opp].life += 3; showLifeChange(opp, +3);
           log(`${blkCard.name}: ライフ+3`);
-          render();
+          render(); continueStack();
         });
       }
       if (blkCard.onBlock === 'damage2attacker' || blkCard.onBlock === 'damage2attackerAndCopy') {
@@ -3310,7 +3310,7 @@ function resolveSingleCombat(atkPlayer, atkInstId, kakutouTargetId, blockerInstI
       if (G.kaizenBlockDraw === opp) {
         triggerEffect('介善 ■3 ブロック誘発', '✨', opp, () => {
           drawCard(opp); log('介善 ■3: ブロック時1ドロー');
-          render();
+          render(); continueStack();
         });
       }
     }
@@ -3355,7 +3355,7 @@ function resolveSingleCombat(atkPlayer, atkInstId, kakutouTargetId, blockerInstI
           G.players[capAtkP].life -= 2;
           showLifeChange(capAtkP, -2);
           log('アレスティア ■3: 相手プレイヤーへ2ダメージ', 'damage');
-          render();
+          render(); continueStack();
         });
       }
     }
