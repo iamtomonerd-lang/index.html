@@ -551,6 +551,33 @@ function aiPlaySpellEffect(card) {
       log(`AI: ${card.name} で土地${landCount}枚分のダメージ`, 'damage');
     }
     CARD_EFFECTS.mori_kansha.apply(1, { oppTargetId });
+  } else if (typeof CARD_EFFECTS !== 'undefined' &&
+             ((card.effect && CARD_EFFECTS[card.effect] && CARD_EFFECTS[card.effect].apply) ||
+              (CARD_EFFECTS[card.id] && CARD_EFFECTS[card.id].apply))) {
+    // 汎用フォールバック（案1）: 専用のAI分岐が無い呪文でも、CARD_EFFECTS に効果定義が
+    // あれば標準的な対象（相手=倒せる最大脅威、自分=最弱）を選んで適用する。
+    // 新カード追加時にここへ分岐を書き足さなくてもAIが最低限プレイできる。
+    const key = (card.effect && CARD_EFFECTS[card.effect] && CARD_EFFECTS[card.effect].apply) ? card.effect : card.id;
+    let oppTargetId = null, allyTargetId = null;
+    if (player.field.length > 0) {
+      // カードカルテ(案D): 学習済みの最良対象方針があればそれに従う
+      const pol = (typeof dossierBestPolicy === 'function') ? dossierBestPolicy(card.id) : 'killmax';
+      let t;
+      if (pol === 'maxpow') t = player.field.reduce((a,b)=>getEffectivePower(0,b)>getEffectivePower(0,a)?b:a);
+      else if (pol === 'minhp') t = player.field.reduce((a,b)=>(getEffectiveToughness(0,b)-(b.damage||0))<(getEffectiveToughness(0,a)-(a.damage||0))?b:a);
+      else t = aiBestKillableTarget(0, 999) || player.field.reduce((a,b)=>getEffectivePower(0,b)>getEffectivePower(0,a)?b:a);
+      oppTargetId = t.instanceId;
+    }
+    if (ai.field.length > 0) {
+      const a2 = ai.field.reduce((a,b)=>getEffectiveToughness(1,b)<getEffectiveToughness(1,a)?b:a);
+      allyTargetId = a2.instanceId;
+    }
+    try {
+      CARD_EFFECTS[key].apply(1, { oppTargetId, allyTargetId });
+      log(`AI: ${card.name} を使用（汎用対象選択）`);
+    } catch (e) {
+      log(`AI: ${card.name} を使用`);
+    }
   } else {
     log(`AI: ${card.name} を使用`);
   }
@@ -865,6 +892,9 @@ function resolveAICombat() {
   // ホットシート格闘では攻撃側がP0の場合もある
   const atkP = (G._pendingBlockAtkP !== undefined && G._pendingBlockAtkP !== null) ? G._pendingBlockAtkP : 1;
   G._pendingBlockAtkP = null;
+
+  // 案4: 相手モデリング — AIの攻撃に対して人間がブロックしたか（機会と選択）を観測
+  if (atkP === 1 && atkId && typeof oppModelNoteBlockChance === 'function') oppModelNoteBlockChance(!!blkId);
 
   G.playerBlockMode = false;
   G.aiCurrentAttackers = [];

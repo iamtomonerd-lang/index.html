@@ -243,6 +243,9 @@ function initGame() {
     for (let i = 0; i < 7; i++) drawCard(p);
   }
 
+  // 案4: 相手モデリング — 新しい対局の開始（過去の観測は減衰させて引き継ぐ）
+  if (typeof oppModelNewGame === 'function') oppModelNewGame();
+
   G.phase = 'main';
 
   const retireBtn = document.getElementById('btn-retire');
@@ -962,6 +965,9 @@ function playCardFromHand(player, handIndex) {
   }
 
   if (!canAfford(player, card.cost)) { log('マナが足りません'); return; }
+
+  // 案4: 相手モデリング — 人間(P0)のカードプレイをAIが観測する
+  if (player === 0 && typeof oppModelNotePlay === 'function') oppModelNotePlay(cardId);
 
   if (card.type === 'spell') {
     if (card.effect === 'junigeki') {
@@ -3204,7 +3210,7 @@ function resolveSingleCombat(atkPlayer, atkInstId, kakutouTargetId, blockerInstI
         triggerEffect(`${blkCard.name} ブロック誘発`, blkCard.icon||'✨', opp, () => {
           G.players[opp].life += 3; showLifeChange(opp, +3);
           log(`${blkCard.name}: ライフ+3`);
-          render();
+          render(); continueStack();
         });
       }
       if (blkCard.onBlock === 'damage2attacker' || blkCard.onBlock === 'damage2attackerAndCopy') {
@@ -3304,7 +3310,7 @@ function resolveSingleCombat(atkPlayer, atkInstId, kakutouTargetId, blockerInstI
       if (G.kaizenBlockDraw === opp) {
         triggerEffect('介善 ■3 ブロック誘発', '✨', opp, () => {
           drawCard(opp); log('介善 ■3: ブロック時1ドロー');
-          render();
+          render(); continueStack();
         });
       }
     }
@@ -3349,7 +3355,7 @@ function resolveSingleCombat(atkPlayer, atkInstId, kakutouTargetId, blockerInstI
           G.players[capAtkP].life -= 2;
           showLifeChange(capAtkP, -2);
           log('アレスティア ■3: 相手プレイヤーへ2ダメージ', 'damage');
-          render();
+          render(); continueStack();
         });
       }
     }
@@ -3677,6 +3683,8 @@ function fireEndTurnEffects(player) {
 }
 
 function endTurn() {
+  // 案4: 相手モデリング — 人間がマナを構えたままターンを返したかを観測
+  if (G.activePlayer === 0 && typeof oppModelNoteEndTurn === 'function') oppModelNoteEndTurn();
   // ターン終了時のクリーチャー誘発（終了プレイヤーの分）
   fireEndTurnEffects(G.activePlayer);
   // 中央にターン終了を表示
@@ -5217,9 +5225,12 @@ function updateSpecialMatchDisplay() {
   const stats = getSpecialMatchStats();
   const statsDiv = document.getElementById('special-match-stats');
   if (statsDiv) {
-    document.getElementById('special-match-wins').textContent = stats.aiWins;
-    document.getElementById('special-match-loss').textContent = stats.aiLoss;
-    document.getElementById('special-match-rate').textContent = stats.rate;
+    const winsEl = document.getElementById('special-match-wins');
+    const lossEl = document.getElementById('special-match-loss');
+    const rateEl = document.getElementById('special-match-rate');
+    if (winsEl) winsEl.textContent = stats.aiWins;
+    if (lossEl) lossEl.textContent = stats.aiLoss;
+    if (rateEl) rateEl.textContent = stats.rate;
     statsDiv.style.display = stats.total > 0 ? 'block' : 'none';
   }
 }

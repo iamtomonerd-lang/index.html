@@ -2659,6 +2659,13 @@ body.demo-recording #stack-empty-msg { font-size: 17px !important; padding: 16px
   <div id="home-record"></div>
   <div id="home-elo" style="font-size:13px;margin-top:4px;cursor:pointer;" onclick="showTrophyPanel()"></div>
   <div class="home-version">v2.1.3</div>
+  <div style="margin-top:20px;display:flex;gap:8px;flex-wrap:wrap;justify-content:center;">
+    <button onclick="exportGameData()" style="padding:8px 12px;background:#1a1a3a;border:1px solid #4466aa;color:#aaccff;border-radius:6px;font-size:12px;cursor:pointer;">💾 データを保存</button>
+    <label style="padding:8px 12px;background:#1a2a1a;border:1px solid #447744;color:#88ff88;border-radius:6px;font-size:12px;cursor:pointer;">
+      <input type="file" accept=".json" onchange="importGameData(this.files[0]);this.value='';" style="display:none">
+      📂 データを復元
+    </label>
+  </div>
 </div>
 
 <!-- Tutorial Overlay -->
@@ -2776,16 +2783,48 @@ body.demo-recording #stack-empty-msg { font-size: 17px !important; padding: 16px
   </div>
 </div>
 
+<script src="persistence.js"></script>
 <script src="cards.js"></script>
 <script src="engine.js"></script>
 <script src="card-effects.js"></script>
 <script src="ai.js"></script>
 <script src="render.js"></script>
 <script src="sim.js"></script>
+<script src="ai-meta.js"></script>
+<script src="ai-dossier.js"></script>
 <script src="test-cards.js"></script>
 <script src="home.js"></script>
 <script src="demo.js"></script>
 <script src="game.js"></script>
+
+<!-- ZIP直開き検知: 解凍せずにZIP内のindex.htmlを開くと、隣接する.jsが
+     読み込まれず全関数が未定義になり操作不能になる。その状態を検知して
+     解凍を促すガイドを表示する（正常時は何もしない）。 -->
+<script>
+(function () {
+  if (typeof showHomeScreen === 'function') return; // スクリプトは正しく読み込まれている
+  var isFile = location.protocol === 'file:';
+  var msg = isFile
+    ? 'ゲームのファイルが読み込めませんでした。<br><br>' +
+      'ZIPを<b>解凍（展開）せずに</b>中身のindex.htmlを直接開くと、<br>' +
+      '必要なプログラム（.jsファイル）が一緒に読み込まれず動作しません。<br><br>' +
+      '<b>対処法:</b><br>' +
+      '① ダウンロードしたZIPを右クリック →「すべて展開」で解凍する<br>' +
+      '② 解凍してできた<b>フォルダ</b>を開く<br>' +
+      '③ その中の <b>index.html</b> をダブルクリックで開く<br><br>' +
+      '<small style="color:#889">※ フォルダのパスが「…\\Temp\\….zip\\…」になっている場合は、まだ解凍できていません。</small>'
+    : 'ゲームのファイル（.js）の読み込みに失敗しました。<br>ページを再読み込みするか、ファイルが揃っているか確認してください。';
+  var o = document.createElement('div');
+  o.setAttribute('style', 'position:fixed;inset:0;z-index:2147483647;background:#0a0a14;color:#e8e8f0;' +
+    'display:flex;align-items:center;justify-content:center;padding:24px;font-family:sans-serif;');
+  o.innerHTML = '<div style="max-width:560px;text-align:center;line-height:1.9;font-size:15px;">' +
+    '<div style="font-size:44px;margin-bottom:12px;">📂</div>' +
+    '<div style="font-size:19px;font-weight:bold;color:#ffcc66;margin-bottom:16px;">ZIPを解凍してから開いてください</div>' +
+    '<div style="background:#14141f;border:1px solid #33334a;border-radius:10px;padding:18px 20px;text-align:left;">' +
+    msg + '</div></div>';
+  document.body.appendChild(o);
+})();
+</script>
 
 <!-- ルール検証パネル（HTML） -->
 <div id="rule-validator" class="hidden">

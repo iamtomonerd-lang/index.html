@@ -46,7 +46,9 @@ self.requestAnimationFrame = ()=>0; self.cancelAnimationFrame = ()=>{};
 self.Peer = function(){ return { on(){}, connect(){ return { on(){}, send(){} }; }, destroy(){} }; };
 
 // ゲーム本体（探索に必要な分だけ・index.htmlと同じ順序）
-importScripts('cards.js', 'engine.js', 'card-effects.js', 'ai.js', 'sim.js');
+// ai-meta.js / ai-dossier.js は探索中の知識ボーナス・メタ推論を裏スレッドでも
+// 効かせるために追加（sim.js の typeof ガードが参照する関数群を提供する）。
+importScripts('cards.js', 'engine.js', 'card-effects.js', 'ai.js', 'sim.js', 'ai-meta.js', 'ai-dossier.js');
 
 self.onmessage = (e) => {
   const msg = e.data || {};

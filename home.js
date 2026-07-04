@@ -520,6 +520,87 @@ function dbResetDeck() {
 }
 
 // ============================================================
+// DATA EXPORT/IMPORT（IndexedDB + localStorage バックアップ）
+// ============================================================
+
+function exportGameData() {
+  const data = {
+    record: localStorage.getItem('dcg_record'),
+    decks: localStorage.getItem('dcg_decks_v2'),
+    cardDossier: localStorage.getItem('dcg_card_dossier'),
+    cardKnowledge: localStorage.getItem('CARD_KNOWLEDGE'),
+    cardKnowledgeVerify: localStorage.getItem('CARD_KNOWLEDGE_VERIFY'),
+    aiWeights: localStorage.getItem('aiWeights'),
+    specialMatchRecords: localStorage.getItem('specialMatchRecords'),
+    eloRating: localStorage.getItem('eloRating'),
+    eloHistory: localStorage.getItem('eloHistory'),
+    exportDate: new Date().toISOString(),
+    version: 'v2.1.3'
+  };
+
+  const json = JSON.stringify(data, null, 2);
+  const blob = new Blob([json], { type: 'application/json;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `dcg-backup-${new Date().getTime()}.json`;
+  link.click();
+  URL.revokeObjectURL(url);
+  log('✅ ゲームデータをダウンロードしました');
+}
+
+function importGameData(file) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = async (e) => {
+    try {
+      const data = JSON.parse(e.target.result);
+      const keys = [
+        'record', 'decks', 'cardDossier', 'cardKnowledge', 'cardKnowledgeVerify',
+        'aiWeights', 'specialMatchRecords', 'eloRating', 'eloHistory'
+      ];
+
+      for (const key of keys) {
+        if (data[key]) {
+          const lsKey = key === 'cardDossier' ? 'dcg_card_dossier'
+                      : key === 'cardKnowledge' ? 'CARD_KNOWLEDGE'
+                      : key === 'cardKnowledgeVerify' ? 'CARD_KNOWLEDGE_VERIFY'
+                      : key === 'decks' ? 'dcg_decks_v2'
+                      : key === 'record' ? 'dcg_record'
+                      : key === 'aiWeights' ? 'aiWeights'
+                      : key === 'specialMatchRecords' ? 'specialMatchRecords'
+                      : key === 'eloRating' ? 'eloRating'
+                      : key === 'eloHistory' ? 'eloHistory'
+                      : null;
+
+          if (lsKey) {
+            localStorage.setItem(lsKey, data[key]);
+            if (typeof PersistenceManager !== 'undefined') {
+              await PersistenceManager.save(lsKey, data[key]);
+            }
+          }
+        }
+      }
+
+      log(`✅ データを復元しました（${data.exportDate || '日時不明'}）`);
+      showModal('データ復元完了', `
+        <div style="color:#aaffaa;text-align:center;">
+          <div style="font-size:20px;margin:20px 0;">✓ 復元成功</div>
+          <div style="color:#888;margin-bottom:20px;">ページを再読み込みすると反映されます</div>
+          <button onclick="location.reload()" style="padding:10px 20px;background:#1a2a1a;border:1px solid #447744;color:#88ff88;border-radius:6px;cursor:pointer;">
+            🔄 ページを再読み込み
+          </button>
+        </div>
+      `);
+    } catch (err) {
+      log(`❌ ファイル読み込みエラー: ${err.message}`);
+      alert('ファイルが正しくありません');
+    }
+  };
+  reader.readAsText(file);
+}
+
+// ============================================================
 // INIT
 // ============================================================
 
@@ -575,6 +656,9 @@ if (typeof globalThis !== 'undefined') { globalThis.__runGolemVerify = (typeof r
 
 // ── PWA: Service Worker登録 ──
 if ('serviceWorker' in navigator) {
+  // ページ読込時点で既存の SW が制御中だったか（＝更新シナリオか）を記録。
+  // 初回インストール時は controller が無いため、この値で不要なリロードを防ぐ。
+  const _swHadControllerAtStart = !!navigator.serviceWorker.controller;
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' })
       .then(reg => {
@@ -582,8 +666,9 @@ if ('serviceWorker' in navigator) {
         reg.addEventListener('updatefound', () => {
           const newWorker = reg.installing;
           newWorker.addEventListener('statechange', () => {
-            // 新 SW がアクティベートされ、かつ古い SW が動作中なら自動リロード
-            if (newWorker.state === 'activated' && reg.controller) {
+            // 更新（既存SWが制御中だった）で新SWがアクティベートされた時のみ
+            // 自動リロードして最新コードを反映。初回インストールではリロードしない。
+            if (newWorker.state === 'activated' && _swHadControllerAtStart) {
               window.location.reload();
             }
           });
