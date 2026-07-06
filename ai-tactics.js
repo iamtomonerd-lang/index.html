@@ -5,9 +5,11 @@
 //   案④: 終盤の攻撃読み切り（攻撃部分集合 × 守備側最適応答のminimax）
 //   案⑥: CXアーク計画（チャージのタイミング先読み）
 //
-// このゲームの戦闘は1攻撃ずつ逐次解決され、ブロッカーはタップされない
-// （生き残れば同じウェーブ内で再ブロック可能・ダメージは蓄積）。
-// そのため「割当」ではなく「逐次応答の最適方策」をDFSで読み切る。
+// このゲームの戦闘は1攻撃ずつ逐次解決される。ルール: テキストに記載が
+// ない限り、ブロックしたクリーチャーはタップし、タップ中はブロック不可
+// （＝同一ウェーブ内での再ブロックは原則不可。ocBlockWhileTapped 持ちの
+// OC状態のみ例外的にタップ後も再ブロック可能。ダメージは蓄積）。
+// 「割当」ではなく「逐次応答の最適方策」をDFSで読み切る。
 // 盤面は各5体以下なので全列挙が現実的（分岐≤6^5、ノード上限でガード）。
 //
 // 全関数は実盤面 G を読むだけで書き換えない。engine/ai からは
@@ -56,8 +58,14 @@ function _tacPair(atkP, atk, atkDmg, defP, blk, blkDmg) {
 function _tacDefendDFS(atkP, attackers, defP, blockers, eligMatrix, defLife) {
   let nodes = 0;
   const nA = attackers.length;
-  // ブロッカーの可変状態（ダメージ蓄積・死亡）
-  const bState = blockers.map(b => ({ inst: b, dmg: b.damage || 0, alive: true }));
+  // ブロッカーの可変状態（ダメージ蓄積・死亡・ブロック済み=タップ）。
+  // ルール: ブロックしたらタップ→同一ウェーブ内の再ブロック不可。
+  // 例外: ocBlockWhileTapped 持ちがOC状態ならタップ後も再ブロック可能。
+  const ocDef = isOCActive(defP);
+  const bState = blockers.map(b => ({
+    inst: b, dmg: b.damage || 0, alive: true, blocked: false,
+    reblock: !!((CARD_DB[b.cardId] || {}).ocBlockWhileTapped && ocDef),
+  }));
   const aState = attackers.map(a => ({ inst: a, dmg: a.damage || 0, alive: true }));
 
   function leafScore(acc) {
@@ -80,14 +88,16 @@ function _tacDefendDFS(atkP, attackers, defP, blockers, eligMatrix, defLife) {
       const r = rec(i + 1, { kills: acc.kills, losses: acc.losses, lifeLoss: acc.lifeLoss + atkPow });
       best = { score: r.score, lifeLoss: r.lifeLoss, choices: [null, ...r.choices] };
     }
-    // 選択肢2: 生存中の適格ブロッカーで受ける
+    // 選択肢2: 生存中・未タップ（または再ブロック可）の適格ブロッカーで受ける
     for (let j = 0; j < bState.length; j++) {
       const b = bState[j];
       if (!b.alive || !eligMatrix[i][j]) continue;
+      if (b.blocked && !b.reblock) continue; // ブロック済み=タップ → 再ブロック不可
       const r0 = _tacPair(atkP, a.inst, a.dmg, defP, b.inst, b.dmg);
       // 状態を進めて再帰 → 巻き戻し
-      const savedB = { dmg: b.dmg, alive: b.alive }, savedA = { dmg: a.dmg, alive: a.alive };
+      const savedB = { dmg: b.dmg, alive: b.alive, blocked: b.blocked }, savedA = { dmg: a.dmg, alive: a.alive };
       b.dmg += r0.dmgToBlk; if (r0.blkDies) b.alive = false;
+      b.blocked = true;
       a.dmg += r0.dmgToAtk; if (r0.atkDies) a.alive = false;
       const acc2 = {
         kills: acc.kills + (r0.atkDies ? _tacVal(atkP, a.inst) * 0.9 : 0),
@@ -95,7 +105,7 @@ function _tacDefendDFS(atkP, attackers, defP, blockers, eligMatrix, defLife) {
         lifeLoss: acc.lifeLoss + r0.through,
       };
       const r = rec(i + 1, acc2);
-      b.dmg = savedB.dmg; b.alive = savedB.alive;
+      b.dmg = savedB.dmg; b.alive = savedB.alive; b.blocked = savedB.blocked;
       a.dmg = savedA.dmg; a.alive = savedA.alive;
       if (r.score > best.score) best = { score: r.score, lifeLoss: r.lifeLoss, choices: [b.inst, ...r.choices] };
     }

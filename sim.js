@@ -1842,6 +1842,7 @@ function mctsOrderAttackers(insts) {
         const atkPow = (atkCard.power||0)+(atk.tempPower||0);
         const blkPow = (CARD_DB[blocker.cardId].power||0)+(blocker.tempPower||0);
         blocker.damage += atkPow;
+        blocker.tapped = true; // ルール: ブロックしたらタップ（他箇所のsim戦闘と統一）
         atk.damage += blkPow;
         sim.simCheckDeath(0); sim.simCheckDeath(1);
       } else {

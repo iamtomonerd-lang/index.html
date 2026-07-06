@@ -3174,6 +3174,12 @@ function resolveSingleCombat(atkPlayer, atkInstId, kakutouTargetId, blockerInstI
     const blkInst = G.players[opp].field.find(c => c.instanceId === blockerInstId);
     if (blkInst) {
       const blkCard = CARD_DB[blkInst.cardId];
+      // ルール: テキストに記載がない限り、ブロックしたクリーチャーはタップする。
+      // （タップ中はブロック不可のため、同一ウェーブ内での再ブロックはできない。
+      //   バスティアンOC等の ocBlockWhileTapped 持ちはタップ後もブロック可能）
+      // シミュレーション(sim.js simAttack)は元からタップしており、実ゲーム側の
+      // 欠落で「1体の壁が総攻撃を全部受け切れる」齟齬が生じていたのを修正。
+      blkInst.tapped = true;
       const blkPow = getEffectivePower(opp, blkInst);
       blkInst.damage += atkPow;
       if (!atkInvuln) atkInst.damage += blkPow;
