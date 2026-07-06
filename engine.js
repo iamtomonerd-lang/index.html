@@ -3075,6 +3075,13 @@ function pickAIBlockerFor(atkPlayer, atkInstId, excludeInstId) {
   const oppField = G.players[opp].field;
   const atkInst = G.players[atkPlayer].field.find(c => c.instanceId === atkInstId);
   if (!atkInst) return null;
+
+  // 読み切りブロック(ai-tactics.js): 現在の攻撃＋残りの攻撃キュー全体に対する
+  // 逐次最適応答をDFSで計算。undefined が返った時のみ従来の貪欲ロジックへ。
+  if (typeof tacticalBlockChoice === 'function') {
+    const tac = tacticalBlockChoice(atkPlayer, atkInstId, excludeInstId);
+    if (tac !== undefined) return tac;
+  }
   // 格闘の攻撃先に指定されているクリーチャーはブロックできない
   const kkTargeted = new Set(Object.values(G.kakutouTargets || {}));
   if (G.directlyAttackedCreatures) G.directlyAttackedCreatures.forEach(id => kkTargeted.add(id));

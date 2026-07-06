@@ -1260,11 +1260,19 @@ class MCTSNode {
     this.parent = parent;
     this.action = action;     // {type:'play'|'attack'|'pass', ...} action that led here
     this.children = [];
-    this.visits = 0;
-    this.wins = 0.0;
+    // 案⑤: 統計を共有可能なオブジェクトに分離。置換表(TT)で同一局面の
+    // 双子ノード（例: A→B と B→A のプレイ順違い）が stats を共有し、
+    // 訪問数・勝率が合算される＝実効シミュレーション数が増える。
+    this.stats = { visits: 0, wins: 0.0 };
     this.untriedActions = null; // null = not yet expanded
     this._nid = simNid || 1;
   }
+
+  // 既存コード互換: node.visits / node.wins の読み書きは stats に委譲
+  get visits() { return this.stats.visits; }
+  set visits(v) { this.stats.visits = v; }
+  get wins() { return this.stats.wins; }
+  set wins(v) { this.stats.wins = v; }
 
   ucb1() {
     if (this.visits === 0) return Infinity;
@@ -1280,6 +1288,22 @@ class MCTSNode {
     return this.children.reduce((best, c) => c.visits > best.visits ? c : best);
   }
 }
+
+// 案⑤: 決定に関わる状態の compact ハッシュ（置換表・木の再利用のキー）
+function mctsStateHash(s) {
+  let h = s.turn + '@' + s.activePlayer;
+  for (let i = 0; i < 2; i++) {
+    const p = s.players[i];
+    h += '#' + p.life + ';' + [...p.hand].sort().join(',') +
+      ';' + (p.mana.W || 0) + 'w' + (p.mana.C || 0) +
+      ';' + p.field.map(c => c.cardId + ':' + (c.tapped ? 1 : 0) + ':' + (c.damage || 0) +
+        ':' + (c.sick ? 1 : 0) + ':' + (c.tempPower || 0) + ':' + (c.tempToughness || 0)).join('|') +
+      ';' + p.lands.length + ';' + p.deck.length + ';' + p.graveyard.length;
+  }
+  return h;
+}
+let MCTS_TT_STATS = { merged: 0, rootReuse: 0 };
+let _mctsRootCache = null; // {hash, root} 直近探索の木（同一局面の再探索時に丸ごと再利用）
 
 // Convert current G.players to SimGame-compatible state
 function mctsStateFromG() {
@@ -1319,14 +1343,39 @@ function deterministicState(baseState) {
   const p0 = s.players[0];
   const handSize = p0.hand.length;
   if (handSize === 0 || p0.deck.length === 0) return s;
-  // shuffle deck copy and take handSize cards as the "sampled" hand
   const deck = [...p0.deck];
-  for (let i = deck.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [deck[i], deck[j]] = [deck[j], deck[i]];
+  // 案②: 相手手札のベイズ推定 — 観測（マナの構え・大量マナ温存の癖）から
+  // 「手札に残っていそうな札」に重みを付けてサンプルする。観測不足なら一様。
+  const wts = (typeof oppModelHandWeights === 'function') ? oppModelHandWeights(deck) : null;
+  if (wts) {
+    const hand = [];
+    const pool = deck.map((cid, i) => ({ cid, w: Math.max(0.01, wts[i] || 1) }));
+    const take = Math.min(handSize, pool.length);
+    for (let k = 0; k < take; k++) {
+      let total = 0;
+      for (const it of pool) total += it.w;
+      let r = Math.random() * total;
+      let pick = 0;
+      for (let i = 0; i < pool.length; i++) { r -= pool[i].w; if (r <= 0) { pick = i; break; } }
+      hand.push(pool[pick].cid);
+      pool.splice(pick, 1);
+    }
+    p0.hand = hand;
+    p0.deck = pool.map(it => it.cid);
+    // 山札側は順序をランダム化
+    for (let i = p0.deck.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [p0.deck[i], p0.deck[j]] = [p0.deck[j], p0.deck[i]];
+    }
+  } else {
+    // shuffle deck copy and take handSize cards as the "sampled" hand
+    for (let i = deck.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [deck[i], deck[j]] = [deck[j], deck[i]];
+    }
+    p0.hand = deck.slice(0, Math.min(handSize, deck.length));
+    p0.deck = deck.slice(p0.hand.length);
   }
-  p0.hand = deck.slice(0, Math.min(handSize, deck.length));
-  p0.deck = deck.slice(p0.hand.length);
   // 案4: 相手モデリング — 観測した「マナ構え→クイック割込み」傾向を
   // サンプル手札に反映（構えている相手の手札にクイックを混ぜる）
   if (typeof oppModelAdjustSample === 'function') oppModelAdjustSample(s);
@@ -1428,8 +1477,21 @@ function mctsSearch(timeMs, rootBundle) {
     let deadline = start + budget;
     let extended = false; // バンク延長／メタ延長は合わせて1回だけ
     const rootState = rootBundle || mctsStateFromG();
-    const root = new MCTSNode(rootState, null, null, 1);
-    root.untriedActions = mctsEnumerateActions(rootState, 1);
+    // 案⑤: 同一局面の再探索なら前回の木を丸ごと引き継ぐ（Workerタイムアウト後の
+    // 同期再探索や、状態が変わらないままの再呼び出しで訪問数を無駄にしない）
+    const rootHash = mctsStateHash(rootState);
+    let root;
+    if (_mctsRootCache && _mctsRootCache.hash === rootHash) {
+      root = _mctsRootCache.root;
+      root.parent = null;
+      MCTS_TT_STATS.rootReuse++;
+    } else {
+      root = new MCTSNode(rootState, null, null, 1);
+      root.untriedActions = mctsEnumerateActions(rootState, 1);
+    }
+    // 案⑤: 置換表 — この探索中に生成された局面のstatsをハッシュで共有
+    const _tt = new Map();
+    _tt.set(rootHash, root.stats);
 
     // C: 選択肢が実質1つ（passのみ等）なら探索不要 → 全額貯金して即決
     if (root.untriedActions.length <= 1) {
@@ -1493,6 +1555,12 @@ function mctsSearch(timeMs, rootBundle) {
           const action = node.untriedActions.splice(actionIdx, 1)[0];
           const { state: newState, nid: newNid } = mctsApplyAction(node.state, action, node._nid);
           const child = new MCTSNode(newState, node, action, newNid);
+          // 案⑤: 置換表 — 同一局面（プレイ順違い等）の双子ノードとstatsを共有。
+          // 双子で得た訪問・勝敗が合算され、UCB1が正確になり実効予算が増える。
+          const h = mctsStateHash(newState);
+          const twin = _tt.get(h);
+          if (twin) { child.stats = twin; MCTS_TT_STATS.merged++; }
+          else _tt.set(h, child.stats);
           if (action.type === 'play') {
             child.untriedActions = mctsEnumerateActions(newState, newNid);
           } else {
@@ -1517,6 +1585,8 @@ function mctsSearch(timeMs, rootBundle) {
       }
     }
     MCTS_LAST_ITERS = iterations; // 診断用: 直近の探索反復数
+    // 案⑤: 木を保存 — 同一局面で再探索された場合に丸ごと再利用する
+    _mctsRootCache = { hash: rootHash, root };
 
     // Extract best action sequence: follow most-visited path
     const plays = [];
@@ -1821,7 +1891,7 @@ SimGame.prototype._canFlyBlock = function(atk, blk) {
 // ── 汎用MCTSオプション選択 ──────────────────────────────────────────
 // options: 選択肢の配列, applyToSim(sim, option): シム状態に選択を適用する関数
 // 各選択肢をrolloutで評価し、P1の勝率が最高のものを返す
-function mctsPickOption(options, applyToSim) {
+function mctsPickOption(options, applyToSim, priorFn) {
   if (options.length === 0) return null;
   if (options.length === 1) return options[0];
   const budget = Math.min(mctsTimeBudget(), 250);
@@ -1867,7 +1937,8 @@ function mctsPickOption(options, applyToSim) {
   let bestIdx = 0, bestRate = -1;
   for (let i = 0; i < options.length; i++) {
     if (trials[i] === 0) continue;
-    const rate = wins[i] / trials[i];
+    // 案⑥等: 事前知識ボーナス（勝率単位）をロールアウト勝率に加算して選択
+    const rate = wins[i] / trials[i] + (priorFn ? priorFn(options[i]) : 0);
     if (rate > bestRate) { bestRate = rate; bestIdx = i; }
   }
   return options[bestIdx];
@@ -3424,6 +3495,9 @@ function applyUrameCare(attackers, aiIdx, isLethal) {
   }
 
   // C+D: 反撃ワーストケース — 攻撃後、返しの総攻撃で負けるなら1体防御に残す
+  // 案③(ai-tactics.js)の正確な返し即死チェックがある場合はそちらに委ねる
+  // （粗い見積もりとの二重削りで攻撃が過剰に萎縮するのを防ぐ）
+  if (typeof tacticalCrackbackDeath === 'function') return { attackers: result, notes };
   if (result.length > 0) {
     const me = G.players[aiIdx];
     const oppField = G.players[oppIdx].field || [];

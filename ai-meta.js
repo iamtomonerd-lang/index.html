@@ -424,6 +424,7 @@ let OPP_MODEL = {
   blockOpp: 0, blockTaken: 0,   // ブロック機会 / 実際にブロックした回数
   holdTurns: 0, endTurns: 0,    // マナを構えてターンを返した回数 / 観測ターン数
   quickFromHold: 0,             // AIターン中にクイックを撃ってきた回数
+  bigHoldTurns: 0,              // 案②: 3マナ以上を残してターンを返した回数（高コスト札温存の癖）
   seenPlays: {},                // 今ゲームで見えた相手のプレイ {cardId: n}
 };
 (function () {
@@ -446,7 +447,7 @@ function _oppModelObservable() {
 // ゲーム開始時: 記憶は残しつつ直近の行動を重視（指数減衰）
 function oppModelNewGame() {
   if (!_oppModelObservable()) return;
-  for (const k of ['blockOpp', 'blockTaken', 'holdTurns', 'endTurns', 'quickFromHold']) {
+  for (const k of ['blockOpp', 'blockTaken', 'holdTurns', 'endTurns', 'quickFromHold', 'bigHoldTurns']) {
     OPP_MODEL[k] = (OPP_MODEL[k] || 0) * 0.85;
   }
   OPP_MODEL.seenPlays = {};
@@ -477,8 +478,34 @@ function oppModelNoteBlockChance(blocked) {
 function oppModelNoteEndTurn() {
   if (!_oppModelObservable() || typeof G === 'undefined' || !G) return;
   OPP_MODEL.endTurns++;
-  if (G.players[0].lands.some(l => !l.tapped)) OPP_MODEL.holdTurns++;
+  const untapped = G.players[0].lands.filter(l => !l.tapped).length;
+  if (untapped > 0) OPP_MODEL.holdTurns++;
+  if (untapped >= 3) OPP_MODEL.bigHoldTurns++; // 案②: 大量マナ温存＝高コスト札を抱えている兆候
   oppModelSave();
+}
+
+// 案②: determinization用のサンプル重み。山札の各カードについて
+// 「相手の手札に残っていそうな度合い」を観測ベースで返す（1=中立）。
+// - クイック構え実績が高い相手 → クイック札の手札確率を上げる
+// - 3マナ以上を残して返す癖 → 高コスト札を抱えていると読む／軽い札は既に切られている
+// 観測が少ないうちは null（従来の一様サンプル）。
+function oppModelHandWeights(deck) {
+  if (!META_AI.oppModel) return null;
+  const m = OPP_MODEL;
+  if ((m.endTurns || 0) < 4) return null;
+  const quickRate = Math.min(0.9, (m.quickFromHold || 0) / Math.max(1, m.holdTurns || 1));
+  const bigRate = Math.min(0.9, (m.bigHoldTurns || 0) / Math.max(1, m.endTurns || 1));
+  if (quickRate < 0.1 && bigRate < 0.15) return null; // シグナル無し → 一様のまま
+  return deck.map(cid => {
+    const c = CARD_DB[cid];
+    if (!c) return 1;
+    let w = 1;
+    if (c.keywords && c.keywords.includes('Quick')) w *= 1 + quickRate * 2;
+    const cost = totalCost(c.cost || {});
+    if (cost >= 4) w *= 1 + bigRate * 1.5;
+    else if (cost <= 1) w *= Math.max(0.6, 1 - bigRate * 0.5);
+    return w;
+  });
 }
 
 // sim.js simPickBlocker(守備側=P0)から: 観測ブロック率で判定値を補正
