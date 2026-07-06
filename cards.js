@@ -6,7 +6,8 @@ const CARD_DB = {
   'shinmai_heishi': {
     id:'shinmai_heishi', name:'新米兵士', type:'creature', color:'W',
     cost:{W:1}, power:1, toughness:3, subtype:'人間(戦士)', icon:'🛡️',
-    keywords:[], text:''
+    keywords:['警戒'], text:'■警戒',
+    vigilance:true
   },
   'ten_kara_shisha': {
     id:'ten_kara_shisha', name:'天からの使者', type:'creature', color:'W',
@@ -34,9 +35,9 @@ const CARD_DB = {
   },
   'serashia_souryo': {
     id:'serashia_souryo', name:'セラシアの僧侶', type:'creature', color:'W',
-    cost:{W:3,C:2}, power:5, toughness:7, subtype:'人間(聖職者)', icon:'🙏',
-    keywords:['C8'], text:'■出た時、相手クリーチャー１体選ぶ。次の相手のターン中、そのクリーチャーは可能なら攻撃する。その後、1枚引く\n■相手の攻撃時、相手のクリーチャー１体に2ダメージ\n■ブロック時、自分のライフを3回復\n〈C8〉\n■ブロック時、自分のクリーチャー全てを+1/+1',
-    etb:'mustAttackTargetThenDraw', onOpponentAttack:'damage2opponent', onBlock:'gain3life', cx8Block:'buffAllAlly'
+    cost:{W:3,C:2}, power:4, toughness:6, subtype:'人間(聖職者)', icon:'🙏',
+    keywords:['C8'], text:'■出た時、相手クリーチャー１体選ぶ。次の相手のターン中、そのクリーチャーは可能なら攻撃する。その後、1枚引く\n■相手の攻撃時、相手のクリーチャー１体に2ダメージ\n〈C8〉\n■ブロック時、自分のクリーチャー全てを+1/+1',
+    etb:'mustAttackTargetThenDraw', onOpponentAttack:'damage2opponent', cx8Block:'buffAllAlly'
   },
   'bastian': {
     id:'bastian', name:'絶対守護 バスティオン', type:'creature', color:'W',
@@ -104,7 +105,7 @@ const CARD_DB = {
   // CREATURES
   'hayaashi_goblin': {
     id:'hayaashi_goblin', name:'早足ゴブリン', type:'creature', color:'R',
-    cost:{R:2}, power:1, toughness:1, subtype:'ゴブリン（戦士）', icon:'👹',
+    cost:{R:2}, power:2, toughness:1, subtype:'ゴブリン（戦士）', icon:'👹',
     keywords:['速攻'], text:'■速攻',
     haste:true
   },
@@ -236,7 +237,7 @@ const CARD_DB = {
   },
   'bu_in': {
     id:'bu_in', name:'万象蒐集会部員', type:'creature', color:'U',
-    cost:{U:1,C:1}, power:1, toughness:1, subtype:'人間(ウィザード)', icon:'📋',
+    cost:{U:1,C:1}, power:1, toughness:2, subtype:'人間(ウィザード)', icon:'📋',
     text:'■このターン、自分が2枚目以降のカードを引く時、相手クリーチャー1体に3ダメージ',
     onDrawTrigger2nd:'damage3creature'
   },
@@ -272,7 +273,7 @@ const CARD_DB = {
   },
   'hitei': {
     id:'hitei', name:'否定', type:'spell', color:'U',
-    cost:{U:2,C:2}, icon:'🚫', quick:true,
+    cost:{U:1,C:1}, icon:'🚫', quick:true,
     keywords:['Quick'],
     text:'■スタックの一つ下を打ち消す',
     effect:'hitei'
@@ -344,8 +345,8 @@ const CARD_DB = {
     id:'itazura_obake', name:'いたずらお化け', type:'creature', color:'B',
     cost:{C:1,B:2}, power:2, toughness:1, subtype:'ゴースト', icon:'👻',
     keywords:[],
-    text:'■出た時、相手は自身の手札を1枚選んで捨てる',
-    etb:'opp_discard1'
+    text:'■出た時、相手は自身の手札をランダムに1枚捨てる',
+    etb:'opp_discard1_random'
   },
   'haka_zombie': {
     id:'haka_zombie', name:'墓守ゾンビ', type:'creature', color:'B',
@@ -417,7 +418,7 @@ const CARD_DB = {
   // ============================================================
   'foklya': {
     id:'foklya', name:'村長樹妃 フォクリア', type:'creature', color:'G',
-    cost:{C:3,G:3}, power:6, toughness:6, subtype:'', icon:'🌳',
+    cost:{C:3,G:3}, power:4, toughness:5, subtype:'', icon:'🌳',
     keywords:['格闘','貫通'],
     text:'■格闘　■貫通\n■出た時、2枚還元してもよい。そうした時、2枚引く\n■ランドが出た時、相手に2ダメージ\n■起動(還元):自分のクリーチャー1体選ぶ。それはこのターン離れない',
     kakutou:true, trample:true, etb:'foklya_kaizou2draw2', landEnterDamage2:true, activated:'foklya_protect'

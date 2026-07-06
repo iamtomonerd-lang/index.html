@@ -151,14 +151,16 @@ function runCardTests() {
     assert('onBlock draw1: 兵士ブロック時1ドロー', G.players[0].hand.length === handBefore+1);
   });
 
-  // 8. onBlock gain3life: セラシアの僧侶がブロック時にライフ+3
+  // 8. cx8Block buffAllAlly: セラシアの僧侶がC8達成時にブロックで自軍全体+1/+1
   withState(()=>{
-    G.players[0].life = 20;
-    const atk = _testAddCreature(1,'shinmai_heishi');     // 1/2
-    const blk = _testAddCreature(0,'serashia_souryo');    // 3/5 onBlock:gain3life
+    for (let i=0;i<8;i++) G.players[0].lands.push({instanceId:800+i, cardId:'hito_heichi', tapped:false, chargeCard:null});
+    const atk = _testAddCreature(1,'shinmai_heishi');     // 1/3
+    const blk = _testAddCreature(0,'serashia_souryo');    // 4/6 C8ブロック時全体+1/+1
+    const ally = _testAddCreature(0,'shinmai_heishi');    // 1/3 (バフ対象確認用の僚機)
     resolveSingleCombat(1, atk.instanceId, null, blk.instanceId);
-    drainStack(); // スタックのonBlock誘発を解決
-    assert('onBlock gain3life: 僧侶ブロック時ライフ+3', G.players[0].life===23);
+    drainStack(); // スタックのcx8Block誘発を解決
+    const allyNow = G.players[0].field.find(x=>x.instanceId===ally.instanceId);
+    assert('cx8Block buffAllAlly: C8達成時、僧侶ブロックで自軍全体+1/+1', allyNow && getEffectivePower(0,allyNow)===2 && getEffectiveToughness(0,allyNow)===4);
   });
 
   // 9. onBlock damage2attacker: 盾兵がブロック時に攻撃者に2ダメージ (AI blocker)

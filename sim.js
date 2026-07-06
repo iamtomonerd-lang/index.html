@@ -986,11 +986,15 @@ class SimGame {
         me.graveyard.push(card);
       }
     } else if (card.effect==='kaitaku1spell' || card.id==='tami_kaitaku') {
-      // 民による開拓: 開拓:1 (sim: kaitakuTurns++)
+      // 民による開拓: 開拓:1 → 土地デッキから1枚を場に出す（タップ状態）
       if (!s.kaitakuTurns) s.kaitakuTurns = 0;
       s.kaitakuTurns++;
+      if (me.landDeck && me.landDeck.length > 0) {
+        const landId = me.landDeck.shift();
+        me.lands.push({ id: this.nid++, cardId: landId, tapped: true, chargeCard: null });
+      }
     } else if (card.effect==='mori_kansha' || card.id==='mori_kansha') {
-      // 森への感謝: 土地数分ダメージ + 開拓:1
+      // 森への感謝: 土地数分ダメージ(開拓の1枚が入る前の枚数) + 開拓:1
       const damageAmount = me.lands.length;
       if (damageAmount > 0 && opp.field.length) {
         const tgt = opp.field.reduce((a,b)=>this.hp(b)<this.hp(a)?b:a);
@@ -1001,6 +1005,10 @@ class SimGame {
       }
       if (!s.kaitakuTurns) s.kaitakuTurns = 0;
       s.kaitakuTurns++;
+      if (me.landDeck && me.landDeck.length > 0) {
+        const landId = me.landDeck.shift();
+        me.lands.push({ id: this.nid++, cardId: landId, tapped: true, chargeCard: null });
+      }
     }
   }
 

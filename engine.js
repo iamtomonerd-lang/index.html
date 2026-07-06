@@ -1614,18 +1614,18 @@ function resolveETBEffect(player, instanceId) {
     }};
     log(`${card.name} 出た時: 2ダメージの対象を選択`);
     render(); updateHints();
-  } else if (card.etb === 'opp_discard1') {
-    // いたずらお化け: 相手は自身の手札を1枚選んで捨てる
-    if (G.players[opp].hand.length === 0) { log(`${card.name} 出た時: 相手の手札が空`); continueStack(); return; }
-    // 相手視点で選んで捨てる（プレイヤーが相手=opp=人間ならモーダル、AIなら自動）
-    if (opp === 0 && NET_MODE !== 'guest') {
-      G._discardCont = () => continueStack();
-      _promptDiscard(0, 1);
-    } else {
-      discardCards(opp, 1, 'auto');
-      log(`${card.name} 出た時: 相手は手札を1枚捨てた`, 'important');
-      continueStack();
-    }
+  } else if (card.etb === 'opp_discard1_random') {
+    // いたずらお化け: 相手は自身の手札をランダムに1枚捨てる。
+    // 手札は非公開情報のため「キャスターが選ぶ」は成立せず、また「相手(＝捨てる本人)が
+    // 選ぶ」だと常に一番価値の低いカードを安全に捨てられてしまい妨害として機能しない。
+    // ランダム discard にすることで手札破壊として実際に機能する。
+    const oppP = G.players[opp];
+    if (oppP.hand.length === 0) { log(`${card.name} 出た時: 相手の手札が空`); continueStack(); return; }
+    const idx = Math.floor(Math.random() * oppP.hand.length);
+    const discarded = oppP.hand.splice(idx, 1)[0];
+    oppP.graveyard.push(discarded);
+    log(`${card.name} 出た時: ${opp===0?'自分':'相手'}は${CARD_DB[discarded]?.name||discarded}をランダムに捨てた`, 'important');
+    render(); updateHints(); continueStack();
   } else if (card.etb === 'shiki_distribute') {
     // 死を食らうもの シキ: 自分の墓地の枚数分、相手クリーチャー1体と相手プレイヤーに割り振る
     resolveShikiDistribute(player);
@@ -4562,9 +4562,13 @@ function getCXBonus(player, creature) {
   const card = CARD_DB[creature.cardId];
   if (!card.keywords) return {power:0, toughness:0};
   const cx = getCXValue(player);
+  // OC(cx>=10)はC8(cx>=8)を包含するため、上位ティアのボーナス(ocBuff44)を
+  // 先に判定する。逆順だとOC到達後も常にC8側の+3/+3で頭打ちになり、
+  // カードテキスト通りの〈OC〉+4/+4 が永久に発動しない不具合になっていた
+  // （フォルクス: C8で判定が先に確定してしまいOC分が到達不能だった）。
   if (card.id === 'bastian' && card.cx8Buff && cx >= 8) return {power:3, toughness:3};
-  if (card.cx8Buff33 && cx >= 8) return {power:3, toughness:3};
   if (card.ocBuff44 && isOCActive(player)) return {power:4, toughness:4};
+  if (card.cx8Buff33 && cx >= 8) return {power:3, toughness:3};
   return {power:0, toughness:0};
 }
 
