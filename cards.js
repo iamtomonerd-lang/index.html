@@ -111,7 +111,7 @@ const CARD_DB = {
   },
   'kururu': {
     id:'kururu', name:'福来る竜 クルル', type:'creature', color:'R',
-    cost:{C:1,R:1}, power:1, toughness:1, subtype:'ドラゴン', icon:'🐉',
+    cost:{C:1,R:1}, power:2, toughness:2, subtype:'ドラゴン', icon:'🐉',
     keywords:[], text:'■攻撃時、1枚引く',
     onAttack:'draw1'
   },
@@ -223,7 +223,7 @@ const CARD_DB = {
   },
   'chishiki_maju': {
     id:'chishiki_maju', name:'知識集めの魔術師', type:'creature', color:'U',
-    cost:{U:1,C:1}, power:1, toughness:1, subtype:'人間(ウィザード)', icon:'🔮',
+    cost:{U:1,C:1}, power:1, toughness:2, subtype:'人間(ウィザード)', icon:'🔮',
     text:'■出た時、1枚引く',
     etb:'draw1'
   },
@@ -336,7 +336,7 @@ const CARD_DB = {
   },
   'skeleton_senshi': {
     id:'skeleton_senshi', name:'スケルトンの戦士', type:'creature', color:'B',
-    cost:{B:1}, power:0, toughness:1, subtype:'スケルトン', icon:'🦴',
+    cost:{B:1}, power:1, toughness:1, subtype:'スケルトン', icon:'🦴',
     keywords:['接死'],
     text:'■接死',
     deathtouch:true
@@ -350,7 +350,7 @@ const CARD_DB = {
   },
   'haka_zombie': {
     id:'haka_zombie', name:'墓守ゾンビ', type:'creature', color:'B',
-    cost:{C:1,B:1}, power:2, toughness:2, subtype:'人間、ゾンビ', icon:'🧟',
+    cost:{B:1}, power:2, toughness:1, subtype:'人間、ゾンビ', icon:'🧟',
     keywords:[],
     text:'■出た時、自分の山札の上から2枚墓地に置き、相手クリーチャー1体に2ダメージ',
     etb:'mill2_damage2'
@@ -467,14 +467,14 @@ const CARD_DB = {
   },
   'iwai_tami': {
     id:'iwai_tami', name:'祝いの民', type:'creature', color:'G',
-    cost:{G:2}, power:2, toughness:2, subtype:'人間', icon:'🎊',
+    cost:{G:1}, power:2, toughness:2, subtype:'人間', icon:'🎊',
     keywords:[],
     text:'■自分の場にランドが出た時、相手クリーチャー1体に１ダメージ',
     landEnterDamage1creature:true
   },
   'matsuri_otoko': {
     id:'matsuri_otoko', name:'祭り男', type:'creature', color:'G',
-    cost:{C:1,G:1}, power:1, toughness:1, subtype:'人間', icon:'🎆',
+    cost:{G:1}, power:1, toughness:1, subtype:'人間', icon:'🎆',
     keywords:[],
     text:'■自分の場にランドが出た時、＋1/＋1',
     landEnterBuff11:true

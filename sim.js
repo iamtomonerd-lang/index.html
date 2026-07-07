@@ -1047,14 +1047,33 @@ class SimGame {
     if (card.etb==='damage1opponent') dealDmg(1);
     else if (card.etb==='damage2opponent_always_cx6damage3') dealDmg(2);
     else if (card.etb==='damage3opponent') dealDmg(3);
-    else if ((card.etb==='look3keep1white'||card.etb==='look3keep1blue'||card.etb==='look2keep1red') && me.deck.length) me.hand.push(me.deck.shift());
+    else if (card.etb==='damage2creature' && opp.field.length) dealDmg(2);
+    else if (card.etb==='mill2_damage2') { for(let i=0;i<2&&me.deck.length;i++) me.graveyard.push(me.deck.shift()); dealDmg(2); }
+    else if ((card.etb==='look3keep1white'||card.etb==='look3keep1blue'||card.etb==='look2keep1red'
+             ||card.etb==='look3keep1red'||card.etb==='look3keep1black'||card.etb==='lookKeepWhite'
+             ||card.etb==='search1') && me.deck.length) me.hand.push(me.deck.shift());
     else if (card.etb==='draw1' && me.deck.length) me.hand.push(me.deck.shift());
     else if (card.etb==='omnieru_hand5') { while(me.hand.length<5&&me.deck.length) me.hand.push(me.deck.shift()); }
-    else if (card.etb==='mustAttackTarget') {
+    else if (card.etb==='foklya_kaizou2draw2' && me.lands.length>=2) {
+      for(let i=0;i<2;i++){ const l=me.lands.pop(); me.landDeck.push(l.cardId); }
+      for(let i=0;i<2&&me.deck.length;i++) me.hand.push(me.deck.shift());
+    }
+    else if (card.etb==='shiki_distribute') {
+      for(let i=0;i<5&&me.deck.length;i++) me.graveyard.push(me.deck.shift());
+      dealDmg(me.graveyard.length);
+    }
+    else if ((card.etb==='kaitaku1'||card.etb==='folkusu_c6_kaitaku') && me.landDeck.length) {
+      me.lands.push({instanceId:this.nid++,cardId:me.landDeck.shift(),tapped:false,chargeCard:null});
+    }
+    else if (card.etb==='opp_discard1_random' && opp.hand.length) {
+      opp.hand.splice(Math.floor(Math.random()*opp.hand.length),1);
+    }
+    else if (card.etb==='mustAttackTarget'||card.etb==='mustAttackTargetThenDraw') {
       if (opp.field.length) {
         const weakest=opp.field.reduce((a,b)=>(CARD_DB[a.cardId].power||0)<=(CARD_DB[b.cardId].power||0)?a:b);
         weakest.mustAttack=true;
       }
+      if (card.etb==='mustAttackTargetThenDraw' && me.deck.length) me.hand.push(me.deck.shift());
     }
   }
 
@@ -1145,6 +1164,8 @@ class SimGame {
           this.payMana(opp,qcard.cost||{});
           this.simSpellEffect(1-ap,qcard);
           opp.graveyard.push(qcid);
+          if (!this.playedCards[1-ap].has(qcid)) this.playedCards[1-ap].set(qcid, {count:0, turns:[]});
+          const _qpc = this.playedCards[1-ap].get(qcid); _qpc.count++; _qpc.turns.push(s.turn);
           this.simCheckDeath(ap); this.simCheckDeath(1-ap);
           // Check attacker still alive after Quick
           if (!p.field.includes(atk)) continue;
@@ -2457,6 +2478,78 @@ async function quickSimForBalance(nGames, onDone) {
     setTimeout(step, 0);
   }
   step();
+}
+
+// ── ナーフ/アッパー検証（プレイ頻度ベース） ──
+// 「AI自身がそのカードを積極的にプレイする価値があると判断するか」を
+// 1試合あたりの平均プレイ回数(avgPlaysPerGame)で測る。勝率ベースのshowBalancePanelとは
+// 独立した指標で、色ごとのスターターデッキ学習重み(AI_WEIGHTS_BY_COLOR)を使ったミラー戦で計測する。
+
+// colorKey のスターターデッキでミラー戦をnGames行い、デッキに含まれる全カードの
+// 「1試合あたりの平均プレイ回数」を集計する。AIが自発的に使わない(＝弱い)カードを
+// デッキ横断で洗い出すための診断用。
+function deckPlayRateReport(colorKey, nGames = 80) {
+  const colorDef = RATED_COLOR_DEFS.find(c => c.key === colorKey);
+  const mainCounts = {}; colorDef.mainList().forEach(id => mainCounts[id] = 4);
+  const landCounts = {}; colorDef.landList().forEach(id => landCounts[id] = 2);
+  const w = AI_WEIGHTS_BY_COLOR[colorKey];
+  const allIds = [...colorDef.mainList(), ...colorDef.landList()];
+  const totals = {}; allIds.forEach(id => totals[id] = 0);
+
+  for (let i = 0; i < nGames; i++) {
+    const g = new SimGame(w, w, mainCounts, mainCounts, landCounts, landCounts);
+    g.run();
+    for (let p = 0; p < 2; p++) {
+      for (const [cid, info] of g.playedCards[p]) {
+        if (totals[cid] === undefined) continue;
+        totals[cid] += info.count;
+      }
+    }
+  }
+  return allIds
+    .map(cid => ({
+      cardId: cid,
+      avgPlaysPerGame: totals[cid] / nGames,
+      maxCopies: mainCounts[cid] || landCounts[cid] || 0,
+    }))
+    .sort((a, b) => a.avgPlaysPerGame - b.avgPlaysPerGame);
+}
+
+// 5色全デッキをまとめて診断する。
+function fullDeckPlayRateReport(nGames = 80) {
+  return RATED_COLOR_DEFS.map(c => ({ color: c.key, report: deckPlayRateReport(c.key, nGames) }));
+}
+
+// 指定カードの「修正前 vs 修正後」でAIの自発的プレイ頻度と勝率を比較する。
+// colorKey のスターターデッキでミラー戦をnGames行う。cardId/colorKey/patchFnは任意のカードに使える汎用関数。
+function cardBuffVerify(cardId, colorKey, patchFn, nGames = 60) {
+  const colorDef = RATED_COLOR_DEFS.find(c => c.key === colorKey);
+  const mainCounts = {}; colorDef.mainList().forEach(id => mainCounts[id] = 4);
+  const landCounts = {}; colorDef.landList().forEach(id => landCounts[id] = 2);
+  const w = AI_WEIGHTS_BY_COLOR[colorKey];
+
+  function runBatch() {
+    let totalPlays = 0, wins = 0;
+    for (let i = 0; i < nGames; i++) {
+      const g = new SimGame(w, w, mainCounts, mainCounts, landCounts, landCounts);
+      const result = g.run();
+      for (let p = 0; p < 2; p++) {
+        const info = g.playedCards[p].get(cardId);
+        if (info) totalPlays += info.count;
+      }
+      // 先手/後手バイアス除去のため両陣営が同じデッキ・重みのミラー戦
+      if (result.winner === 0) wins++;
+    }
+    return { avgPlaysPerGame: totalPlays / nGames, winRate: wins / nGames };
+  }
+
+  const original = JSON.parse(JSON.stringify(CARD_DB[cardId]));
+  const before = runBatch();
+  Object.assign(CARD_DB[cardId], patchFn(JSON.parse(JSON.stringify(original))));
+  const after = runBatch();
+  Object.assign(CARD_DB[cardId], original); // 必ず元に戻す
+
+  return { cardId, before, after, delta: after.avgPlaysPerGame - before.avgPlaysPerGame };
 }
 
 // ── カードバランス分析パネル ──
