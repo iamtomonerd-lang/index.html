@@ -1114,8 +1114,11 @@ class SimGame {
       const atkPow=(atkCard.power||0)+(atk.tempPower||0);
       const atkTou=(atkCard.toughness||0)+(atk.tempToughness||0);
       // #2: predict block outcome, decide whether to attack
+      // 格闘の攻撃先に指定されているクリーチャーはブロック不可
+      const kakutouTargeted = new Set(Object.values(this.state.kakutouTargets || {}));
       const eligibleBlockers=opp.field.filter(b=>{
         if (b.tapped) return false;
+        if (kakutouTargeted.has(b.id)) return false; // 格闘の攻撃先はブロック不可
         if (atkCard.flying&&!CARD_DB[b.cardId].flying) return false;
         if (!atkCard.flying&&CARD_DB[b.cardId].flying) return false;
         return true;
@@ -1684,7 +1687,12 @@ function mctsPickAttackers(candidates) {
       const atkCard = CARD_DB[atk.cardId];
       if (!atkCard.vigilance) atk.tapped = true;
       // ブロッカー選択（SimGame流）
-      const eligible = p0.field.filter(b => !b.tapped && sim._canFlyBlock(atk, b));
+      // 格闘の攻撃先に指定されているクリーチャーはブロック不可
+      const kakutouTargeted = new Set(Object.values(this.state.kakutouTargets || {}));
+      const eligible = p0.field.filter(b => {
+        if (!b.tapped && sim._canFlyBlock(atk, b) && !kakutouTargeted.has(b.id)) return true;
+        return false;
+      });
       const blocker = sim.simPickBlocker(0, atk, eligible,
         (atkCard.power||0)+(atk.tempPower||0));
       if (blocker) {
@@ -1869,7 +1877,9 @@ function mctsOrderAttackers(insts) {
       if (!atk) continue;
       const atkCard = CARD_DB[atk.cardId];
       if (!atkCard.vigilance) atk.tapped = true;
-      const eligible = p0.field.filter(b => !b.tapped && sim._canFlyBlock(atk, b));
+      // 格闘の攻撃先に指定されているクリーチャーはブロック不可
+      const kakutouTargeted = new Set(Object.values(s.kakutouTargets || {}));
+      const eligible = p0.field.filter(b => !b.tapped && !kakutouTargeted.has(b.id) && sim._canFlyBlock(atk, b));
       const blocker = sim.simPickBlocker(0, atk, eligible, (atkCard.power||0)+(atk.tempPower||0));
       if (blocker) {
         const atkPow = (atkCard.power||0)+(atk.tempPower||0);
