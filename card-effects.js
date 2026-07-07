@@ -193,11 +193,13 @@ const FX = {
       });
     return eligible.length > 0 ? eligible : [];
   },
-  // 開拓：Nターンを進行（拡張カード発動のチャンス）。
+  // 開拓：土地デッキからN枚を場に出す（タップ状態）。実効果は doKaitaku(engine.js)
+  // に委譲し、人間プレイのETB版(kaitaku1/folkusu_c6_kaitaku)と同じ土地追加を行う。
+  // kaitakuTurns は開拓の累計回数（演出・将来拡張用の記録値）として維持する。
   kaitaku(player, count) {
     if (!G.kaitakuTurns) G.kaitakuTurns = 0;
     G.kaitakuTurns += (count || 1);
-    if (typeof log === 'function') log(`開拓：${count || 1}`, 'kaitaku');
+    if (typeof doKaitaku === 'function') doKaitaku(player, count || 1);
     return true;
   },
   // 土地の枚数に基づくダメージ。
@@ -889,7 +891,7 @@ function runBlackColorDeckVerifyHeadless() {
     ok('skeleton.deathtouch = true', skeleton.deathtouch === true);
 
     const itazura = CARD_DB['itazura_obake'];
-    ok('itazura.etb = opp_discard1', itazura.etb === 'opp_discard1');
+    ok('itazura.etb = opp_discard1_random', itazura.etb === 'opp_discard1_random');
 
     const haka = CARD_DB['haka_zombie'];
     ok('haka.etb = mill2_damage2', haka.etb === 'mill2_damage2');

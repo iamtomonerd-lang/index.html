@@ -711,13 +711,15 @@ class SimGame {
     }
   }
 
-  simPlayCards(ap) {
+  simPlayCards(ap, aggressiveMode=null) {
     const s = this.state;
     const p = s.players[ap];
     let limit=15;
+    // aggressiveModeが明示的に指定されていない場合は、インスタンス変数をチェック
+    const _aggressive = aggressiveMode !== null ? aggressiveMode : (this.aggressiveMode || false);
     while (limit-->0) {
       const scoreBefore = this.simEval(ap);
-      let bestOption=null, bestGain=0;
+      let bestOption=null, bestGain=_aggressive ? -999 : 0;
       // #1: evaluate each playable card by simulating play
       p.hand.forEach((cid,i)=>{
         const card=CARD_DB[cid];
@@ -986,11 +988,15 @@ class SimGame {
         me.graveyard.push(card);
       }
     } else if (card.effect==='kaitaku1spell' || card.id==='tami_kaitaku') {
-      // 民による開拓: 開拓:1 (sim: kaitakuTurns++)
+      // 民による開拓: 開拓:1 → 土地デッキから1枚を場に出す（タップ状態）
       if (!s.kaitakuTurns) s.kaitakuTurns = 0;
       s.kaitakuTurns++;
+      if (me.landDeck && me.landDeck.length > 0) {
+        const landId = me.landDeck.shift();
+        me.lands.push({ id: this.nid++, cardId: landId, tapped: true, chargeCard: null });
+      }
     } else if (card.effect==='mori_kansha' || card.id==='mori_kansha') {
-      // 森への感謝: 土地数分ダメージ + 開拓:1
+      // 森への感謝: 土地数分ダメージ(開拓の1枚が入る前の枚数) + 開拓:1
       const damageAmount = me.lands.length;
       if (damageAmount > 0 && opp.field.length) {
         const tgt = opp.field.reduce((a,b)=>this.hp(b)<this.hp(a)?b:a);
@@ -1001,6 +1007,10 @@ class SimGame {
       }
       if (!s.kaitakuTurns) s.kaitakuTurns = 0;
       s.kaitakuTurns++;
+      if (me.landDeck && me.landDeck.length > 0) {
+        const landId = me.landDeck.shift();
+        me.lands.push({ id: this.nid++, cardId: landId, tapped: true, chargeCard: null });
+      }
     }
   }
 
@@ -1039,14 +1049,33 @@ class SimGame {
     if (card.etb==='damage1opponent') dealDmg(1);
     else if (card.etb==='damage2opponent_always_cx6damage3') dealDmg(2);
     else if (card.etb==='damage3opponent') dealDmg(3);
-    else if ((card.etb==='look3keep1white'||card.etb==='look3keep1blue'||card.etb==='look2keep1red') && me.deck.length) me.hand.push(me.deck.shift());
+    else if (card.etb==='damage2creature' && opp.field.length) dealDmg(2);
+    else if (card.etb==='mill2_damage2') { for(let i=0;i<2&&me.deck.length;i++) me.graveyard.push(me.deck.shift()); dealDmg(2); }
+    else if ((card.etb==='look3keep1white'||card.etb==='look3keep1blue'||card.etb==='look2keep1red'
+             ||card.etb==='look3keep1red'||card.etb==='look3keep1black'||card.etb==='lookKeepWhite'
+             ||card.etb==='search1') && me.deck.length) me.hand.push(me.deck.shift());
     else if (card.etb==='draw1' && me.deck.length) me.hand.push(me.deck.shift());
     else if (card.etb==='omnieru_hand5') { while(me.hand.length<5&&me.deck.length) me.hand.push(me.deck.shift()); }
-    else if (card.etb==='mustAttackTarget') {
+    else if (card.etb==='foklya_kaizou2draw2' && me.lands.length>=2) {
+      for(let i=0;i<2;i++){ const l=me.lands.pop(); me.landDeck.push(l.cardId); }
+      for(let i=0;i<2&&me.deck.length;i++) me.hand.push(me.deck.shift());
+    }
+    else if (card.etb==='shiki_distribute') {
+      for(let i=0;i<5&&me.deck.length;i++) me.graveyard.push(me.deck.shift());
+      dealDmg(me.graveyard.length);
+    }
+    else if ((card.etb==='kaitaku1'||card.etb==='folkusu_c6_kaitaku') && me.landDeck.length) {
+      me.lands.push({instanceId:this.nid++,cardId:me.landDeck.shift(),tapped:false,chargeCard:null});
+    }
+    else if (card.etb==='opp_discard1_random' && opp.hand.length) {
+      opp.hand.splice(Math.floor(Math.random()*opp.hand.length),1);
+    }
+    else if (card.etb==='mustAttackTarget'||card.etb==='mustAttackTargetThenDraw') {
       if (opp.field.length) {
         const weakest=opp.field.reduce((a,b)=>(CARD_DB[a.cardId].power||0)<=(CARD_DB[b.cardId].power||0)?a:b);
         weakest.mustAttack=true;
       }
+      if (card.etb==='mustAttackTargetThenDraw' && me.deck.length) me.hand.push(me.deck.shift());
     }
   }
 
@@ -1085,8 +1114,11 @@ class SimGame {
       const atkPow=(atkCard.power||0)+(atk.tempPower||0);
       const atkTou=(atkCard.toughness||0)+(atk.tempToughness||0);
       // #2: predict block outcome, decide whether to attack
+      // 格闘の攻撃先に指定されているクリーチャーはブロック不可
+      const kakutouTargeted = new Set(Object.values(this.state.kakutouTargets || {}));
       const eligibleBlockers=opp.field.filter(b=>{
         if (b.tapped) return false;
+        if (kakutouTargeted.has(b.id)) return false; // 格闘の攻撃先はブロック不可
         if (atkCard.flying&&!CARD_DB[b.cardId].flying) return false;
         if (!atkCard.flying&&CARD_DB[b.cardId].flying) return false;
         return true;
@@ -1137,6 +1169,8 @@ class SimGame {
           this.payMana(opp,qcard.cost||{});
           this.simSpellEffect(1-ap,qcard);
           opp.graveyard.push(qcid);
+          if (!this.playedCards[1-ap].has(qcid)) this.playedCards[1-ap].set(qcid, {count:0, turns:[]});
+          const _qpc = this.playedCards[1-ap].get(qcid); _qpc.count++; _qpc.turns.push(s.turn);
           this.simCheckDeath(ap); this.simCheckDeath(1-ap);
           // Check attacker still alive after Quick
           if (!p.field.includes(atk)) continue;
@@ -1260,11 +1294,19 @@ class MCTSNode {
     this.parent = parent;
     this.action = action;     // {type:'play'|'attack'|'pass', ...} action that led here
     this.children = [];
-    this.visits = 0;
-    this.wins = 0.0;
+    // 案⑤: 統計を共有可能なオブジェクトに分離。置換表(TT)で同一局面の
+    // 双子ノード（例: A→B と B→A のプレイ順違い）が stats を共有し、
+    // 訪問数・勝率が合算される＝実効シミュレーション数が増える。
+    this.stats = { visits: 0, wins: 0.0 };
     this.untriedActions = null; // null = not yet expanded
     this._nid = simNid || 1;
   }
+
+  // 既存コード互換: node.visits / node.wins の読み書きは stats に委譲
+  get visits() { return this.stats.visits; }
+  set visits(v) { this.stats.visits = v; }
+  get wins() { return this.stats.wins; }
+  set wins(v) { this.stats.wins = v; }
 
   ucb1() {
     if (this.visits === 0) return Infinity;
@@ -1280,6 +1322,22 @@ class MCTSNode {
     return this.children.reduce((best, c) => c.visits > best.visits ? c : best);
   }
 }
+
+// 案⑤: 決定に関わる状態の compact ハッシュ（置換表・木の再利用のキー）
+function mctsStateHash(s) {
+  let h = s.turn + '@' + s.activePlayer;
+  for (let i = 0; i < 2; i++) {
+    const p = s.players[i];
+    h += '#' + p.life + ';' + [...p.hand].sort().join(',') +
+      ';' + (p.mana.W || 0) + 'w' + (p.mana.C || 0) +
+      ';' + p.field.map(c => c.cardId + ':' + (c.tapped ? 1 : 0) + ':' + (c.damage || 0) +
+        ':' + (c.sick ? 1 : 0) + ':' + (c.tempPower || 0) + ':' + (c.tempToughness || 0)).join('|') +
+      ';' + p.lands.length + ';' + p.deck.length + ';' + p.graveyard.length;
+  }
+  return h;
+}
+let MCTS_TT_STATS = { merged: 0, rootReuse: 0 };
+let _mctsRootCache = null; // {hash, root} 直近探索の木（同一局面の再探索時に丸ごと再利用）
 
 // Convert current G.players to SimGame-compatible state
 function mctsStateFromG() {
@@ -1319,14 +1377,39 @@ function deterministicState(baseState) {
   const p0 = s.players[0];
   const handSize = p0.hand.length;
   if (handSize === 0 || p0.deck.length === 0) return s;
-  // shuffle deck copy and take handSize cards as the "sampled" hand
   const deck = [...p0.deck];
-  for (let i = deck.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [deck[i], deck[j]] = [deck[j], deck[i]];
+  // 案②: 相手手札のベイズ推定 — 観測（マナの構え・大量マナ温存の癖）から
+  // 「手札に残っていそうな札」に重みを付けてサンプルする。観測不足なら一様。
+  const wts = (typeof oppModelHandWeights === 'function') ? oppModelHandWeights(deck) : null;
+  if (wts) {
+    const hand = [];
+    const pool = deck.map((cid, i) => ({ cid, w: Math.max(0.01, wts[i] || 1) }));
+    const take = Math.min(handSize, pool.length);
+    for (let k = 0; k < take; k++) {
+      let total = 0;
+      for (const it of pool) total += it.w;
+      let r = Math.random() * total;
+      let pick = 0;
+      for (let i = 0; i < pool.length; i++) { r -= pool[i].w; if (r <= 0) { pick = i; break; } }
+      hand.push(pool[pick].cid);
+      pool.splice(pick, 1);
+    }
+    p0.hand = hand;
+    p0.deck = pool.map(it => it.cid);
+    // 山札側は順序をランダム化
+    for (let i = p0.deck.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [p0.deck[i], p0.deck[j]] = [p0.deck[j], p0.deck[i]];
+    }
+  } else {
+    // shuffle deck copy and take handSize cards as the "sampled" hand
+    for (let i = deck.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [deck[i], deck[j]] = [deck[j], deck[i]];
+    }
+    p0.hand = deck.slice(0, Math.min(handSize, deck.length));
+    p0.deck = deck.slice(p0.hand.length);
   }
-  p0.hand = deck.slice(0, Math.min(handSize, deck.length));
-  p0.deck = deck.slice(p0.hand.length);
   // 案4: 相手モデリング — 観測した「マナ構え→クイック割込み」傾向を
   // サンプル手札に反映（構えている相手の手札にクイックを混ぜる）
   if (typeof oppModelAdjustSample === 'function') oppModelAdjustSample(s);
@@ -1397,6 +1480,8 @@ function mctsRollout(simState, nid) {
   sim.state = fastCloneState(simState);
   sim.nid = nid;
   sim.maxTurns = MCTS_ROLLOUT_DEPTH;
+  // ロールアウト中は積極的プレイモードでシミュレーション（プレイしないことのペナルティを高く評価）
+  sim.aggressiveMode = true;
   // both players use SimGame's heuristic (not random)
   let guard = 0;
   while (guard++ < MCTS_ROLLOUT_DEPTH * 2) {
@@ -1428,8 +1513,21 @@ function mctsSearch(timeMs, rootBundle) {
     let deadline = start + budget;
     let extended = false; // バンク延長／メタ延長は合わせて1回だけ
     const rootState = rootBundle || mctsStateFromG();
-    const root = new MCTSNode(rootState, null, null, 1);
-    root.untriedActions = mctsEnumerateActions(rootState, 1);
+    // 案⑤: 同一局面の再探索なら前回の木を丸ごと引き継ぐ（Workerタイムアウト後の
+    // 同期再探索や、状態が変わらないままの再呼び出しで訪問数を無駄にしない）
+    const rootHash = mctsStateHash(rootState);
+    let root;
+    if (_mctsRootCache && _mctsRootCache.hash === rootHash) {
+      root = _mctsRootCache.root;
+      root.parent = null;
+      MCTS_TT_STATS.rootReuse++;
+    } else {
+      root = new MCTSNode(rootState, null, null, 1);
+      root.untriedActions = mctsEnumerateActions(rootState, 1);
+    }
+    // 案⑤: 置換表 — この探索中に生成された局面のstatsをハッシュで共有
+    const _tt = new Map();
+    _tt.set(rootHash, root.stats);
 
     // C: 選択肢が実質1つ（passのみ等）なら探索不要 → 全額貯金して即決
     if (root.untriedActions.length <= 1) {
@@ -1493,6 +1591,12 @@ function mctsSearch(timeMs, rootBundle) {
           const action = node.untriedActions.splice(actionIdx, 1)[0];
           const { state: newState, nid: newNid } = mctsApplyAction(node.state, action, node._nid);
           const child = new MCTSNode(newState, node, action, newNid);
+          // 案⑤: 置換表 — 同一局面（プレイ順違い等）の双子ノードとstatsを共有。
+          // 双子で得た訪問・勝敗が合算され、UCB1が正確になり実効予算が増える。
+          const h = mctsStateHash(newState);
+          const twin = _tt.get(h);
+          if (twin) { child.stats = twin; MCTS_TT_STATS.merged++; }
+          else _tt.set(h, child.stats);
           if (action.type === 'play') {
             child.untriedActions = mctsEnumerateActions(newState, newNid);
           } else {
@@ -1517,6 +1621,8 @@ function mctsSearch(timeMs, rootBundle) {
       }
     }
     MCTS_LAST_ITERS = iterations; // 診断用: 直近の探索反復数
+    // 案⑤: 木を保存 — 同一局面で再探索された場合に丸ごと再利用する
+    _mctsRootCache = { hash: rootHash, root };
 
     // Extract best action sequence: follow most-visited path
     const plays = [];
@@ -1581,7 +1687,12 @@ function mctsPickAttackers(candidates) {
       const atkCard = CARD_DB[atk.cardId];
       if (!atkCard.vigilance) atk.tapped = true;
       // ブロッカー選択（SimGame流）
-      const eligible = p0.field.filter(b => !b.tapped && sim._canFlyBlock(atk, b));
+      // 格闘の攻撃先に指定されているクリーチャーはブロック不可
+      const kakutouTargeted = new Set(Object.values(this.state.kakutouTargets || {}));
+      const eligible = p0.field.filter(b => {
+        if (!b.tapped && sim._canFlyBlock(atk, b) && !kakutouTargeted.has(b.id)) return true;
+        return false;
+      });
       const blocker = sim.simPickBlocker(0, atk, eligible,
         (atkCard.power||0)+(atk.tempPower||0));
       if (blocker) {
@@ -1766,12 +1877,15 @@ function mctsOrderAttackers(insts) {
       if (!atk) continue;
       const atkCard = CARD_DB[atk.cardId];
       if (!atkCard.vigilance) atk.tapped = true;
-      const eligible = p0.field.filter(b => !b.tapped && sim._canFlyBlock(atk, b));
+      // 格闘の攻撃先に指定されているクリーチャーはブロック不可
+      const kakutouTargeted = new Set(Object.values(s.kakutouTargets || {}));
+      const eligible = p0.field.filter(b => !b.tapped && !kakutouTargeted.has(b.id) && sim._canFlyBlock(atk, b));
       const blocker = sim.simPickBlocker(0, atk, eligible, (atkCard.power||0)+(atk.tempPower||0));
       if (blocker) {
         const atkPow = (atkCard.power||0)+(atk.tempPower||0);
         const blkPow = (CARD_DB[blocker.cardId].power||0)+(blocker.tempPower||0);
         blocker.damage += atkPow;
+        blocker.tapped = true; // ルール: ブロックしたらタップ（他箇所のsim戦闘と統一）
         atk.damage += blkPow;
         sim.simCheckDeath(0); sim.simCheckDeath(1);
       } else {
@@ -1821,7 +1935,7 @@ SimGame.prototype._canFlyBlock = function(atk, blk) {
 // ── 汎用MCTSオプション選択 ──────────────────────────────────────────
 // options: 選択肢の配列, applyToSim(sim, option): シム状態に選択を適用する関数
 // 各選択肢をrolloutで評価し、P1の勝率が最高のものを返す
-function mctsPickOption(options, applyToSim) {
+function mctsPickOption(options, applyToSim, priorFn) {
   if (options.length === 0) return null;
   if (options.length === 1) return options[0];
   const budget = Math.min(mctsTimeBudget(), 250);
@@ -1867,7 +1981,8 @@ function mctsPickOption(options, applyToSim) {
   let bestIdx = 0, bestRate = -1;
   for (let i = 0; i < options.length; i++) {
     if (trials[i] === 0) continue;
-    const rate = wins[i] / trials[i];
+    // 案⑥等: 事前知識ボーナス（勝率単位）をロールアウト勝率に加算して選択
+    const rate = wins[i] / trials[i] + (priorFn ? priorFn(options[i]) : 0);
     if (rate > bestRate) { bestRate = rate; bestIdx = i; }
   }
   return options[bestIdx];
@@ -2377,6 +2492,78 @@ async function quickSimForBalance(nGames, onDone) {
     setTimeout(step, 0);
   }
   step();
+}
+
+// ── ナーフ/アッパー検証（プレイ頻度ベース） ──
+// 「AI自身がそのカードを積極的にプレイする価値があると判断するか」を
+// 1試合あたりの平均プレイ回数(avgPlaysPerGame)で測る。勝率ベースのshowBalancePanelとは
+// 独立した指標で、色ごとのスターターデッキ学習重み(AI_WEIGHTS_BY_COLOR)を使ったミラー戦で計測する。
+
+// colorKey のスターターデッキでミラー戦をnGames行い、デッキに含まれる全カードの
+// 「1試合あたりの平均プレイ回数」を集計する。AIが自発的に使わない(＝弱い)カードを
+// デッキ横断で洗い出すための診断用。
+function deckPlayRateReport(colorKey, nGames = 80) {
+  const colorDef = RATED_COLOR_DEFS.find(c => c.key === colorKey);
+  const mainCounts = {}; colorDef.mainList().forEach(id => mainCounts[id] = 4);
+  const landCounts = {}; colorDef.landList().forEach(id => landCounts[id] = 2);
+  const w = AI_WEIGHTS_BY_COLOR[colorKey];
+  const allIds = [...colorDef.mainList(), ...colorDef.landList()];
+  const totals = {}; allIds.forEach(id => totals[id] = 0);
+
+  for (let i = 0; i < nGames; i++) {
+    const g = new SimGame(w, w, mainCounts, mainCounts, landCounts, landCounts);
+    g.run();
+    for (let p = 0; p < 2; p++) {
+      for (const [cid, info] of g.playedCards[p]) {
+        if (totals[cid] === undefined) continue;
+        totals[cid] += info.count;
+      }
+    }
+  }
+  return allIds
+    .map(cid => ({
+      cardId: cid,
+      avgPlaysPerGame: totals[cid] / nGames,
+      maxCopies: mainCounts[cid] || landCounts[cid] || 0,
+    }))
+    .sort((a, b) => a.avgPlaysPerGame - b.avgPlaysPerGame);
+}
+
+// 5色全デッキをまとめて診断する。
+function fullDeckPlayRateReport(nGames = 80) {
+  return RATED_COLOR_DEFS.map(c => ({ color: c.key, report: deckPlayRateReport(c.key, nGames) }));
+}
+
+// 指定カードの「修正前 vs 修正後」でAIの自発的プレイ頻度と勝率を比較する。
+// colorKey のスターターデッキでミラー戦をnGames行う。cardId/colorKey/patchFnは任意のカードに使える汎用関数。
+function cardBuffVerify(cardId, colorKey, patchFn, nGames = 60) {
+  const colorDef = RATED_COLOR_DEFS.find(c => c.key === colorKey);
+  const mainCounts = {}; colorDef.mainList().forEach(id => mainCounts[id] = 4);
+  const landCounts = {}; colorDef.landList().forEach(id => landCounts[id] = 2);
+  const w = AI_WEIGHTS_BY_COLOR[colorKey];
+
+  function runBatch() {
+    let totalPlays = 0, wins = 0;
+    for (let i = 0; i < nGames; i++) {
+      const g = new SimGame(w, w, mainCounts, mainCounts, landCounts, landCounts);
+      const result = g.run();
+      for (let p = 0; p < 2; p++) {
+        const info = g.playedCards[p].get(cardId);
+        if (info) totalPlays += info.count;
+      }
+      // 先手/後手バイアス除去のため両陣営が同じデッキ・重みのミラー戦
+      if (result.winner === 0) wins++;
+    }
+    return { avgPlaysPerGame: totalPlays / nGames, winRate: wins / nGames };
+  }
+
+  const original = JSON.parse(JSON.stringify(CARD_DB[cardId]));
+  const before = runBatch();
+  Object.assign(CARD_DB[cardId], patchFn(JSON.parse(JSON.stringify(original))));
+  const after = runBatch();
+  Object.assign(CARD_DB[cardId], original); // 必ず元に戻す
+
+  return { cardId, before, after, delta: after.avgPlaysPerGame - before.avgPlaysPerGame };
 }
 
 // ── カードバランス分析パネル ──
@@ -3424,6 +3611,9 @@ function applyUrameCare(attackers, aiIdx, isLethal) {
   }
 
   // C+D: 反撃ワーストケース — 攻撃後、返しの総攻撃で負けるなら1体防御に残す
+  // 案③(ai-tactics.js)の正確な返し即死チェックがある場合はそちらに委ねる
+  // （粗い見積もりとの二重削りで攻撃が過剰に萎縮するのを防ぐ）
+  if (typeof tacticalCrackbackDeath === 'function') return { attackers: result, notes };
   if (result.length > 0) {
     const me = G.players[aiIdx];
     const oppField = G.players[oppIdx].field || [];

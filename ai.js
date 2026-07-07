@@ -281,6 +281,9 @@ async function aiTurn() {  // 純スペックB: Worker長考をawaitするため
         });
       });
       showAIThinking(true);
+      // CXアーク計画(ai-tactics.js): C6/C8/OC閾値到達とペイオフ札の噛み合わせを
+      // 事前ボーナスとしてロールアウト勝率に加算（無ければ従来通り勝率のみ）
+      const chargePrior = (typeof cxArcPrior === 'function') ? cxArcPrior : null;
       const bestCharge = mctsPickOption(chargeOptions, (sim, opt) => {
         if (opt.type === 'noCharge') return;
         const p1 = sim.state.players[1];
@@ -292,7 +295,7 @@ async function aiTurn() {  // 純スペックB: Worker長考をawaitするため
         simLand.chargeCard = opt.cardId;
         const lc = CARD_DB[simLand.cardId];
         if (lc.chargeDrawTrigger && p1.deck.length) p1.hand.push(p1.deck.shift());
-      });
+      }, chargePrior);
       showAIThinking(false);
       if (bestCharge && bestCharge.type === 'charge') {
         const hi = ai.hand.indexOf(bestCharge.cardId);
@@ -755,11 +758,20 @@ function aiAttack() {
     const care = applyUrameCare(attackerInsts, 1, isLethal);
     care.notes.forEach(n => aiThink(n));
     attackerInsts = care.attackers;
-    if (attackerInsts.length === 0) {
-      aiThink('裏目ケアの結果、今ターンの攻撃は見送り（安全優先）');
-      setTimeout(() => endTurnAfterMainPhase(), 300);
-      return;
-    }
+  }
+
+  // 読み切りリファイン(ai-tactics.js): 正確なリーサル判定・次ターン確定リーサル・
+  // 終盤の攻撃読み切り・返し即死回避。概算(isLethal)より優先される。
+  if (typeof tacticalRefineAttack === 'function') {
+    const ref = tacticalRefineAttack(candidates, attackerInsts, 1, isLethal);
+    ref.notes.forEach(n => aiThink(n));
+    attackerInsts = ref.attackers;
+  }
+
+  if (attackerInsts.length === 0) {
+    aiThink('攻撃見送り（安全優先）');
+    setTimeout(() => endTurnAfterMainPhase(), 300);
+    return;
   }
 
   // Phase B: Hard Constraints（攻撃の妥当性チェック）
