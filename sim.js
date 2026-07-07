@@ -711,13 +711,15 @@ class SimGame {
     }
   }
 
-  simPlayCards(ap) {
+  simPlayCards(ap, aggressiveMode=null) {
     const s = this.state;
     const p = s.players[ap];
     let limit=15;
+    // aggressiveModeが明示的に指定されていない場合は、インスタンス変数をチェック
+    const _aggressive = aggressiveMode !== null ? aggressiveMode : (this.aggressiveMode || false);
     while (limit-->0) {
       const scoreBefore = this.simEval(ap);
-      let bestOption=null, bestGain=0;
+      let bestOption=null, bestGain=_aggressive ? -999 : 0;
       // #1: evaluate each playable card by simulating play
       p.hand.forEach((cid,i)=>{
         const card=CARD_DB[cid];
@@ -1475,6 +1477,8 @@ function mctsRollout(simState, nid) {
   sim.state = fastCloneState(simState);
   sim.nid = nid;
   sim.maxTurns = MCTS_ROLLOUT_DEPTH;
+  // ロールアウト中は積極的プレイモードでシミュレーション（プレイしないことのペナルティを高く評価）
+  sim.aggressiveMode = true;
   // both players use SimGame's heuristic (not random)
   let guard = 0;
   while (guard++ < MCTS_ROLLOUT_DEPTH * 2) {
